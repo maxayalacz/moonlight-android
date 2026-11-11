@@ -1,10 +1,58 @@
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:background="#1A1A1A"
+    android:background="@color/oneui_surface_bg"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     tools:context=".PcView" >
+
+    <!-- One UI 9 Liquid Glass Side Navigation Drawer/Toolbar -->
+    <LinearLayout
+        android:id="@+id/pcToolbarContainer"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_alignParentStart="true"
+        android:layout_alignParentLeft="true"
+        android:layout_centerVertical="true"
+        android:layout_marginLeft="16dp"
+        android:layout_marginStart="16dp"
+        android:padding="8dp"
+        android:background="@drawable/bg_oneui_liquid_glass">
+
+        <ImageButton
+            android:id="@+id/settingsButton"
+            android:layout_width="60dp"
+            android:layout_height="60dp"
+            android:cropToPadding="false"
+            android:scaleType="centerInside"
+            android:padding="12dp"
+            android:nextFocusForward="@id/helpButton"
+            android:src="@drawable/ic_settings"
+            style="?android:attr/borderlessButtonStyle"/>
+
+        <ImageButton
+            android:id="@+id/helpButton"
+            android:layout_width="60dp"
+            android:layout_height="60dp"
+            android:cropToPadding="false"
+            android:scaleType="centerInside"
+            android:padding="12dp"
+            android:nextFocusForward="@id/manuallyAddPc"
+            android:src="@drawable/ic_help"
+            style="?android:attr/borderlessButtonStyle"/>
+
+        <ImageButton
+            android:id="@+id/manuallyAddPc"
+            android:layout_width="60dp"
+            android:layout_height="60dp"
+            android:cropToPadding="false"
+            android:scaleType="centerInside"
+            android:padding="12dp"
+            android:src="@drawable/ic_add"
+            style="?android:attr/borderlessButtonStyle"/>
+
+    </LinearLayout>
 
     <RelativeLayout
         android:id="@+id/pcFragmentContainer"
@@ -13,27 +61,30 @@
         android:gravity="center"
         android:layout_alignParentBottom="true"
         android:layout_alignParentTop="true"
-        android:layout_toRightOf="@+id/settingsButton"
-        android:layout_toEndOf="@+id/settingsButton">
+        android:layout_toRightOf="@+id/pcToolbarContainer"
+        android:layout_toEndOf="@+id/pcToolbarContainer">
 
         <RelativeLayout
             android:id="@+id/no_pc_found_layout"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:background="@drawable/bg_oneui_liquid_glass"
+            android:padding="24dp"
             android:layout_centerVertical="true"
             android:layout_centerHorizontal="true">
             <ProgressBar
                 android:id="@+id/pcs_loading"
-                android:layout_width="75dp"
-                android:layout_height="75dp"
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:layout_centerVertical="true"
                 android:indeterminate="true"/>
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_toRightOf="@+id/pcs_loading"
                 android:layout_toEndOf="@+id/pcs_loading"
-                android:layout_marginLeft="10dp"
-                android:layout_marginStart="10dp"
+                android:layout_marginLeft="16dp"
+                android:layout_marginStart="16dp"
                 android:layout_centerVertical="true"
                 android:textAppearance="?android:attr/textAppearanceLarge"
                 android:gravity="center"
@@ -41,44 +92,6 @@
         </RelativeLayout>
 
     </RelativeLayout>
-
-    <ImageButton
-        android:id="@+id/settingsButton"
-        android:layout_width="70dp"
-        android:layout_height="65dp"
-        android:cropToPadding="false"
-        android:scaleType="fitXY"
-        android:nextFocusForward="@id/helpButton"
-        android:layout_alignParentStart="true"
-        android:layout_alignParentLeft="true"
-        android:layout_alignParentTop="true"
-        android:src="@drawable/ic_settings"
-        style="?android:attr/borderlessButtonStyle"/>
-
-    <ImageButton
-        android:id="@+id/helpButton"
-        android:layout_width="70dp"
-        android:layout_height="65dp"
-        android:cropToPadding="false"
-        android:scaleType="fitXY"
-        android:nextFocusForward="@id/manuallyAddPc"
-        android:layout_alignParentStart="true"
-        android:layout_alignParentLeft="true"
-        android:layout_below="@id/settingsButton"
-        android:src="@drawable/ic_help"
-        style="?android:attr/borderlessButtonStyle"/>
-
-    <ImageButton
-        android:id="@+id/manuallyAddPc"
-        android:layout_width="70dp"
-        android:layout_height="65dp"
-        android:cropToPadding="false"
-        android:scaleType="fitXY"
-        android:layout_alignParentStart="true"
-        android:layout_alignParentLeft="true"
-        android:layout_below="@id/helpButton"
-        android:src="@drawable/ic_add"
-        style="?android:attr/borderlessButtonStyle"/>
 
     <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
         android:id="@+id/profilesButton"
@@ -90,6 +103,7 @@
         android:layout_marginEnd="24dp"
         android:contentDescription="@string/profile_manager_choose_profile"
         android:layout_margin="16dp"
+        app:shapeAppearanceOverlay="@style/ShapeAppearance.OneUI.Squircle"
         app:icon="@drawable/ic_profiles" />
 
 </RelativeLayout>

@@ -1,6 +1,12 @@
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/stream_settings"
+    android:background="@color/oneui_surface_bg"
+    android:paddingTop="@dimen/oneui_header_title_top_margin"
+    android:paddingStart="12dp"
+    android:paddingEnd="12dp"
+    android:paddingBottom="12dp"
+    android:clipToPadding="false"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     tools:context=".preferences.StreamSettings">

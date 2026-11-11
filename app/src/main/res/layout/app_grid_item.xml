@@ -8,7 +8,8 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_margin="10dp"
-        app:cardCornerRadius="12dp"
+        app:cardBackgroundColor="#25000000"
+        app:cardCornerRadius="@dimen/oneui_squircle_radius_large"
         app:cardElevation="8dp"
         app:cardMaxElevation="8dp">
 
@@ -22,7 +23,8 @@
         <RelativeLayout
             android:id="@+id/grid_mask"
             android:layout_width="match_parent"
-            android:layout_height="match_parent">
+            android:layout_height="match_parent"
+            android:background="@drawable/bg_oneui_squircle_card">
 
             <ImageView
                 android:id="@+id/grid_overlay"
@@ -36,7 +38,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:layout_below="@id/grid_overlay"
-                android:layout_margin="5dp"
+                android:layout_margin="8dp"
                 android:gravity="center|center_vertical"
                 android:background="#00FFFFFF"
                 android:textAlignment="center"
