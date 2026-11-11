@@ -138,23 +138,6 @@ public class UiHelper {
         return null;
     }
 
-    public static void applyActivityBackdropBlur(Activity activity, boolean enable) {
-        if (activity == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
-            return;
-        }
-        View content = activity.findViewById(android.R.id.content);
-        if (content == null) {
-            return;
-        }
-        if (enable && !activity.isFinishing() && !activity.isChangingConfigurations()) {
-            float blurRadiusPx = dpToPx(activity, ONEUI_BLUR_RADIUS_DP);
-            content.setRenderEffect(RenderEffect.createBlurEffect(
-                    blurRadiusPx, blurRadiusPx, Shader.TileMode.CLAMP));
-        } else {
-            content.setRenderEffect(null);
-        }
-    }
-
     public static void applyReachabilitySpacing(Activity activity) {
         if (activity == null) {
             return;
@@ -230,50 +213,101 @@ public class UiHelper {
         }
     }
 
-    public static void styleDialogSquircle(android.app.Dialog dialog) {
+    /**
+     * Styles a dialog as a One UI "Liquid Glass" squircle card.
+     *
+     * On API 31+ the blur is a window *background* blur: SurfaceFlinger blurs only the
+     * content behind the dialog window, clipped to the window background drawable's
+     * rounded bounds. Nothing outside the card is blurred and the dialog's own text is
+     * never blurred. When the OS disables cross-window blur (battery saver, reduce
+     * transparency, some game modes) a more opaque surface is used so text stays legible.
+     */
+    public static void styleDialogSquircle(final android.app.Dialog dialog) {
         if (dialog == null) {
             return;
         }
-        Window window = dialog.getWindow();
+        final Window window = dialog.getWindow();
         if (window == null) {
             return;
         }
-        Context context = dialog.getContext();
-        final Activity hostActivity = dialog.getOwnerActivity() != null
-                ? dialog.getOwnerActivity()
-                : findActivity(context);
         window.setBackgroundDrawableResource(R.drawable.bg_oneui_dialog_squircle);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            int blurRadiusPx = (int) dpToPx(context, ONEUI_BLUR_RADIUS_DP);
-            window.setBackgroundBlurRadius(blurRadiusPx);
-            window.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND
-                    | WindowManager.LayoutParams.FLAG_DIM_BEHIND);
-            WindowManager.LayoutParams attrs = window.getAttributes();
-            attrs.setBlurBehindRadius(blurRadiusPx);
-            attrs.dimAmount = 0.30f;
-            window.setAttributes(attrs);
-        }
-        View decorView = window.getDecorView();
-        if (decorView != null) {
-            decorView.setRenderEffect(null);
-            decorView.setClipToOutline(true);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && hostActivity != null) {
-                if (decorView.isAttachedToWindow()) {
-                    applyActivityBackdropBlur(hostActivity, true);
-                }
-                if (decorView.getTag(R.id.oneuiHeaderContainer) == null) {
-                    decorView.setTag(R.id.oneuiHeaderContainer, Boolean.TRUE);
-                    decorView.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
-                        @Override
-                        public void onViewAttachedToWindow(View v) {
-                            applyActivityBackdropBlur(hostActivity, true);
-                        }
+        // Never blur the whole screen behind the dialog; only the card's own bounds.
+        window.clearFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND);
 
-                        @Override
-                        public void onViewDetachedFromWindow(View v) {
-                            applyActivityBackdropBlur(hostActivity, false);
-                        }
-                    });
+        View decorView = window.getDecorView();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            decorView.setRenderEffect(null);
+            applyBoundedWindowBlur(window, dialog.getContext());
+        }
+        clearOpaquePanelBackgrounds(decorView);
+    }
+
+    @androidx.annotation.RequiresApi(api = Build.VERSION_CODES.S)
+    private static void applyBoundedWindowBlur(final Window window, Context context) {
+        final WindowManager wm = context.getSystemService(WindowManager.class);
+        final int blurRadiusPx = (int) dpToPx(context, ONEUI_BLUR_RADIUS_DP);
+        final java.util.function.Consumer<Boolean> updateBlur = enabled -> {
+            window.setBackgroundDrawableResource(enabled
+                    ? R.drawable.bg_oneui_dialog_squircle
+                    : R.drawable.bg_oneui_dialog_squircle_opaque);
+            window.setBackgroundBlurRadius(enabled ? blurRadiusPx : 0);
+        };
+
+        boolean blurEnabled = wm != null && wm.isCrossWindowBlurEnabled();
+        if (wm == null) {
+            LimeLog.warning("OneUI: WindowManager unavailable, using opaque dialog surface");
+        } else if (!blurEnabled) {
+            LimeLog.info("OneUI: cross-window blur is disabled by the system, using opaque dialog surface");
+        }
+        updateBlur.accept(blurEnabled);
+
+        final View decorView = window.getDecorView();
+        if (wm == null || decorView.getTag(R.id.oneuiHeaderContainer) != null) {
+            return;
+        }
+        decorView.setTag(R.id.oneuiHeaderContainer, Boolean.TRUE);
+        decorView.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
+            @Override
+            public void onViewAttachedToWindow(View v) {
+                wm.addCrossWindowBlurEnabledListener(updateBlur);
+            }
+
+            @Override
+            public void onViewDetachedFromWindow(View v) {
+                wm.removeCrossWindowBlurEnabledListener(updateBlur);
+            }
+        });
+        if (decorView.isAttachedToWindow()) {
+            wm.addCrossWindowBlurEnabledListener(updateBlur);
+        }
+    }
+
+    /**
+     * Material/AppCompat alert layouts may paint their own opaque surface on top of the
+     * window background, which hides the blurred glass. Make those inner panels transparent.
+     */
+    private static void clearOpaquePanelBackgrounds(View decorView) {
+        if (!(decorView instanceof android.view.ViewGroup)) {
+            return;
+        }
+        android.view.ViewGroup group = (android.view.ViewGroup) decorView;
+        for (int i = 0; i < group.getChildCount(); i++) {
+            group.getChildAt(i).setBackground(null);
+        }
+        View content = decorView.findViewById(android.R.id.content);
+        if (content != null) {
+            content.setBackground(null);
+        }
+        Context ctx = decorView.getContext();
+        int[] panelIds = {
+                ctx.getResources().getIdentifier("parentPanel", "id", "android"),
+                ctx.getResources().getIdentifier("parentPanel", "id", ctx.getPackageName()),
+        };
+        for (int id : panelIds) {
+            if (id != 0) {
+                View panel = decorView.findViewById(id);
+                if (panel != null) {
+                    panel.setBackground(null);
                 }
             }
         }
@@ -365,32 +399,6 @@ public class UiHelper {
         }
     }
 
-    public static void registerPopupBlurListener(final Activity activity) {
-        if (activity == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
-            return;
-        }
-        final View rootView = activity.findViewById(android.R.id.content);
-        if (rootView == null || rootView.getTag(R.id.pcToolbarContainer) != null) {
-            return;
-        }
-        rootView.setTag(R.id.pcToolbarContainer, Boolean.TRUE);
-        rootView.getViewTreeObserver().addOnWindowFocusChangeListener(hasFocus -> {
-            if (hasFocus) {
-                applyActivityBackdropBlur(activity, false);
-            } else if (!activity.isFinishing() && !activity.isChangingConfigurations()) {
-                boolean isResumed = true;
-                if (activity instanceof androidx.lifecycle.LifecycleOwner) {
-                    isResumed = ((androidx.lifecycle.LifecycleOwner) activity).getLifecycle()
-                            .getCurrentState()
-                            .isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED);
-                }
-                if (isResumed) {
-                    applyActivityBackdropBlur(activity, true);
-                }
-            }
-        });
-    }
-
     public static void notifyNewRootView(final Activity activity)
     {
         View rootView = activity.findViewById(android.R.id.content);
@@ -400,8 +408,6 @@ public class UiHelper {
         setGameModeStatus(activity, false, false);
 
         applyReachabilitySpacing(activity);
-        applyActivityBackdropBlur(activity, false);
-        registerPopupBlurListener(activity);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             // Allow this non-streaming activity to layout under notches.

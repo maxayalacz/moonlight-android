@@ -413,8 +413,6 @@ public class AppView extends AppCompatActivity implements AdapterFragmentCallbac
     protected void onResume() {
         super.onResume();
 
-        UiHelper.applyActivityBackdropBlur(this, false);
-
         // Display a decoder crash notification if we've returned after a crash
         UiHelper.showDecoderCrashDialog(this);
 
@@ -439,8 +437,6 @@ public class AppView extends AppCompatActivity implements AdapterFragmentCallbac
     @Override
     protected void onPause() {
         super.onPause();
-
-        UiHelper.applyActivityBackdropBlur(this, false);
 
         inForeground = false;
         stopComputerUpdates();
@@ -468,8 +464,6 @@ public class AppView extends AppCompatActivity implements AdapterFragmentCallbac
     @Override
     public void onCreateContextMenu(ContextMenu menu, View v, ContextMenuInfo menuInfo) {
         super.onCreateContextMenu(menu, v, menuInfo);
-        UiHelper.applyActivityBackdropBlur(this, true);
-
         AdapterContextMenuInfo info = (AdapterContextMenuInfo) menuInfo;
         AppObject selectedApp = (AppObject) appGridAdapter.getItem(info.position);
 
@@ -525,7 +519,6 @@ public class AppView extends AppCompatActivity implements AdapterFragmentCallbac
 
     @Override
     public void onContextMenuClosed(Menu menu) {
-        UiHelper.applyActivityBackdropBlur(this, false);
     }
 
     @Override

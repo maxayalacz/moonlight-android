@@ -99,7 +99,6 @@ public class StreamSettings extends AppCompatActivity {
 
         setContentView(R.layout.activity_stream_settings);
         UiHelper.applyReachabilitySpacing(this);
-        UiHelper.registerPopupBlurListener(this);
 
         getSupportFragmentManager().registerFragmentLifecycleCallbacks(
                 new androidx.fragment.app.FragmentManager.FragmentLifecycleCallbacks() {
@@ -118,7 +117,6 @@ public class StreamSettings extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        UiHelper.applyActivityBackdropBlur(this, false);
     }
 
     @Override

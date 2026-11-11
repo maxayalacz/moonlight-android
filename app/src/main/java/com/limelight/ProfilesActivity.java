@@ -55,7 +55,6 @@ public class ProfilesActivity extends AppCompatActivity implements ProfilesManag
     @Override
     protected void onResume() {
         super.onResume();
-        UiHelper.applyActivityBackdropBlur(this, false);
     }
 
     @Override

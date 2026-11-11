@@ -374,8 +374,6 @@ public class PcView extends AppCompatActivity implements AdapterFragmentCallback
     protected void onResume() {
         super.onResume();
 
-        UiHelper.applyActivityBackdropBlur(this, false);
-
         // Display a decoder crash notification if we've returned after a crash
         UiHelper.showDecoderCrashDialog(this);
 
@@ -388,8 +386,6 @@ public class PcView extends AppCompatActivity implements AdapterFragmentCallback
     @Override
     protected void onPause() {
         super.onPause();
-
-        UiHelper.applyActivityBackdropBlur(this, false);
 
         inForeground = false;
         stopComputerUpdates(false);
@@ -405,8 +401,6 @@ public class PcView extends AppCompatActivity implements AdapterFragmentCallback
     @Override
     public void onCreateContextMenu(ContextMenu menu, View v, ContextMenuInfo menuInfo) {
         stopComputerUpdates(false);
-        UiHelper.applyActivityBackdropBlur(this, true);
-
         // Call superclass
         super.onCreateContextMenu(menu, v, menuInfo);
 
@@ -469,7 +463,6 @@ public class PcView extends AppCompatActivity implements AdapterFragmentCallback
 
     @Override
     public void onContextMenuClosed(Menu menu) {
-        UiHelper.applyActivityBackdropBlur(this, false);
         // For some reason, this gets called again _after_ onPause() is called on this activity.
         // startComputerUpdates() manages this and won't actual start polling until the activity
         // returns to the foreground.

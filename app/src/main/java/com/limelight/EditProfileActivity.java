@@ -101,7 +101,6 @@ public class EditProfileActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        UiHelper.applyActivityBackdropBlur(this, false);
     }
 
     @Override
