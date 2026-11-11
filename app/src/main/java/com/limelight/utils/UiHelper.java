@@ -61,18 +61,51 @@ public class UiHelper {
             float blurRadiusPx = dpToPx(context, ONEUI_BLUR_RADIUS_DP);
             int overlayTint = isNightMode ? ONEUI_GLASS_OVERLAY_TINT_DARK : ONEUI_GLASS_OVERLAY_TINT_LIGHT;
 
+            // Ensure the foreground view/container itself is never blurred so all text and icons stay razor-sharp
+            view.setRenderEffect(null);
+
             RenderEffect blurEffect = RenderEffect.createBlurEffect(
                     blurRadiusPx, blurRadiusPx, Shader.TileMode.CLAMP);
             RenderEffect liquidGlassEffect = RenderEffect.createColorFilterEffect(
                     new PorterDuffColorFilter(overlayTint, PorterDuff.Mode.SRC_OVER),
                     blurEffect);
-            view.setRenderEffect(liquidGlassEffect);
 
             GradientDrawable glassDrawable = new GradientDrawable();
             glassDrawable.setShape(GradientDrawable.RECTANGLE);
             glassDrawable.setCornerRadius(cornerRadiusPx);
             glassDrawable.setColor(overlayTint);
             glassDrawable.setStroke((int) Math.max(1f, dpToPx(context, 1f)), 0x33FFFFFF);
+
+            if (view instanceof android.widget.FrameLayout && shouldAttachGlassBackdrop((android.view.ViewGroup) view)) {
+                android.view.ViewGroup group = (android.view.ViewGroup) view;
+                View backdrop = group.findViewWithTag("oneui_liquid_glass_backdrop");
+                if (backdrop == null) {
+                    backdrop = new View(context);
+                    backdrop.setTag("oneui_liquid_glass_backdrop");
+                    backdrop.setClickable(false);
+                    backdrop.setFocusable(false);
+                    backdrop.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+                    GradientDrawable backdropFill = new GradientDrawable();
+                    backdropFill.setShape(GradientDrawable.RECTANGLE);
+                    backdropFill.setCornerRadius(cornerRadiusPx);
+                    backdropFill.setColor(overlayTint);
+                    backdrop.setBackground(backdropFill);
+                    backdrop.setRenderEffect(liquidGlassEffect);
+
+                    android.widget.FrameLayout.LayoutParams lp = new android.widget.FrameLayout.LayoutParams(
+                            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                            android.view.ViewGroup.LayoutParams.MATCH_PARENT);
+                    group.addView(backdrop, 0, lp);
+                } else {
+                    backdrop.setRenderEffect(liquidGlassEffect);
+                }
+            } else {
+                View explicitBg = view.findViewWithTag("oneui_liquid_glass_backdrop");
+                if (explicitBg != null) {
+                    explicitBg.setRenderEffect(liquidGlassEffect);
+                }
+            }
+
             view.setBackground(glassDrawable);
             view.setClipToOutline(true);
         } else {
@@ -80,6 +113,19 @@ public class UiHelper {
                     ? R.drawable.bg_oneui_liquid_glass_dark
                     : R.drawable.bg_oneui_liquid_glass_light);
         }
+    }
+
+    private static boolean shouldAttachGlassBackdrop(android.view.ViewGroup group) {
+        // Only attach a full-bleed backdrop child to overlay/positional containers (FrameLayout / RelativeLayout)
+        // that are not root fragment hosts, so child layout rules and weights are never disrupted.
+        if (!(group instanceof android.widget.FrameLayout || group instanceof android.widget.RelativeLayout)) {
+            return false;
+        }
+        int id = group.getId();
+        return id != R.id.stream_settings
+                && id != R.id.preferences_container
+                && id != R.id.pcFragmentContainer
+                && id != R.id.appFragmentContainer;
     }
 
     public static void styleDialogSquircle(android.app.Dialog dialog) {
@@ -95,10 +141,13 @@ public class UiHelper {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             int blurRadiusPx = (int) dpToPx(context, ONEUI_BLUR_RADIUS_DP);
             window.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND);
-            window.setBackgroundBlurRadius(blurRadiusPx);
+            WindowManager.LayoutParams attrs = window.getAttributes();
+            attrs.setBlurBehindRadius(blurRadiusPx);
+            window.setAttributes(attrs);
         }
         View decorView = window.getDecorView();
         if (decorView != null) {
+            decorView.setRenderEffect(null);
             decorView.setClipToOutline(true);
         }
     }

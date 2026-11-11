@@ -23,14 +23,22 @@
             android:layout_width="match_parent"
             android:layout_height="68dp"
             android:background="@drawable/bg_oneui_liquid_glass"
-            android:paddingLeft="12dp"
-            android:paddingRight="12dp"
             android:gravity="center_vertical">
+
+            <View
+                android:tag="oneui_liquid_glass_backdrop"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@drawable/bg_oneui_liquid_glass"
+                android:clickable="false"
+                android:focusable="false" />
 
             <ImageButton
                 android:id="@+id/settingsButton"
                 android:layout_width="56dp"
                 android:layout_height="56dp"
+                android:layout_marginLeft="12dp"
+                android:layout_marginStart="12dp"
                 android:cropToPadding="false"
                 android:scaleType="centerInside"
                 android:padding="12dp"
@@ -59,6 +67,8 @@
                 android:id="@+id/manuallyAddPc"
                 android:layout_width="56dp"
                 android:layout_height="56dp"
+                android:layout_marginRight="12dp"
+                android:layout_marginEnd="12dp"
                 android:cropToPadding="false"
                 android:scaleType="centerInside"
                 android:padding="12dp"
