@@ -330,6 +330,7 @@ public class AppView extends AppCompatActivity implements AdapterFragmentCallbac
         TextView label = findViewById(R.id.appListText);
         setTitle(computerName);
         label.setText(computerName);
+        UiHelper.applyLiquidGlassEffect(label);
 
         this.prefConfig = PreferenceConfiguration.readPreferences(this);
 

@@ -17,6 +17,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.limelight.EditProfileActivity;
 import com.limelight.R;
+import com.limelight.utils.UiHelper;
 
 import java.util.List;
 import java.util.UUID;
@@ -69,7 +70,7 @@ public class ProfilesAdapter extends RecyclerView.Adapter<ProfilesAdapter.Profil
         });
 
         holder.deleteProfile.setOnClickListener(v -> {
-            new AlertDialog.Builder(context)
+            AlertDialog deleteDialog = new AlertDialog.Builder(context)
                 .setTitle(R.string.profile_manager_delete_profile)
                 .setMessage(context.getString(R.string.profile_manager_confirm_profile_deleteion, profile.getName()))
                 .setPositiveButton(R.string.profile_manager_delete, (dialog, which) -> {
@@ -79,6 +80,7 @@ public class ProfilesAdapter extends RecyclerView.Adapter<ProfilesAdapter.Profil
                 })
                 .setNegativeButton(context.getString(R.string.cancel), null)
                 .show();
+            UiHelper.styleDialogSquircle(deleteDialog);
         });
 
         // Also make the whole row clickable to edit

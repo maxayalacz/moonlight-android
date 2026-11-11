@@ -95,7 +95,9 @@ public class SpinnerDialog implements Runnable,OnCancelListener {
 
             synchronized (rundownDialogs) {
                 rundownDialogs.add(this);
+                UiHelper.styleDialogSquircle(progress);
                 progress.show();
+                UiHelper.styleDialogSquircle(progress);
             }
         }
         else

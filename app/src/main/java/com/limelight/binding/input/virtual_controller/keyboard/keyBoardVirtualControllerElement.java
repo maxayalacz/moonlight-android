@@ -17,6 +17,7 @@ import android.widget.FrameLayout;
 
 import com.limelight.Game;
 import com.limelight.binding.input.virtual_controller.VirtualController;
+import com.limelight.utils.UiHelper;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -286,8 +287,10 @@ public abstract class keyBoardVirtualControllerElement extends View {
             }
         });
         AlertDialog alert = alertBuilder.create();
+        UiHelper.styleDialogSquircle(alert);
         // show menu
         alert.show();
+        UiHelper.styleDialogSquircle(alert);
     }
 
     @Override

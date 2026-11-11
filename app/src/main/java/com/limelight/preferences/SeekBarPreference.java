@@ -11,6 +11,7 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.preference.Preference;
 
 import com.limelight.R;
+import com.limelight.utils.UiHelper;
 
 import java.util.Locale;
 
@@ -158,6 +159,7 @@ public class SeekBarPreference extends Preference
         dialogBuilder.setNegativeButton(context.getString(R.string.cancel), (dialog, which) -> dialog.dismiss());
 
         dialog = dialogBuilder.create();
+        UiHelper.styleDialogSquircle(dialog);
         return dialog;
     }
 
@@ -194,7 +196,9 @@ public class SeekBarPreference extends Preference
     public void showDialog() {
         AlertDialog dialog = getDialog();
         updateSeekbar();
+        UiHelper.styleDialogSquircle(dialog);
         dialog.show();
+        UiHelper.styleDialogSquircle(dialog);
     }
 
     @Override

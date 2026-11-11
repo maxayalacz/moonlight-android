@@ -28,6 +28,7 @@ import android.widget.TextView;
 import com.limelight.Game;
 import com.limelight.R;
 import com.limelight.preferences.PreferenceConfiguration;
+import com.limelight.utils.UiHelper;
 
 import java.util.BitSet;
 import java.util.HashMap;
@@ -104,6 +105,7 @@ public class KeyBoardLayoutController {
         this.context = context;
         this.prefConfig = prefConfig;
         this.keyboardView = (LinearLayout) LayoutInflater.from(context).inflate(R.layout.layout_axixi_keyboard, null);
+        UiHelper.applyLiquidGlassEffect(this.keyboardView);
         this.handler = new Handler(Looper.getMainLooper());
         initKeyPopup();
         initKeyboard();
@@ -262,6 +264,7 @@ public class KeyBoardLayoutController {
         // Create the popup window
         keyPopupText = new TextView(context);
         keyPopupText.setBackgroundResource(R.drawable.key_popup_background);
+        UiHelper.applyLiquidGlassEffect(keyPopupText);
         keyPopupText.setTextColor(Color.WHITE);
         keyPopupText.setTextSize(32);
         keyPopupText.setGravity(Gravity.CENTER);

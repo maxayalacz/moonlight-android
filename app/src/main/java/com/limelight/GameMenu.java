@@ -19,6 +19,7 @@ import com.limelight.binding.input.KeyboardTranslator;
 import com.limelight.preferences.PreferenceConfiguration;
 import com.limelight.utils.KeyConfigHelper;
 import com.limelight.utils.KeyMapper;
+import com.limelight.utils.UiHelper;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -130,6 +131,7 @@ public class GameMenu implements Game.GameMenuCallbacks {
             currentDialog.dismiss();
         }
         currentDialog = builder.show();
+        UiHelper.styleDialogSquircle(currentDialog);
 
         Window window = currentDialog.getWindow();
 
@@ -304,10 +306,11 @@ public class GameMenu implements Game.GameMenuCallbacks {
                     if (serverCmds.isEmpty()) {
                         int themeResId = game.getApplicationInfo().theme;
                         Context themedContext = new ContextThemeWrapper(dialogScreenContext, themeResId);
-                        new AlertDialog.Builder(themedContext)
+                        AlertDialog emptyCmdDialog = new AlertDialog.Builder(themedContext)
                                 .setTitle(R.string.game_dialog_title_server_cmd_empty)
                                 .setMessage(R.string.game_dialog_message_server_cmd_empty)
                                 .show();
+                        UiHelper.styleDialogSquircle(emptyCmdDialog);
                     } else {
                         hideMenu();
                         this.showServerCmd(serverCmds);

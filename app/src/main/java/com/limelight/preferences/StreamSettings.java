@@ -98,6 +98,7 @@ public class StreamSettings extends AppCompatActivity {
         UiHelper.setLocale(this);
 
         setContentView(R.layout.activity_stream_settings);
+        UiHelper.applyLiquidGlassEffect(findViewById(R.id.stream_settings));
 
 //        UiHelper.notifyNewRootView(this);
     }

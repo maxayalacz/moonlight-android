@@ -106,7 +106,9 @@ public class Dialog implements Runnable {
 
         synchronized (rundownDialogs) {
             rundownDialogs.add(this);
+            UiHelper.styleDialogSquircle(alert);
             alert.show();
+            UiHelper.styleDialogSquircle(alert);
         }
     }
 

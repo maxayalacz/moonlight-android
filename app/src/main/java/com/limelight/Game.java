@@ -516,12 +516,15 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
         }
 
         notificationOverlayView = findViewById(R.id.notificationOverlay);
+        UiHelper.applyLiquidGlassEffect(notificationOverlayView);
 
         performanceOverlayView = findViewById(R.id.performanceOverlay);
 
         performanceOverlayLite = findViewById(R.id.performanceOverlayLite);
+        UiHelper.applyLiquidGlassEffect(performanceOverlayLite);
 
         performanceOverlayBig = findViewById(R.id.performanceOverlayBig);
+        UiHelper.applyLiquidGlassEffect(performanceOverlayBig);
 
         inputCaptureProvider = InputCaptureManager.getInputCaptureProvider(this, this);
 
@@ -881,10 +884,12 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
         gameMenuCallbacks = new GameMenu(this);
 
         floatingMenuButton = findViewById(R.id.floatingMenuButton);
+        UiHelper.applyLiquidGlassEffect(floatingMenuButton);
         updateFloatingButtonVisibility(prefConfig.enableBackMenu && prefConfig.enableFloatingButton);
         initFloatingButton();
 
         overlayToggleButton = findViewById(R.id.overlayToggleZoomButton);
+        UiHelper.applyLiquidGlassEffect(overlayToggleButton);
         setupOverlayToggleButton();
 
         //fixed size + pacing without back-pressure on MTK
@@ -4130,7 +4135,7 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
         }
         final MouseModeOption[] optionArray = options.toArray(new MouseModeOption[0]);
 
-        new AlertDialog.Builder(context)
+        AlertDialog mouseDialog = new AlertDialog.Builder(context)
                 .setTitle(getString(R.string.game_menu_select_mouse_mode))
                 .setItems(labels, (dialog, which) -> {
                     dialog.dismiss();
@@ -4147,8 +4152,10 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
                         }
                     }
                 })
-                .create()
-                .show();
+                .create();
+        UiHelper.styleDialogSquircle(mouseDialog);
+        mouseDialog.show();
+        UiHelper.styleDialogSquircle(mouseDialog);
     }
 
     //本地鼠标光标切换
@@ -4253,7 +4260,9 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
         builder.setNegativeButton(getString(R.string.no), (dialog, which) -> dialog.dismiss());
 
         AlertDialog dialog = builder.create();
+        UiHelper.styleDialogSquircle(dialog);
         dialog.show();
+        UiHelper.styleDialogSquircle(dialog);
     }
 
     @Override

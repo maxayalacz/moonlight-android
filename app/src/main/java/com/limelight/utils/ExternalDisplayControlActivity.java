@@ -497,7 +497,12 @@ public class ExternalDisplayControlActivity extends AppCompatActivity implements
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.HORIZONTAL);
         layout.setGravity(gravity);
+        int pad = dpToPx(6);
+        layout.setPadding(pad, pad, pad, pad);
+        UiHelper.applyLiquidGlassEffect(layout);
         FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, gravity);
+        int margin = dpToPx(12);
+        params.setMargins(margin, margin, margin, margin);
         layout.setLayoutParams(params);
         return layout;
     }

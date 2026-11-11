@@ -11,12 +11,18 @@ import android.content.DialogInterface;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.graphics.Insets;
+import android.graphics.PorterDuff;
+import android.graphics.PorterDuffColorFilter;
+import android.graphics.RenderEffect;
+import android.graphics.Shader;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.LocaleList;
 import android.text.Html;
 import android.text.method.LinkMovementMethod;
 import android.util.TypedValue;
 import android.view.View;
+import android.view.Window;
 import android.view.WindowInsets;
 import android.view.WindowManager;
 import android.widget.TextView;
@@ -35,6 +41,67 @@ public class UiHelper {
 
     private static final int TV_VERTICAL_PADDING_DP = 15;
     private static final int TV_HORIZONTAL_PADDING_DP = 15;
+    private static final float ONEUI_SQUIRCLE_RADIUS_DP = 28f;
+    private static final float ONEUI_DIALOG_SQUIRCLE_RADIUS_DP = 32f;
+    private static final float ONEUI_BLUR_RADIUS_DP = 28f;
+    private static final int ONEUI_GLASS_OVERLAY_TINT_DARK = 0x40000000; // 25% translucent dark tint
+    private static final int ONEUI_GLASS_OVERLAY_TINT_LIGHT = 0x40FFFFFF; // 25% translucent light tint
+
+    public static void applyLiquidGlassEffect(View view) {
+        if (view == null) {
+            return;
+        }
+
+        Context context = view.getContext();
+        boolean isNightMode = (context.getResources().getConfiguration().uiMode
+                & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
+        float cornerRadiusPx = dpToPx(context, ONEUI_SQUIRCLE_RADIUS_DP);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            float blurRadiusPx = dpToPx(context, ONEUI_BLUR_RADIUS_DP);
+            int overlayTint = isNightMode ? ONEUI_GLASS_OVERLAY_TINT_DARK : ONEUI_GLASS_OVERLAY_TINT_LIGHT;
+
+            RenderEffect blurEffect = RenderEffect.createBlurEffect(
+                    blurRadiusPx, blurRadiusPx, Shader.TileMode.CLAMP);
+            RenderEffect liquidGlassEffect = RenderEffect.createColorFilterEffect(
+                    new PorterDuffColorFilter(overlayTint, PorterDuff.Mode.SRC_OVER),
+                    blurEffect);
+            view.setRenderEffect(liquidGlassEffect);
+
+            GradientDrawable glassDrawable = new GradientDrawable();
+            glassDrawable.setShape(GradientDrawable.RECTANGLE);
+            glassDrawable.setCornerRadius(cornerRadiusPx);
+            glassDrawable.setColor(overlayTint);
+            glassDrawable.setStroke((int) Math.max(1f, dpToPx(context, 1f)), 0x33FFFFFF);
+            view.setBackground(glassDrawable);
+            view.setClipToOutline(true);
+        } else {
+            view.setBackgroundResource(isNightMode
+                    ? R.drawable.bg_oneui_liquid_glass_dark
+                    : R.drawable.bg_oneui_liquid_glass_light);
+        }
+    }
+
+    public static void styleDialogSquircle(android.app.Dialog dialog) {
+        if (dialog == null) {
+            return;
+        }
+        Window window = dialog.getWindow();
+        if (window == null) {
+            return;
+        }
+        Context context = dialog.getContext();
+        window.setBackgroundDrawableResource(R.drawable.bg_oneui_dialog_squircle);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            int blurRadiusPx = (int) dpToPx(context, ONEUI_BLUR_RADIUS_DP);
+            window.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND);
+            window.setBackgroundBlurRadius(blurRadiusPx);
+        }
+        View decorView = window.getDecorView();
+        if (decorView != null) {
+            decorView.setClipToOutline(true);
+        }
+    }
 
     private static void setGameModeStatus(Context context, boolean streaming, boolean interruptible) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -246,8 +313,13 @@ public class UiHelper {
             builder.setNegativeButton(btnNoText, dialogClickListener);
         }
         AlertDialog dialog = builder.create();
+        styleDialogSquircle(dialog);
         dialog.show();
-        ((TextView)dialog.findViewById(android.R.id.message)).setMovementMethod(LinkMovementMethod.getInstance());
+        styleDialogSquircle(dialog);
+        TextView messageView = dialog.findViewById(android.R.id.message);
+        if (messageView != null) {
+            messageView.setMovementMethod(LinkMovementMethod.getInstance());
+        }
     }
 
     public static void displayVdisplayConfirmationDialog(Activity parent, ComputerDetails computer, final Runnable onYes, final Runnable onNo) {

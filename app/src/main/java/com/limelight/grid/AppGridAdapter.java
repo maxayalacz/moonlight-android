@@ -176,11 +176,11 @@ public class AppGridAdapter extends GenericGridAdapter<AppView.AppObject> {
             // Show the play button overlay
             overlayView.setImageResource(R.drawable.ic_play);
             overlayView.setVisibility(View.VISIBLE);
-            gridMask.setBackgroundColor(0x66000000);
+            gridMask.setBackgroundResource(R.drawable.bg_oneui_liquid_glass_dark);
         }
         else {
             overlayView.setVisibility(View.GONE);
-            gridMask.setBackgroundColor(0x00000000);
+            gridMask.setBackgroundResource(R.drawable.bg_oneui_squircle_card);
         }
 
         if (obj.isHidden) {

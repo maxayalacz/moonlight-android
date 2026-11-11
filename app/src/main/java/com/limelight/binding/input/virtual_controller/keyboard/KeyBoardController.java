@@ -33,6 +33,7 @@ import com.limelight.nvstream.NvConnection;
 import com.limelight.preferences.PreferenceConfiguration;
 import com.limelight.utils.KeyConfigHelper;
 import com.limelight.utils.KeyMapper;
+import com.limelight.utils.UiHelper;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -190,9 +191,10 @@ public class KeyBoardController {
 
         // Clear All button
         buttonClearAll = new Button(context);
-        buttonClearAll.setBackgroundColor(Color.DKGRAY);
+        UiHelper.applyLiquidGlassEffect(buttonClearAll);
+        buttonClearAll.setTextColor(Color.WHITE);
         buttonClearAll.setText(context.getString(R.string.keyboard_clear_all));
-        buttonClearAll.setAlpha(0.7f);
+        buttonClearAll.setAlpha(0.85f);
         buttonClearAll.setVisibility(View.GONE);
         buttonClearAll.setOnClickListener(v -> {
             AlertDialog.Builder builder = new AlertDialog.Builder(context);
@@ -209,14 +211,16 @@ public class KeyBoardController {
                 vibrate(KeyEvent.ACTION_DOWN);
             });
             builder.setNegativeButton(context.getString(R.string.no), null);
-            builder.show();
+            AlertDialog clearDialog = builder.show();
+            UiHelper.styleDialogSquircle(clearDialog);
         });
 
         // Add Keys button
         buttonAddKeys = new Button(context);
-        buttonAddKeys.setBackgroundColor(Color.DKGRAY);
+        UiHelper.applyLiquidGlassEffect(buttonAddKeys);
+        buttonAddKeys.setTextColor(Color.WHITE);
         buttonAddKeys.setText(context.getString(R.string.keyboard_add_keys));
-        buttonAddKeys.setAlpha(0.7f);
+        buttonAddKeys.setAlpha(0.85f);
         buttonAddKeys.setVisibility(View.GONE);
         buttonAddKeys.setOnClickListener(v -> showKeySelectionDialog());
 
@@ -691,7 +695,8 @@ public class KeyBoardController {
             });
 
             builder.setNegativeButton(context.getString(R.string.cancel), null);
-            builder.show();
+            AlertDialog keySelectionDialog = builder.show();
+            UiHelper.styleDialogSquircle(keySelectionDialog);
 
         } catch (Exception e) {
             LimeLog.warning("Error loading keyboard configuration: " + e.getMessage());

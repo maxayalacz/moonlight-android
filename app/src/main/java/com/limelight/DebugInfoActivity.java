@@ -23,6 +23,7 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.limelight.utils.DeviceUtils;
+import com.limelight.utils.UiHelper;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -44,6 +45,8 @@ public class DebugInfoActivity extends AppCompatActivity implements View.OnClick
 
         tx_gamepad_info = findViewById(R.id.tx_game_pad_info);
         TextView tx_content = findViewById(R.id.tx_content);
+        UiHelper.applyLiquidGlassEffect(tx_content);
+        UiHelper.applyLiquidGlassEffect(tx_gamepad_info);
         bt_vibrator = findViewById(R.id.bt_vibrator);
         bt_vibrator_value = findViewById(R.id.bt_vibrator_value);
 
@@ -87,7 +90,7 @@ public class DebugInfoActivity extends AppCompatActivity implements View.OnClick
         // Device Vibration
         if (v.getId() == R.id.bt_vibrator) {
             String[] titles = new String[]{getString(R.string.debug_info_simple_vibration), getString(R.string.debug_info_continuous_hd_vibration)};
-            new AlertDialog.Builder(this).setItems(titles, new DialogInterface.OnClickListener() {
+            AlertDialog dialog = new AlertDialog.Builder(this).setItems(titles, new DialogInterface.OnClickListener() {
                 @Override
                 public void onClick(DialogInterface dialog, int which) {
                     dialog.dismiss();
@@ -100,7 +103,10 @@ public class DebugInfoActivity extends AppCompatActivity implements View.OnClick
                             break;
                     }
                 }
-            }).setTitle(getString(R.string.debug_info_please_choose)).create().show();
+            }).setTitle(getString(R.string.debug_info_please_choose)).create();
+            UiHelper.styleDialogSquircle(dialog);
+            dialog.show();
+            UiHelper.styleDialogSquircle(dialog);
             return;
         }
 
@@ -114,13 +120,13 @@ public class DebugInfoActivity extends AppCompatActivity implements View.OnClick
             for (int i = 0; i < ids.size(); i++) {
                 strings[i] = ids.get(i).getName();
             }
-            new AlertDialog.Builder(this).setItems(strings, new DialogInterface.OnClickListener() {
+            AlertDialog gamepadDialog = new AlertDialog.Builder(this).setItems(strings, new DialogInterface.OnClickListener() {
                 @Override
                 public void onClick(DialogInterface dialog, int which) {
                     dialog.dismiss();
                     if (ids.get(which).getVibrator().hasVibrator()) {
                         String[] titles = new String[]{getString(R.string.debug_info_simple_vibration), getString(R.string.debug_info_continuous_hd_vibration)};
-                        new AlertDialog.Builder(DebugInfoActivity.this).setItems(titles, new DialogInterface.OnClickListener() {
+                        AlertDialog modeDialog = new AlertDialog.Builder(DebugInfoActivity.this).setItems(titles, new DialogInterface.OnClickListener() {
                             @Override
                             public void onClick(DialogInterface dialog, int which2) {
                                 dialog.dismiss();
@@ -135,12 +141,18 @@ public class DebugInfoActivity extends AppCompatActivity implements View.OnClick
                                         break;
                                 }
                             }
-                        }).setTitle(getString(R.string.debug_info_please_choose)).create().show();
+                        }).setTitle(getString(R.string.debug_info_please_choose)).create();
+                        UiHelper.styleDialogSquircle(modeDialog);
+                        modeDialog.show();
+                        UiHelper.styleDialogSquircle(modeDialog);
                     } else {
                         Toast.makeText(DebugInfoActivity.this, getString(R.string.debug_info_no_vibrator), Toast.LENGTH_SHORT).show();
                     }
                 }
-            }).setTitle(getString(R.string.debug_info_please_choose)).create().show();
+            }).setTitle(getString(R.string.debug_info_please_choose)).create();
+            UiHelper.styleDialogSquircle(gamepadDialog);
+            gamepadDialog.show();
+            UiHelper.styleDialogSquircle(gamepadDialog);
             return;
         }
 
@@ -155,7 +167,10 @@ public class DebugInfoActivity extends AppCompatActivity implements View.OnClick
             AlertDialog.Builder editDialog = new AlertDialog.Builder(this);
             editDialog.setTitle(getString(R.string.debug_info_set_amplitude));
             editDialog.setView(mSeekBar);
-            editDialog.create().show();
+            AlertDialog ampDialog = editDialog.create();
+            UiHelper.styleDialogSquircle(ampDialog);
+            ampDialog.show();
+            UiHelper.styleDialogSquircle(ampDialog);
         }
     }
 

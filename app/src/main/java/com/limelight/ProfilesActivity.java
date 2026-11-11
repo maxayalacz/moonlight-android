@@ -34,6 +34,8 @@ public class ProfilesActivity extends AppCompatActivity implements ProfilesManag
 
         // Setup empty state
         emptyState = findViewById(R.id.emptyState);
+        UiHelper.applyLiquidGlassEffect(emptyState);
+        UiHelper.applyLiquidGlassEffect(findViewById(R.id.profilesDescription));
 
         // Setup FloatingActionButton
         FloatingActionButton fab = findViewById(R.id.addProfileFab);

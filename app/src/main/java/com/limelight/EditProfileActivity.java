@@ -44,6 +44,7 @@ public class EditProfileActivity extends AppCompatActivity {
 
         // Setup toolbar
         Toolbar toolbar = findViewById(R.id.toolbar);
+        UiHelper.applyLiquidGlassEffect(toolbar);
         setSupportActionBar(toolbar);
         getSupportActionBar().setDisplayHomeAsUpEnabled(true);
 
@@ -75,6 +76,7 @@ public class EditProfileActivity extends AppCompatActivity {
         }
 
         prefsFragment = new ProfilePreferenceFragment(this, inMemoryPrefs);
+        UiHelper.applyLiquidGlassEffect(findViewById(R.id.preferences_container));
 
         // Load preference fragment
         getSupportFragmentManager()
@@ -164,7 +166,7 @@ public class EditProfileActivity extends AppCompatActivity {
         input.setText(initial);
         input.setSelection(initial.length());
 
-        new AlertDialog.Builder(this)
+        AlertDialog renameDialog = new AlertDialog.Builder(this)
                 .setTitle(R.string.profile_manager_edit_profile_name)
                 .setView(input)
                 .setPositiveButton("OK", (dialog, which) -> {
@@ -186,6 +188,7 @@ public class EditProfileActivity extends AppCompatActivity {
                 })
                 .setNegativeButton(getString(R.string.cancel), null)
                 .show();
+        UiHelper.styleDialogSquircle(renameDialog);
     }
 
     public SharedPreferences getInMemoryPrefs() {

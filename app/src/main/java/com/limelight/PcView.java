@@ -154,6 +154,8 @@ public class PcView extends AppCompatActivity implements AdapterFragmentCallback
         pcGridAdapter.updateLayoutWithPreferences(this, PreferenceConfiguration.readPreferences(this));
 
         // Setup the list view
+        View pcToolbarContainer = findViewById(R.id.pcToolbarContainer);
+        UiHelper.applyLiquidGlassEffect(pcToolbarContainer);
         ImageButton settingsButton = findViewById(R.id.settingsButton);
         ImageButton addComputerButton = findViewById(R.id.manuallyAddPc);
         ImageButton helpButton = findViewById(R.id.helpButton);
@@ -197,6 +199,7 @@ public class PcView extends AppCompatActivity implements AdapterFragmentCallback
             .commitAllowingStateLoss();
 
         noPcFoundLayout = findViewById(R.id.no_pc_found_layout);
+        UiHelper.applyLiquidGlassEffect(noPcFoundLayout);
         if (pcGridAdapter.getCount() == 0) {
             noPcFoundLayout.setVisibility(View.VISIBLE);
         }
@@ -608,7 +611,9 @@ public class PcView extends AppCompatActivity implements AdapterFragmentCallback
 
         dialogBuilder.setNegativeButton(getString(R.string.cancel), (dialog, which) -> dialog.dismiss());
         AlertDialog dialog = dialogBuilder.create();
+        UiHelper.styleDialogSquircle(dialog);
         dialog.show();
+        UiHelper.styleDialogSquircle(dialog);
 
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
             String pin = otpInput.getText().toString();

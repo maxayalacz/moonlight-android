@@ -325,6 +325,7 @@ public class AddComputerManually extends AppCompatActivity {
         setContentView(R.layout.activity_add_computer_manually);
 
         UiHelper.notifyNewRootView(this);
+        UiHelper.applyLiquidGlassEffect(findViewById(R.id.addPcCardContainer));
 
         this.hostText = findViewById(R.id.hostTextView);
         hostText.setImeOptions(EditorInfo.IME_ACTION_DONE);
@@ -388,7 +389,9 @@ public class AddComputerManually extends AppCompatActivity {
             builder.setNegativeButton(getString(R.string.cancel), (dialog, which) -> dialog.dismiss());
 
             AlertDialog dialog = builder.create();
+            UiHelper.styleDialogSquircle(dialog);
             dialog.show();
+            UiHelper.styleDialogSquircle(dialog);
         }
     }
 
