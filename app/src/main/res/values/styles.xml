@@ -14,15 +14,39 @@
         -->
     </style>
 
+    <!-- One UI 9 Squircle Shape Appearances (28dp to 32dp) -->
+    <style name="ShapeAppearance.OneUI.Squircle" parent="ShapeAppearance.MaterialComponents.MediumComponent">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">@dimen/oneui_squircle_radius</item>
+    </style>
+
+    <style name="ShapeAppearance.OneUI.Squircle.Large" parent="ShapeAppearance.MaterialComponents.LargeComponent">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">@dimen/oneui_squircle_radius_large</item>
+    </style>
+
+    <!-- One UI 9 Squircle Dialog Theme -->
+    <style name="OneUI.DialogTheme" parent="ThemeOverlay.MaterialComponents.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/bg_oneui_dialog_squircle</item>
+        <item name="shapeAppearanceMediumComponent">@style/ShapeAppearance.OneUI.Squircle.Large</item>
+        <item name="shapeAppearanceLargeComponent">@style/ShapeAppearance.OneUI.Squircle.Large</item>
+    </style>
+
     <!-- Application theme. -->
     <style name="AppTheme" parent="AppBaseTheme">
         <!-- All customizations that are NOT specific to a particular API-level can go here. -->
         <item name="android:windowActionBar">false</item>
         <item name="android:windowNoTitle">true</item>
-        <item name="android:statusBarColor">#1A1A1A</item>
-        <item name="android:navigationBarColor">#1A1A1A</item>
-        <item name="android:colorBackground">#1A1A1A</item>
-        <item name="android:windowBackground">#1A1A1A</item>
+        <item name="android:statusBarColor">#0F1115</item>
+        <item name="android:navigationBarColor">#0F1115</item>
+        <item name="android:colorBackground">#0F1115</item>
+        <item name="android:windowBackground">#0F1115</item>
+        <item name="android:alertDialogTheme">@style/OneUI.DialogTheme</item>
+        <item name="alertDialogTheme">@style/OneUI.DialogTheme</item>
+        <item name="android:dialogTheme">@style/OneUI.DialogTheme</item>
+        <item name="dialogTheme">@style/OneUI.DialogTheme</item>
+        <item name="shapeAppearanceMediumComponent">@style/ShapeAppearance.OneUI.Squircle</item>
+        <item name="shapeAppearanceLargeComponent">@style/ShapeAppearance.OneUI.Squircle.Large</item>
     </style>
 
     <style name="StreamBaseTheme" parent="AppBaseTheme">
@@ -47,6 +71,12 @@
         <item name="colorAccent">@android:color/white</item>
         <item name="colorControlActivated">@android:color/white</item>
         <item name="colorButtonNormal">@android:color/white</item>
+        <item name="android:alertDialogTheme">@style/OneUI.DialogTheme</item>
+        <item name="alertDialogTheme">@style/OneUI.DialogTheme</item>
+        <item name="android:dialogTheme">@style/OneUI.DialogTheme</item>
+        <item name="dialogTheme">@style/OneUI.DialogTheme</item>
+        <item name="shapeAppearanceMediumComponent">@style/ShapeAppearance.OneUI.Squircle</item>
+        <item name="shapeAppearanceLargeComponent">@style/ShapeAppearance.OneUI.Squircle.Large</item>
     </style>
 
     <style name="SettingsTheme" parent="Theme.AppCompat.NoActionBar">
@@ -54,6 +84,10 @@
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:colorBackground">@android:color/transparent</item>
         <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:alertDialogTheme">@style/OneUI.DialogTheme</item>
+        <item name="alertDialogTheme">@style/OneUI.DialogTheme</item>
+        <item name="android:dialogTheme">@style/OneUI.DialogTheme</item>
+        <item name="dialogTheme">@style/OneUI.DialogTheme</item>
     </style>
 
     <style name="ExternalDisplayControllerTheme" parent="AppTheme">

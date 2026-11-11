@@ -4,6 +4,12 @@
         <item name="android:statusBarColor">@android:color/transparent</item>
         <!-- Avoid some systems like MIUI which break the visibility of games title -->
         <item name="android:forceDarkAllowed">false</item>
+        <item name="android:alertDialogTheme">@style/OneUI.DialogTheme</item>
+        <item name="alertDialogTheme">@style/OneUI.DialogTheme</item>
+        <item name="android:dialogTheme">@style/OneUI.DialogTheme</item>
+        <item name="dialogTheme">@style/OneUI.DialogTheme</item>
+        <item name="shapeAppearanceMediumComponent">@style/ShapeAppearance.OneUI.Squircle</item>
+        <item name="shapeAppearanceLargeComponent">@style/ShapeAppearance.OneUI.Squircle.Large</item>
     </style>
 
     <style name="SettingsTheme" parent="AppTheme">

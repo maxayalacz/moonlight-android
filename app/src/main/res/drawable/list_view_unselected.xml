@@ -2,6 +2,7 @@
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle" >
 
-    <stroke android:width="1dip" android:color="#ffffff"/>
+    <corners android:radius="@dimen/oneui_squircle_radius" />
+    <stroke android:width="1dip" android:color="@color/oneui_glass_stroke"/>
 
 </shape>

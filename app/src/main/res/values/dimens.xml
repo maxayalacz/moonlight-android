@@ -1,9 +1,17 @@
 <resources>
 
     <!-- Default screen margins, per the Android Design guidelines. -->
-    <dimen name="activity_horizontal_margin">16dp</dimen>
-    <dimen name="activity_vertical_margin">16dp</dimen>
+    <dimen name="activity_horizontal_margin">20dp</dimen>
+    <dimen name="activity_vertical_margin">20dp</dimen>
     <dimen name="tv_channel_logo_width">80dp</dimen>
     <dimen name="tv_channel_logo_height">80dp</dimen>
+
+    <!-- Samsung One UI 9 'Liquid Glass' design tokens -->
+    <dimen name="oneui_squircle_radius">28dp</dimen>
+    <dimen name="oneui_squircle_radius_large">32dp</dimen>
+    <dimen name="oneui_blur_radius">28dp</dimen>
+    <dimen name="oneui_reachability_top_margin">180dp</dimen>
+    <dimen name="oneui_header_title_top_margin">88dp</dimen>
+    <dimen name="oneui_header_bottom_margin">24dp</dimen>
 
 </resources>

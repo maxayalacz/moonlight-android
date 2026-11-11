@@ -2,9 +2,10 @@
 <ripple xmlns:android="http://schemas.android.com/apk/res/android"
     android:color="#80FFFFFF">
     <item>
-        <shape android:shape="oval">
-            <solid android:color="#CC000000" />
-            <stroke android:color="#AAFFFFFF" android:width="2dp" />
+        <shape android:shape="rectangle">
+            <corners android:radius="@dimen/oneui_squircle_radius" />
+            <solid android:color="#25000000" />
+            <stroke android:color="@color/oneui_glass_stroke" android:width="1.5dp" />
             <size android:width="36dp" android:height="36dp" />
         </shape>
     </item>

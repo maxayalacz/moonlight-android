@@ -1,4 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="profileAccent">#FF4081</color>
+    <color name="oneui_surface_bg">#0F1115</color>
+    <color name="oneui_card_surface">#25000000</color>
+    <color name="oneui_glass_tint">#401A1D24</color>
+    <color name="oneui_glass_fallback_light">#20FFFFFF</color>
+    <color name="oneui_glass_fallback_dark">#25000000</color>
+    <color name="oneui_glass_fallback">@color/oneui_glass_fallback_dark</color>
+    <color name="oneui_glass_stroke">#33FFFFFF</color>
+    <color name="oneui_dialog_surface">#D91C1F26</color>
 </resources>

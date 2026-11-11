@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="oneui_glass_fallback">@color/oneui_glass_fallback_dark</color>
+    <color name="oneui_glass_tint">#40000000</color>
+</resources>
