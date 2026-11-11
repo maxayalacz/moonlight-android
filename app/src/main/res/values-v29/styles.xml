@@ -1,4 +1,18 @@
 <resources>
+    <style name="OneUI.DialogTheme" parent="Theme.Material3.Dark.Dialog.Alert">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowIsFloating">true</item>
+        <item name="android:windowBackground">@drawable/bg_oneui_dialog_squircle</item>
+        <item name="android:backgroundDimEnabled">true</item>
+        <item name="android:backgroundDimAmount">0.30</item>
+        <item name="colorSurface">@android:color/transparent</item>
+        <item name="android:colorBackground">@android:color/transparent</item>
+        <item name="android:colorBackgroundFloating">@android:color/transparent</item>
+        <item name="dialogCornerRadius">@dimen/oneui_squircle_radius_large</item>
+        <item name="shapeAppearanceMediumComponent">@style/ShapeAppearance.OneUI.Squircle.Large</item>
+        <item name="shapeAppearanceLargeComponent">@style/ShapeAppearance.OneUI.Squircle.Large</item>
+    </style>
+
     <style name="AppBaseTheme" parent="Theme.Material3.Dark.NoActionBar">
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
@@ -8,6 +22,11 @@
         <item name="alertDialogTheme">@style/OneUI.DialogTheme</item>
         <item name="android:dialogTheme">@style/OneUI.DialogTheme</item>
         <item name="dialogTheme">@style/OneUI.DialogTheme</item>
+        <item name="android:popupMenuStyle">@style/OneUI.PopupMenu</item>
+        <item name="popupMenuStyle">@style/OneUI.PopupMenu</item>
+        <item name="android:contextPopupMenuStyle">@style/OneUI.PopupMenu</item>
+        <item name="android:listPopupWindowStyle">@style/OneUI.ListPopupWindow</item>
+        <item name="listPopupWindowStyle">@style/OneUI.ListPopupWindow</item>
         <item name="shapeAppearanceMediumComponent">@style/ShapeAppearance.OneUI.Squircle</item>
         <item name="shapeAppearanceLargeComponent">@style/ShapeAppearance.OneUI.Squircle.Large</item>
     </style>

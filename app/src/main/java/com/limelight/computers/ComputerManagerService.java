@@ -44,7 +44,7 @@ import org.xmlpull.v1.XmlPullParserException;
 
 public class ComputerManagerService extends Service {
     private static final int SERVERINFO_POLLING_PERIOD_MS = 1500;
-    private static final int APPLIST_POLLING_PERIOD_MS = 30000;
+    private static final int APPLIST_POLLING_PERIOD_MS = 5000;
     private static final int APPLIST_FAILED_POLLING_RETRY_MS = 2000;
     private static final int MDNS_QUERY_PERIOD_MS = 1000;
     private static final int OFFLINE_POLL_TRIES = 3;
@@ -845,6 +845,7 @@ public class ComputerManagerService extends Service {
         }
 
         public void start() {
+            receivedAppList = false;
             thread = new Thread() {
                 @Override
                 public void run() {
@@ -853,6 +854,7 @@ public class ComputerManagerService extends Service {
                         // Can't poll if it's not online or paired
                         if (computer.state != ComputerDetails.State.ONLINE ||
                                 computer.pairState != PairingManager.PairState.PAIRED) {
+                            receivedAppList = false;
                             if (listener != null) {
                                 listener.notifyComputerUpdated(computer);
                             }

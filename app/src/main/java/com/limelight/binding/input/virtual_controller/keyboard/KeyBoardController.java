@@ -695,7 +695,9 @@ public class KeyBoardController {
             });
 
             builder.setNegativeButton(context.getString(R.string.cancel), null);
-            AlertDialog keySelectionDialog = builder.show();
+            AlertDialog keySelectionDialog = builder.create();
+            UiHelper.styleDialogSquircle(keySelectionDialog);
+            keySelectionDialog.show();
             UiHelper.styleDialogSquircle(keySelectionDialog);
 
         } catch (Exception e) {

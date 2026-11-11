@@ -8,5 +8,5 @@
     <color name="oneui_glass_fallback_dark">#25000000</color>
     <color name="oneui_glass_fallback">@color/oneui_glass_fallback_dark</color>
     <color name="oneui_glass_stroke">#33FFFFFF</color>
-    <color name="oneui_dialog_surface">#D91C1F26</color>
+    <color name="oneui_dialog_surface">#66141820</color>
 </resources>

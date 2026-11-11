@@ -128,6 +128,108 @@ public class UiHelper {
                 && id != R.id.appFragmentContainer;
     }
 
+    public static Activity findActivity(Context context) {
+        while (context instanceof android.content.ContextWrapper) {
+            if (context instanceof Activity) {
+                return (Activity) context;
+            }
+            context = ((android.content.ContextWrapper) context).getBaseContext();
+        }
+        return null;
+    }
+
+    public static void applyActivityBackdropBlur(Activity activity, boolean enable) {
+        if (activity == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            return;
+        }
+        View content = activity.findViewById(android.R.id.content);
+        if (content == null) {
+            return;
+        }
+        if (enable && !activity.isFinishing() && !activity.isChangingConfigurations()) {
+            float blurRadiusPx = dpToPx(activity, ONEUI_BLUR_RADIUS_DP);
+            content.setRenderEffect(RenderEffect.createBlurEffect(
+                    blurRadiusPx, blurRadiusPx, Shader.TileMode.CLAMP));
+        } else {
+            content.setRenderEffect(null);
+        }
+    }
+
+    public static void applyReachabilitySpacing(Activity activity) {
+        if (activity == null) {
+            return;
+        }
+        android.content.res.Resources res = activity.getResources();
+        boolean isLandscape = res.getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE;
+        int reachabilityTop = res.getDimensionPixelSize(R.dimen.oneui_reachability_top_margin);
+        int headerTitleTop = res.getDimensionPixelSize(R.dimen.oneui_header_title_top_margin);
+        int headerBottom = res.getDimensionPixelSize(R.dimen.oneui_header_bottom_margin);
+        int horizontalMargin = res.getDimensionPixelSize(R.dimen.activity_horizontal_margin);
+
+        View oneuiHeader = activity.findViewById(R.id.oneuiHeaderContainer);
+        if (oneuiHeader != null && oneuiHeader.getLayoutParams() instanceof android.view.ViewGroup.MarginLayoutParams) {
+            android.view.ViewGroup.MarginLayoutParams lp = (android.view.ViewGroup.MarginLayoutParams) oneuiHeader.getLayoutParams();
+            lp.topMargin = reachabilityTop;
+            lp.bottomMargin = headerBottom;
+            oneuiHeader.setLayoutParams(lp);
+            oneuiHeader.setPadding(horizontalMargin, oneuiHeader.getPaddingTop(), horizontalMargin, oneuiHeader.getPaddingBottom());
+        }
+
+        View pcToolbar = activity.findViewById(R.id.pcToolbarContainer);
+        if (pcToolbar != null && pcToolbar.getLayoutParams() != null) {
+            android.view.ViewGroup.LayoutParams lp = pcToolbar.getLayoutParams();
+            lp.height = (int) dpToPx(activity, isLandscape ? 54f : 64f);
+            pcToolbar.setLayoutParams(lp);
+        }
+
+        View appListText = activity.findViewById(R.id.appListText);
+        if (appListText != null && appListText.getLayoutParams() instanceof android.view.ViewGroup.MarginLayoutParams) {
+            android.view.ViewGroup.MarginLayoutParams lp = (android.view.ViewGroup.MarginLayoutParams) appListText.getLayoutParams();
+            lp.topMargin = reachabilityTop;
+            lp.bottomMargin = headerBottom;
+            lp.leftMargin = horizontalMargin;
+            lp.rightMargin = horizontalMargin;
+            appListText.setLayoutParams(lp);
+            int vertPad = (int) dpToPx(activity, isLandscape ? 8f : 12f);
+            appListText.setPadding(appListText.getPaddingLeft(), vertPad, appListText.getPaddingRight(), vertPad);
+        }
+
+        View profilesDesc = activity.findViewById(R.id.profilesDescription);
+        if (profilesDesc != null && profilesDesc.getLayoutParams() instanceof android.view.ViewGroup.MarginLayoutParams) {
+            android.view.ViewGroup.MarginLayoutParams lp = (android.view.ViewGroup.MarginLayoutParams) profilesDesc.getLayoutParams();
+            lp.topMargin = reachabilityTop;
+            lp.bottomMargin = headerBottom;
+            profilesDesc.setLayoutParams(lp);
+            int pad = (int) dpToPx(activity, isLandscape ? 12f : 18f);
+            profilesDesc.setPadding(pad, pad, pad, pad);
+        }
+
+        View manualPcText = activity.findViewById(R.id.manuallyAddPcText);
+        if (manualPcText != null && manualPcText.getLayoutParams() instanceof android.view.ViewGroup.MarginLayoutParams) {
+            android.view.ViewGroup.MarginLayoutParams lp = (android.view.ViewGroup.MarginLayoutParams) manualPcText.getLayoutParams();
+            lp.topMargin = reachabilityTop;
+            lp.bottomMargin = headerBottom;
+            manualPcText.setLayoutParams(lp);
+        }
+
+        View editToolbar = activity.findViewById(R.id.toolbar);
+        if (editToolbar != null && editToolbar.getLayoutParams() instanceof android.view.ViewGroup.MarginLayoutParams) {
+            android.view.ViewGroup.MarginLayoutParams lp = (android.view.ViewGroup.MarginLayoutParams) editToolbar.getLayoutParams();
+            lp.topMargin = headerTitleTop;
+            lp.bottomMargin = headerBottom;
+            editToolbar.setLayoutParams(lp);
+        }
+
+        View streamSettings = activity.findViewById(R.id.stream_settings);
+        if (streamSettings != null) {
+            streamSettings.setPadding(
+                    streamSettings.getPaddingLeft(),
+                    headerTitleTop,
+                    streamSettings.getPaddingRight(),
+                    streamSettings.getPaddingBottom());
+        }
+    }
+
     public static void styleDialogSquircle(android.app.Dialog dialog) {
         if (dialog == null) {
             return;
@@ -137,18 +239,43 @@ public class UiHelper {
             return;
         }
         Context context = dialog.getContext();
+        final Activity hostActivity = dialog.getOwnerActivity() != null
+                ? dialog.getOwnerActivity()
+                : findActivity(context);
         window.setBackgroundDrawableResource(R.drawable.bg_oneui_dialog_squircle);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             int blurRadiusPx = (int) dpToPx(context, ONEUI_BLUR_RADIUS_DP);
-            window.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND);
+            window.setBackgroundBlurRadius(blurRadiusPx);
+            window.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND
+                    | WindowManager.LayoutParams.FLAG_DIM_BEHIND);
             WindowManager.LayoutParams attrs = window.getAttributes();
             attrs.setBlurBehindRadius(blurRadiusPx);
+            attrs.dimAmount = 0.30f;
             window.setAttributes(attrs);
         }
         View decorView = window.getDecorView();
         if (decorView != null) {
             decorView.setRenderEffect(null);
             decorView.setClipToOutline(true);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && hostActivity != null) {
+                if (decorView.isAttachedToWindow()) {
+                    applyActivityBackdropBlur(hostActivity, true);
+                }
+                if (decorView.getTag(R.id.oneuiHeaderContainer) == null) {
+                    decorView.setTag(R.id.oneuiHeaderContainer, Boolean.TRUE);
+                    decorView.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
+                        @Override
+                        public void onViewAttachedToWindow(View v) {
+                            applyActivityBackdropBlur(hostActivity, true);
+                        }
+
+                        @Override
+                        public void onViewDetachedFromWindow(View v) {
+                            applyActivityBackdropBlur(hostActivity, false);
+                        }
+                    });
+                }
+            }
         }
     }
 
@@ -238,6 +365,32 @@ public class UiHelper {
         }
     }
 
+    public static void registerPopupBlurListener(final Activity activity) {
+        if (activity == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            return;
+        }
+        final View rootView = activity.findViewById(android.R.id.content);
+        if (rootView == null || rootView.getTag(R.id.pcToolbarContainer) != null) {
+            return;
+        }
+        rootView.setTag(R.id.pcToolbarContainer, Boolean.TRUE);
+        rootView.getViewTreeObserver().addOnWindowFocusChangeListener(hasFocus -> {
+            if (hasFocus) {
+                applyActivityBackdropBlur(activity, false);
+            } else if (!activity.isFinishing() && !activity.isChangingConfigurations()) {
+                boolean isResumed = true;
+                if (activity instanceof androidx.lifecycle.LifecycleOwner) {
+                    isResumed = ((androidx.lifecycle.LifecycleOwner) activity).getLifecycle()
+                            .getCurrentState()
+                            .isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED);
+                }
+                if (isResumed) {
+                    applyActivityBackdropBlur(activity, true);
+                }
+            }
+        });
+    }
+
     public static void notifyNewRootView(final Activity activity)
     {
         View rootView = activity.findViewById(android.R.id.content);
@@ -245,6 +398,10 @@ public class UiHelper {
 
         // Set GameState.MODE_NONE initially for all activities
         setGameModeStatus(activity, false, false);
+
+        applyReachabilitySpacing(activity);
+        applyActivityBackdropBlur(activity, false);
+        registerPopupBlurListener(activity);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             // Allow this non-streaming activity to layout under notches.

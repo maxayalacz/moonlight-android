@@ -10,8 +10,8 @@
     <dimen name="oneui_squircle_radius">28dp</dimen>
     <dimen name="oneui_squircle_radius_large">32dp</dimen>
     <dimen name="oneui_blur_radius">28dp</dimen>
-    <dimen name="oneui_reachability_top_margin">180dp</dimen>
-    <dimen name="oneui_header_title_top_margin">88dp</dimen>
-    <dimen name="oneui_header_bottom_margin">24dp</dimen>
+    <dimen name="oneui_reachability_top_margin">28dp</dimen>
+    <dimen name="oneui_header_title_top_margin">12dp</dimen>
+    <dimen name="oneui_header_bottom_margin">12dp</dimen>
 
 </resources>

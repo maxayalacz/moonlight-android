@@ -130,7 +130,9 @@ public class GameMenu implements Game.GameMenuCallbacks {
         if (currentDialog != null) {
             currentDialog.dismiss();
         }
-        currentDialog = builder.show();
+        currentDialog = builder.create();
+        UiHelper.styleDialogSquircle(currentDialog);
+        currentDialog.show();
         UiHelper.styleDialogSquircle(currentDialog);
 
         Window window = currentDialog.getWindow();
@@ -309,7 +311,9 @@ public class GameMenu implements Game.GameMenuCallbacks {
                         AlertDialog emptyCmdDialog = new AlertDialog.Builder(themedContext)
                                 .setTitle(R.string.game_dialog_title_server_cmd_empty)
                                 .setMessage(R.string.game_dialog_message_server_cmd_empty)
-                                .show();
+                                .create();
+                        UiHelper.styleDialogSquircle(emptyCmdDialog);
+                        emptyCmdDialog.show();
                         UiHelper.styleDialogSquircle(emptyCmdDialog);
                     } else {
                         hideMenu();

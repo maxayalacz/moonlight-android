@@ -79,7 +79,9 @@ public class ProfilesAdapter extends RecyclerView.Adapter<ProfilesAdapter.Profil
                     Toast.makeText(context, context.getString(R.string.profile_manager_profile_deleted, profile.getName()), Toast.LENGTH_SHORT).show();
                 })
                 .setNegativeButton(context.getString(R.string.cancel), null)
-                .show();
+                .create();
+            UiHelper.styleDialogSquircle(deleteDialog);
+            deleteDialog.show();
             UiHelper.styleDialogSquircle(deleteDialog);
         });
 

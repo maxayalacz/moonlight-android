@@ -168,9 +168,13 @@ public class AppView extends AppCompatActivity implements AdapterFragmentCallbac
         }
     };
 
+    private boolean needsAppListRefresh = true;
+
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
+
+        UiHelper.applyReachabilitySpacing(this);
 
         this.prefConfig = PreferenceConfiguration.readPreferences(this);
 
@@ -196,6 +200,8 @@ public class AppView extends AppCompatActivity implements AdapterFragmentCallbac
         if (managerBinder == null || !inForeground) {
             return;
         }
+
+        needsAppListRefresh = true;
 
         managerBinder.startPolling(new ComputerManagerListener() {
             @Override
@@ -242,6 +248,13 @@ public class AppView extends AppCompatActivity implements AdapterFragmentCallbac
                     return;
                 }
 
+                if (details.state == ComputerDetails.State.ONLINE && needsAppListRefresh) {
+                    needsAppListRefresh = false;
+                    if (poller != null) {
+                        poller.pollNow();
+                    }
+                }
+
                 // App list is the same or empty
                 if (details.rawAppList == null || details.rawAppList.equals(lastRawApplist)) {
 
@@ -250,6 +263,11 @@ public class AppView extends AppCompatActivity implements AdapterFragmentCallbac
                         // Update the currently running game using the app ID
                         lastRunningAppId = details.runningGameId;
                         updateUiWithServerinfo(details);
+                        // Immediately poll the app list when running game changes so dynamic
+                        // session entries (e.g. "Terminate") are added or removed right away
+                        if (poller != null) {
+                            poller.pollNow();
+                        }
                     }
 
                     return;
@@ -272,10 +290,12 @@ public class AppView extends AppCompatActivity implements AdapterFragmentCallbac
             }
         });
 
-        if (poller == null) {
-            poller = managerBinder.createAppListPoller(computer);
+        if (poller != null) {
+            poller.stop();
         }
+        poller = managerBinder.createAppListPoller(computer);
         poller.start();
+        poller.pollNow();
     }
 
     private void stopComputerUpdates() {
@@ -393,6 +413,8 @@ public class AppView extends AppCompatActivity implements AdapterFragmentCallbac
     protected void onResume() {
         super.onResume();
 
+        UiHelper.applyActivityBackdropBlur(this, false);
+
         // Display a decoder crash notification if we've returned after a crash
         UiHelper.showDecoderCrashDialog(this);
 
@@ -417,6 +439,8 @@ public class AppView extends AppCompatActivity implements AdapterFragmentCallbac
     @Override
     protected void onPause() {
         super.onPause();
+
+        UiHelper.applyActivityBackdropBlur(this, false);
 
         inForeground = false;
         stopComputerUpdates();
@@ -444,6 +468,7 @@ public class AppView extends AppCompatActivity implements AdapterFragmentCallbac
     @Override
     public void onCreateContextMenu(ContextMenu menu, View v, ContextMenuInfo menuInfo) {
         super.onCreateContextMenu(menu, v, menuInfo);
+        UiHelper.applyActivityBackdropBlur(this, true);
 
         AdapterContextMenuInfo info = (AdapterContextMenuInfo) menuInfo;
         AppObject selectedApp = (AppObject) appGridAdapter.getItem(info.position);
@@ -500,6 +525,7 @@ public class AppView extends AppCompatActivity implements AdapterFragmentCallbac
 
     @Override
     public void onContextMenuClosed(Menu menu) {
+        UiHelper.applyActivityBackdropBlur(this, false);
     }
 
     @Override

@@ -53,6 +53,18 @@ public class ProfilesActivity extends AppCompatActivity implements ProfilesManag
     }
 
     @Override
+    protected void onResume() {
+        super.onResume();
+        UiHelper.applyActivityBackdropBlur(this, false);
+    }
+
+    @Override
+    public void onConfigurationChanged(android.content.res.Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        UiHelper.applyReachabilitySpacing(this);
+    }
+
+    @Override
     protected void onDestroy() {
         super.onDestroy();
         ProfilesManager.getInstance().removeListener(this);

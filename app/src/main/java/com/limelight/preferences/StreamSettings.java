@@ -98,9 +98,27 @@ public class StreamSettings extends AppCompatActivity {
         UiHelper.setLocale(this);
 
         setContentView(R.layout.activity_stream_settings);
-        UiHelper.applyLiquidGlassEffect(findViewById(R.id.stream_settings));
+        UiHelper.applyReachabilitySpacing(this);
+        UiHelper.registerPopupBlurListener(this);
+
+        getSupportFragmentManager().registerFragmentLifecycleCallbacks(
+                new androidx.fragment.app.FragmentManager.FragmentLifecycleCallbacks() {
+                    @Override
+                    public void onFragmentStarted(@NonNull androidx.fragment.app.FragmentManager fm,
+                                                  @NonNull androidx.fragment.app.Fragment f) {
+                        if (f instanceof DialogFragment) {
+                            UiHelper.styleDialogSquircle(((DialogFragment) f).getDialog());
+                        }
+                    }
+                }, true);
 
 //        UiHelper.notifyNewRootView(this);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        UiHelper.applyActivityBackdropBlur(this, false);
     }
 
     @Override
@@ -124,6 +142,7 @@ public class StreamSettings extends AppCompatActivity {
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
+        UiHelper.applyReachabilitySpacing(this);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             Display.Mode mode = getActiveDisplay(StreamSettings.this, previousPrefs).getMode();
