@@ -25,13 +25,15 @@ jobs:
           java-version: '17'
           cache: 'gradle'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android NDK
+      - name: Setup Android SDK and NDK
         run: |
+          if ! command -v sdkmanager &> /dev/null; then
+            export PATH="${ANDROID_HOME}/cmdline-tools/latest/bin:${PATH}"
+          fi
           yes | sdkmanager --licenses || true
           sdkmanager --install "ndk;27.0.12077973"
+          echo "sdk.dir=${ANDROID_HOME}" > local.properties
+          echo "ndk.dir=${ANDROID_HOME}/ndk/27.0.12077973" >> local.properties
 
       - name: Make gradlew executable
         run: chmod +x gradlew
