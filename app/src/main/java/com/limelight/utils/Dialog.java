@@ -3,7 +3,7 @@ package com.limelight.utils;
 import java.util.ArrayList;
 
 import android.app.Activity;
-import android.app.AlertDialog;
+import androidx.appcompat.app.AlertDialog;
 import android.content.DialogInterface;
 import android.widget.Button;
 

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="OneUI.DialogTheme" parent="Theme.Material3.Dark.Dialog.Alert">
+    <style name="OneUI.DialogTheme" parent="Theme.MaterialComponents.Dialog.Alert">
         <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowIsFloating">true</item>
         <item name="android:windowBackground">@drawable/bg_oneui_dialog_squircle</item>
@@ -10,6 +10,8 @@
         <item name="colorSurface">@android:color/transparent</item>
         <item name="android:colorBackground">@android:color/transparent</item>
         <item name="android:colorBackgroundFloating">@android:color/transparent</item>
+        <item name="android:textColorPrimary">#FFFFFF</item>
+        <item name="android:textColorSecondary">#B3FFFFFF</item>
         <item name="dialogCornerRadius">@dimen/oneui_squircle_radius_large</item>
         <item name="shapeAppearanceMediumComponent">@style/ShapeAppearance.OneUI.Squircle.Large</item>
         <item name="shapeAppearanceLargeComponent">@style/ShapeAppearance.OneUI.Squircle.Large</item>

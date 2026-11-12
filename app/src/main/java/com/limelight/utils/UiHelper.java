@@ -1,7 +1,7 @@
 package com.limelight.utils;
 
 import android.app.Activity;
-import android.app.AlertDialog;
+import androidx.appcompat.app.AlertDialog;
 import android.app.GameManager;
 import android.app.GameState;
 import android.app.LocaleManager;
@@ -11,6 +11,7 @@ import android.content.DialogInterface;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.graphics.Insets;
+import android.graphics.PixelFormat;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
 import android.graphics.RenderEffect;
@@ -219,8 +220,7 @@ public class UiHelper {
      * On API 31+ the blur is a window *background* blur: SurfaceFlinger blurs only the
      * content behind the dialog window, clipped to the window background drawable's
      * rounded bounds. Nothing outside the card is blurred and the dialog's own text is
-     * never blurred. When the OS disables cross-window blur (battery saver, reduce
-     * transparency, some game modes) a more opaque surface is used so text stays legible.
+     * never blurred.
      */
     public static void styleDialogSquircle(final android.app.Dialog dialog) {
         if (dialog == null) {
@@ -230,6 +230,7 @@ public class UiHelper {
         if (window == null) {
             return;
         }
+        window.setFormat(PixelFormat.TRANSLUCENT);
         window.setBackgroundDrawableResource(R.drawable.bg_oneui_dialog_squircle);
         // Never blur the whole screen behind the dialog; only the card's own bounds.
         window.clearFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND);
@@ -246,39 +247,44 @@ public class UiHelper {
     private static void applyBoundedWindowBlur(final Window window, Context context) {
         final WindowManager wm = context.getSystemService(WindowManager.class);
         final int blurRadiusPx = (int) dpToPx(context, ONEUI_BLUR_RADIUS_DP);
-        final java.util.function.Consumer<Boolean> updateBlur = enabled -> {
-            window.setBackgroundDrawableResource(enabled
-                    ? R.drawable.bg_oneui_dialog_squircle
-                    : R.drawable.bg_oneui_dialog_squircle_opaque);
-            window.setBackgroundBlurRadius(enabled ? blurRadiusPx : 0);
-        };
 
-        boolean blurEnabled = wm != null && wm.isCrossWindowBlurEnabled();
+        // Always retain the translucent squircle glass drawable
+        window.setBackgroundDrawableResource(R.drawable.bg_oneui_dialog_squircle);
+        window.setBackgroundBlurRadius(blurRadiusPx);
+
         if (wm == null) {
-            LimeLog.warning("OneUI: WindowManager unavailable, using opaque dialog surface");
-        } else if (!blurEnabled) {
-            LimeLog.info("OneUI: cross-window blur is disabled by the system, using opaque dialog surface");
+            return;
         }
-        updateBlur.accept(blurEnabled);
 
         final View decorView = window.getDecorView();
-        if (wm == null || decorView.getTag(R.id.oneuiHeaderContainer) != null) {
+        if (decorView.getTag(R.id.oneuiHeaderContainer) != null) {
             return;
         }
         decorView.setTag(R.id.oneuiHeaderContainer, Boolean.TRUE);
+
+        final java.util.function.Consumer<Boolean> updateBlur = enabled -> {
+            window.setBackgroundBlurRadius(enabled ? blurRadiusPx : 0);
+        };
+
         decorView.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
             @Override
             public void onViewAttachedToWindow(View v) {
-                wm.addCrossWindowBlurEnabledListener(updateBlur);
+                try {
+                    wm.addCrossWindowBlurEnabledListener(updateBlur);
+                } catch (Exception ignored) {}
             }
 
             @Override
             public void onViewDetachedFromWindow(View v) {
-                wm.removeCrossWindowBlurEnabledListener(updateBlur);
+                try {
+                    wm.removeCrossWindowBlurEnabledListener(updateBlur);
+                } catch (Exception ignored) {}
             }
         });
         if (decorView.isAttachedToWindow()) {
-            wm.addCrossWindowBlurEnabledListener(updateBlur);
+            try {
+                wm.addCrossWindowBlurEnabledListener(updateBlur);
+            } catch (Exception ignored) {}
         }
     }
 
@@ -291,24 +297,27 @@ public class UiHelper {
             return;
         }
         android.view.ViewGroup group = (android.view.ViewGroup) decorView;
+        // Do NOT clear decorView itself, as decorView holds the window's background drawable!
         for (int i = 0; i < group.getChildCount(); i++) {
-            group.getChildAt(i).setBackground(null);
+            clearViewGroupPanelBackgrounds(group.getChildAt(i));
         }
         View content = decorView.findViewById(android.R.id.content);
         if (content != null) {
             content.setBackground(null);
         }
-        Context ctx = decorView.getContext();
-        int[] panelIds = {
-                ctx.getResources().getIdentifier("parentPanel", "id", "android"),
-                ctx.getResources().getIdentifier("parentPanel", "id", ctx.getPackageName()),
-        };
-        for (int id : panelIds) {
-            if (id != 0) {
-                View panel = decorView.findViewById(id);
-                if (panel != null) {
-                    panel.setBackground(null);
-                }
+    }
+
+    private static void clearViewGroupPanelBackgrounds(View view) {
+        if (view == null) {
+            return;
+        }
+        if (view instanceof android.view.ViewGroup) {
+            android.view.ViewGroup group = (android.view.ViewGroup) view;
+            if (!(group instanceof android.widget.Button) && !(group instanceof android.widget.EditText)) {
+                group.setBackground(null);
+            }
+            for (int i = 0; i < group.getChildCount(); i++) {
+                clearViewGroupPanelBackgrounds(group.getChildAt(i));
             }
         }
     }

@@ -9,6 +9,4 @@
     <color name="oneui_glass_fallback">@color/oneui_glass_fallback_dark</color>
     <color name="oneui_glass_stroke">#33FFFFFF</color>
     <color name="oneui_dialog_surface">#66141820</color>
-    <!-- Used when the OS has cross-window blur disabled (battery saver, reduce transparency, game mode) -->
-    <color name="oneui_dialog_surface_opaque">#E61A1D24</color>
 </resources>
