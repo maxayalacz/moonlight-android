@@ -313,9 +313,7 @@ public class UiHelper {
         }
         if (view instanceof android.view.ViewGroup) {
             android.view.ViewGroup group = (android.view.ViewGroup) view;
-            if (!(group instanceof android.widget.Button) && !(group instanceof android.widget.EditText)) {
-                group.setBackground(null);
-            }
+            group.setBackground(null);
             for (int i = 0; i < group.getChildCount(); i++) {
                 clearViewGroupPanelBackgrounds(group.getChildAt(i));
             }
