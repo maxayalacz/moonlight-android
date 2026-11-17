@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Deep midnight slate base -->
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="315"
+                android:startColor="#080B12"
+                android:centerColor="#0F1524"
+                android:endColor="#090D16"
+                android:type="linear" />
+        </shape>
+    </item>
+    <!-- Soft upper-left indigo ambient glow -->
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:type="radial"
+                android:gradientRadius="420dp"
+                android:centerX="0.14"
+                android:centerY="0.10"
+                android:startColor="#243B82F6"
+                android:endColor="#003B82F6" />
+        </shape>
+    </item>
+    <!-- Soft lower-right cyan ambient glow -->
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:type="radial"
+                android:gradientRadius="380dp"
+                android:centerX="0.86"
+                android:centerY="0.84"
+                android:startColor="#1A06B6D4"
+                android:endColor="#0006B6D4" />
+        </shape>
+    </item>
+</layer-list>

@@ -24,7 +24,7 @@
             android:id="@+id/grid_mask"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:background="@drawable/bg_oneui_squircle_card">
+            android:background="@drawable/bg_oneui_glass_card_interactive">
 
             <ImageView
                 android:id="@+id/grid_overlay"

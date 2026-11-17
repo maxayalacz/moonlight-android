@@ -53,65 +53,20 @@ public class UiHelper {
         }
 
         Context context = view.getContext();
-        boolean isNightMode = (context.getResources().getConfiguration().uiMode
-                & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
-        float cornerRadiusPx = dpToPx(context, ONEUI_SQUIRCLE_RADIUS_DP);
-
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            float blurRadiusPx = dpToPx(context, ONEUI_BLUR_RADIUS_DP);
-            int overlayTint = isNightMode ? ONEUI_GLASS_OVERLAY_TINT_DARK : ONEUI_GLASS_OVERLAY_TINT_LIGHT;
-
             // Ensure the foreground view/container itself is never blurred so all text and icons stay razor-sharp
             view.setRenderEffect(null);
+        }
 
-            RenderEffect blurEffect = RenderEffect.createBlurEffect(
-                    blurRadiusPx, blurRadiusPx, Shader.TileMode.CLAMP);
-            RenderEffect liquidGlassEffect = RenderEffect.createColorFilterEffect(
-                    new PorterDuffColorFilter(overlayTint, PorterDuff.Mode.SRC_OVER),
-                    blurEffect);
-
-            GradientDrawable glassDrawable = new GradientDrawable();
-            glassDrawable.setShape(GradientDrawable.RECTANGLE);
-            glassDrawable.setCornerRadius(cornerRadiusPx);
-            glassDrawable.setColor(overlayTint);
-            glassDrawable.setStroke((int) Math.max(1f, dpToPx(context, 1f)), 0x33FFFFFF);
-
-            if (view instanceof android.widget.FrameLayout && shouldAttachGlassBackdrop((android.view.ViewGroup) view)) {
-                android.view.ViewGroup group = (android.view.ViewGroup) view;
-                View backdrop = group.findViewWithTag("oneui_liquid_glass_backdrop");
-                if (backdrop == null) {
-                    backdrop = new View(context);
-                    backdrop.setTag("oneui_liquid_glass_backdrop");
-                    backdrop.setClickable(false);
-                    backdrop.setFocusable(false);
-                    backdrop.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-                    GradientDrawable backdropFill = new GradientDrawable();
-                    backdropFill.setShape(GradientDrawable.RECTANGLE);
-                    backdropFill.setCornerRadius(cornerRadiusPx);
-                    backdropFill.setColor(overlayTint);
-                    backdrop.setBackground(backdropFill);
-                    backdrop.setRenderEffect(liquidGlassEffect);
-
-                    android.widget.FrameLayout.LayoutParams lp = new android.widget.FrameLayout.LayoutParams(
-                            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                            android.view.ViewGroup.LayoutParams.MATCH_PARENT);
-                    group.addView(backdrop, 0, lp);
-                } else {
-                    backdrop.setRenderEffect(liquidGlassEffect);
-                }
-            } else {
-                View explicitBg = view.findViewWithTag("oneui_liquid_glass_backdrop");
-                if (explicitBg != null) {
-                    explicitBg.setRenderEffect(liquidGlassEffect);
-                }
-            }
-
-            view.setBackground(glassDrawable);
-            view.setClipToOutline(true);
+        if (view.getId() == R.id.notificationOverlay) {
+            view.setBackgroundResource(R.drawable.bg_oneui_notification_glass);
         } else {
-            view.setBackgroundResource(isNightMode
-                    ? R.drawable.bg_oneui_liquid_glass_dark
-                    : R.drawable.bg_oneui_liquid_glass_light);
+            view.setBackgroundResource(R.drawable.bg_oneui_liquid_glass);
+        }
+
+        view.setClipToOutline(true);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && view.getElevation() == 0f) {
+            view.setElevation(dpToPx(context, 4f));
         }
     }
 

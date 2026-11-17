@@ -50,7 +50,9 @@
         android:layout_gravity="right"
         android:textAppearance="?android:attr/textAppearanceLarge"
         android:gravity="right"
-        android:background="@drawable/bg_oneui_liquid_glass"
+        android:background="@drawable/bg_oneui_notification_glass"
+        android:textColor="#FFFFFF"
+        android:elevation="6dp"
         android:preferKeepClear="true"
         android:visibility="gone" />
 
