@@ -61,18 +61,55 @@ public class UiHelper {
         if (view.getId() == R.id.notificationOverlay) {
             view.setBackgroundResource(R.drawable.bg_oneui_notification_glass);
         } else if (view.getId() == R.id.pcToolbarContainer || view.getId() == R.id.appListText) {
-            view.setBackgroundResource(R.drawable.bg_oneui_floating_pill);
+            if (!applyFrostedCardBackground(view, com.limelight.ui.FlowingAuroraView.CornerMode.ALL,
+                    ONEUI_SQUIRCLE_RADIUS_DP, 0x4A121826)) {
+                view.setBackgroundResource(R.drawable.bg_oneui_floating_pill);
+            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 view.setElevation(dpToPx(context, 8f));
             }
         } else {
-            view.setBackgroundResource(R.drawable.bg_oneui_liquid_glass);
+            if (!applyFrostedCardBackground(view, com.limelight.ui.FlowingAuroraView.CornerMode.ALL,
+                    ONEUI_SQUIRCLE_RADIUS_DP, 0x26FFFFFF)) {
+                view.setBackgroundResource(R.drawable.bg_oneui_liquid_glass);
+            }
         }
 
         view.setClipToOutline(true);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && view.getElevation() == 0f) {
             view.setElevation(dpToPx(context, 4f));
         }
+    }
+
+    public static boolean applyFrostedCardBackground(
+            View view,
+            com.limelight.ui.FlowingAuroraView.CornerMode cornerMode,
+            float cornerRadiusDp,
+            int frostTintColor) {
+        if (view == null) {
+            return false;
+        }
+        Activity activity = unwrapActivity(view.getContext());
+        if (activity == null || activity.getWindow() == null) {
+            return false;
+        }
+        View content = activity.findViewById(android.R.id.content);
+        if (content == null) {
+            return false;
+        }
+        View auroraCandidate = content.findViewWithTag("oneui_flowing_aurora");
+        if (!(auroraCandidate instanceof com.limelight.ui.FlowingAuroraView)) {
+            return false;
+        }
+        com.limelight.ui.FlowingAuroraView aurora = (com.limelight.ui.FlowingAuroraView) auroraCandidate;
+        view.setBackground(new com.limelight.ui.FlowingAuroraView.FrostedCardDrawable(
+                view,
+                aurora,
+                cornerMode,
+                dpToPx(view.getContext(), cornerRadiusDp),
+                frostTintColor,
+                Math.max(1f, dpToPx(view.getContext(), 1f))));
+        return true;
     }
 
     private static boolean shouldAttachGlassBackdrop(android.view.ViewGroup group) {
@@ -409,27 +446,64 @@ public class UiHelper {
                 int[] svLoc = new int[2];
                 decorView.getLocationOnScreen(dialogLoc);
                 surfaceView.getLocationOnScreen(svLoc);
+
+                int svW = surfaceView.getWidth();
+                int svH = surfaceView.getHeight();
+                int interLeft = Math.max(svLoc[0], dialogLoc[0]);
+                int interTop = Math.max(svLoc[1], dialogLoc[1]);
+                int interRight = Math.min(svLoc[0] + svW, dialogLoc[0] + dialogW);
+                int interBottom = Math.min(svLoc[1] + svH, dialogLoc[1] + dialogH);
+                if (interRight <= interLeft || interBottom <= interTop) {
+                    mainHandler.postDelayed(tickHolder[0], 33L);
+                    return;
+                }
+
+                android.graphics.Rect surfaceFrame = surfaceView.getHolder().getSurfaceFrame();
+                int bufW = (surfaceFrame != null && surfaceFrame.width() > 0) ? surfaceFrame.width() : svW;
+                int bufH = (surfaceFrame != null && surfaceFrame.height() > 0) ? surfaceFrame.height() : svH;
+                float scaleX = bufW / (float) svW;
+                float scaleY = bufH / (float) svH;
+
                 android.graphics.Rect srcRect = new android.graphics.Rect(
-                        Math.max(0, dialogLoc[0] - svLoc[0]),
-                        Math.max(0, dialogLoc[1] - svLoc[1]),
-                        Math.min(surfaceView.getWidth(), dialogLoc[0] - svLoc[0] + dialogW),
-                        Math.min(surfaceView.getHeight(), dialogLoc[1] - svLoc[1] + dialogH));
+                        Math.max(0, Math.round((interLeft - svLoc[0]) * scaleX)),
+                        Math.max(0, Math.round((interTop - svLoc[1]) * scaleY)),
+                        Math.min(bufW, Math.round((interRight - svLoc[0]) * scaleX)),
+                        Math.min(bufH, Math.round((interBottom - svLoc[1]) * scaleY)));
                 if (srcRect.isEmpty()) {
                     mainHandler.postDelayed(tickHolder[0], 33L);
                     return;
                 }
+
+                final boolean fullCoverage = (interLeft == dialogLoc[0] && interTop == dialogLoc[1]
+                        && interRight == dialogLoc[0] + dialogW && interBottom == dialogLoc[1] + dialogH);
+                final int subW = Math.max(1, Math.round((interRight - interLeft) * 0.25f));
+                final int subH = Math.max(1, Math.round((interBottom - interTop) * 0.25f));
+                final android.graphics.Bitmap copyDest = fullCoverage
+                        ? target
+                        : android.graphics.Bitmap.createBitmap(subW, subH, android.graphics.Bitmap.Config.ARGB_8888);
+                final float dstLeft = (interLeft - dialogLoc[0]) * 0.25f;
+                final float dstTop = (interTop - dialogLoc[1]) * 0.25f;
+
                 inFlight[0] = true;
                 try {
                     android.view.PixelCopy.request(
                             surfaceView,
                             srcRect,
-                            target,
+                            copyDest,
                             result -> {
                                 inFlight[0] = false;
                                 if (!stopped[0] && result == android.view.PixelCopy.SUCCESS
                                         && decorView.isAttachedToWindow()) {
+                                    if (!fullCoverage) {
+                                        target.eraseColor(android.graphics.Color.BLACK);
+                                        android.graphics.Canvas c = new android.graphics.Canvas(target);
+                                        c.drawBitmap(copyDest, dstLeft, dstTop, null);
+                                        copyDest.recycle();
+                                    }
                                     applyBitmapToDialogBackdrop(decorView, target);
                                     bufferIndex[0] = 1 - idx;
+                                } else if (!fullCoverage) {
+                                    copyDest.recycle();
                                 }
                                 if (!stopped[0] && decorView.isAttachedToWindow()) {
                                     mainHandler.postDelayed(tickHolder[0], 33L);
@@ -438,6 +512,9 @@ public class UiHelper {
                             mainHandler);
                 } catch (IllegalArgumentException ignored) {
                     inFlight[0] = false;
+                    if (!fullCoverage) {
+                        copyDest.recycle();
+                    }
                 }
             };
 

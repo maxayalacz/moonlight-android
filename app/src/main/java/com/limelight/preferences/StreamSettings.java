@@ -431,31 +431,47 @@ public class StreamSettings extends AppCompatActivity {
                         return;
                     }
                     if (pref.getClass().getSimpleName().contains("SearchPreference")) {
-                        itemView.setBackgroundResource(R.drawable.bg_oneui_floating_pill);
+                        if (!UiHelper.applyFrostedCardBackground(
+                                itemView,
+                                com.limelight.ui.FlowingAuroraView.CornerMode.ALL,
+                                28f,
+                                0x4A121826)) {
+                            itemView.setBackgroundResource(R.drawable.bg_oneui_floating_pill);
+                        }
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                             itemView.setElevation(UiHelper.dpToPx(itemView.getContext(), 6f));
                         }
                     } else if (pref instanceof PreferenceCategory) {
                         boolean hasChildren = nextPref != null && !(nextPref instanceof PreferenceCategory);
-                        itemView.setBackgroundResource(hasChildren
-                                ? R.drawable.bg_oneui_glass_card_top
-                                : R.drawable.bg_oneui_squircle_card);
+                        com.limelight.ui.FlowingAuroraView.CornerMode mode = hasChildren
+                                ? com.limelight.ui.FlowingAuroraView.CornerMode.TOP
+                                : com.limelight.ui.FlowingAuroraView.CornerMode.ALL;
+                        if (!UiHelper.applyFrostedCardBackground(itemView, mode, 28f, 0x26FFFFFF)) {
+                            itemView.setBackgroundResource(hasChildren
+                                    ? R.drawable.bg_oneui_glass_card_top
+                                    : R.drawable.bg_oneui_squircle_card);
+                        }
                         View title = holder.findViewById(android.R.id.title);
                         if (title instanceof android.widget.TextView) {
-                            ((android.widget.TextView) title).setTextColor(0xD9FFFFFF);
+                            ((android.widget.TextView) title).setTextColor(0xE6FFFFFF);
                         }
                     } else {
                         boolean isLastInCard = nextPref == null || nextPref instanceof PreferenceCategory;
-                        itemView.setBackgroundResource(isLastInCard
-                                ? R.drawable.bg_oneui_glass_card_bottom
-                                : R.drawable.bg_oneui_glass_card_middle);
+                        com.limelight.ui.FlowingAuroraView.CornerMode mode = isLastInCard
+                                ? com.limelight.ui.FlowingAuroraView.CornerMode.BOTTOM
+                                : com.limelight.ui.FlowingAuroraView.CornerMode.MIDDLE;
+                        if (!UiHelper.applyFrostedCardBackground(itemView, mode, 28f, 0x22FFFFFF)) {
+                            itemView.setBackgroundResource(isLastInCard
+                                    ? R.drawable.bg_oneui_glass_card_bottom
+                                    : R.drawable.bg_oneui_glass_card_middle);
+                        }
                         View title = holder.findViewById(android.R.id.title);
                         if (title instanceof android.widget.TextView) {
                             ((android.widget.TextView) title).setTextColor(0xFFFFFFFF);
                         }
                         View summary = holder.findViewById(android.R.id.summary);
                         if (summary instanceof android.widget.TextView) {
-                            ((android.widget.TextView) summary).setTextColor(0xB3FFFFFF);
+                            ((android.widget.TextView) summary).setTextColor(0xCCFFFFFF);
                         }
                     }
                 }

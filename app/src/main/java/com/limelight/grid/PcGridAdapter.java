@@ -51,6 +51,17 @@ public class PcGridAdapter extends GenericGridAdapter<PcView.ComputerObject> {
 
     @Override
     public void populateView(View parentView, ImageView imgView, RelativeLayout gridMask, ProgressBar prgView, TextView txtView, ImageView overlayView, PcView.ComputerObject obj) {
+        android.view.ViewGroup cardContainer = parentView.findViewById(R.id.pc_card_container);
+        if (cardContainer != null && cardContainer.getChildCount() > 0) {
+            View cardSurface = cardContainer.getChildAt(0);
+            if (!(cardSurface.getBackground() instanceof com.limelight.ui.FlowingAuroraView.FrostedCardDrawable)) {
+                com.limelight.utils.UiHelper.applyFrostedCardBackground(
+                        cardSurface,
+                        com.limelight.ui.FlowingAuroraView.CornerMode.ALL,
+                        32f,
+                        0x26FFFFFF);
+            }
+        }
         imgView.setImageResource(R.drawable.ic_computer);
         if (obj.details.state == ComputerDetails.State.ONLINE) {
             imgView.setAlpha(1.0f);
