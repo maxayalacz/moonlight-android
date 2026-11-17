@@ -469,6 +469,70 @@ public class PcView extends AppCompatActivity implements AdapterFragmentCallback
         startComputerUpdates();
     }
 
+    private void openPcContextMenu(int position) {
+        if (position < 0 || position >= pcGridAdapter.getCount()) {
+            return;
+        }
+        final ComputerObject computer = (ComputerObject) pcGridAdapter.getItem(position);
+        if (computer == null) {
+            return;
+        }
+
+        stopComputerUpdates(false);
+
+        String headerTitle = computer.details.name + " - ";
+        switch (computer.details.state) {
+            case ONLINE:
+                headerTitle += getResources().getString(R.string.pcview_menu_header_online);
+                break;
+            case OFFLINE:
+                headerTitle += getResources().getString(R.string.pcview_menu_header_offline);
+                break;
+            case UNKNOWN:
+                headerTitle += getResources().getString(R.string.pcview_menu_header_unknown);
+                break;
+        }
+
+        java.util.List<UiHelper.PopupMenuItem> items = new java.util.ArrayList<>();
+        if (computer.details.state == ComputerDetails.State.OFFLINE ||
+                computer.details.state == ComputerDetails.State.UNKNOWN) {
+            items.add(new UiHelper.PopupMenuItem(WOL_ID, getResources().getString(R.string.pcview_menu_send_wol)));
+            items.add(new UiHelper.PopupMenuItem(GAMESTREAM_EOL_ID, getResources().getString(R.string.pcview_menu_eol)));
+        } else if (computer.details.pairState != PairState.PAIRED) {
+            items.add(new UiHelper.PopupMenuItem(PAIR_ID_OTP, getResources().getString(R.string.pcview_menu_pair_pc_otp)));
+            items.add(new UiHelper.PopupMenuItem(PAIR_ID, getResources().getString(R.string.pcview_menu_pair_pc)));
+            if (computer.details.nvidiaServer) {
+                items.add(new UiHelper.PopupMenuItem(GAMESTREAM_EOL_ID, getResources().getString(R.string.pcview_menu_eol)));
+            } else {
+                items.add(new UiHelper.PopupMenuItem(OPEN_MANAGEMENT_PAGE_ID, getResources().getString(R.string.pcview_menu_open_management_page)));
+            }
+        } else {
+            if (computer.details.runningGameId != 0) {
+                items.add(new UiHelper.PopupMenuItem(RESUME_ID, getResources().getString(R.string.applist_menu_resume)));
+                items.add(new UiHelper.PopupMenuItem(QUIT_ID, getResources().getString(R.string.applist_menu_quit)));
+            }
+
+            if (computer.details.nvidiaServer) {
+                items.add(new UiHelper.PopupMenuItem(GAMESTREAM_EOL_ID, getResources().getString(R.string.pcview_menu_eol)));
+            } else {
+                items.add(new UiHelper.PopupMenuItem(OPEN_MANAGEMENT_PAGE_ID, getResources().getString(R.string.pcview_menu_open_management_page)));
+            }
+
+            items.add(new UiHelper.PopupMenuItem(FULL_APP_LIST_ID, getResources().getString(R.string.pcview_menu_app_list)));
+        }
+
+        items.add(new UiHelper.PopupMenuItem(TEST_NETWORK_ID, getResources().getString(R.string.pcview_menu_test_network)));
+        items.add(new UiHelper.PopupMenuItem(DELETE_ID, getResources().getString(R.string.pcview_menu_delete_pc)));
+        items.add(new UiHelper.PopupMenuItem(VIEW_DETAILS_ID, getResources().getString(R.string.pcview_menu_details)));
+
+        UiHelper.showBlurredPopupMenu(
+                this,
+                headerTitle,
+                items,
+                itemId -> handlePcContextMenuSelection(itemId, computer),
+                this::startComputerUpdates);
+    }
+
     private void doPair(final ComputerDetails computer, String otp, String passphrase) {
         if (computer.state == ComputerDetails.State.OFFLINE || computer.activeAddress == null) {
             Toast.makeText(PcView.this, getResources().getString(R.string.pair_pc_offline), Toast.LENGTH_SHORT).show();
@@ -737,7 +801,14 @@ public class PcView extends AppCompatActivity implements AdapterFragmentCallback
     public boolean onContextItemSelected(MenuItem item) {
         AdapterContextMenuInfo info = (AdapterContextMenuInfo) item.getMenuInfo();
         final ComputerObject computer = (ComputerObject) pcGridAdapter.getItem(info.position);
-        switch (item.getItemId()) {
+        if (handlePcContextMenuSelection(item.getItemId(), computer)) {
+            return true;
+        }
+        return super.onContextItemSelected(item);
+    }
+
+    private boolean handlePcContextMenuSelection(int itemId, final ComputerObject computer) {
+        switch (itemId) {
             case PAIR_ID:
                 doPair(computer.details, null, null);
                 return true;
@@ -819,9 +890,10 @@ public class PcView extends AppCompatActivity implements AdapterFragmentCallback
                 } else {
                     HelpLauncher.launchUrl(PcView.this, managementUrl);
                 }
+                return true;
 
             default:
-                return super.onContextItemSelected(item);
+                return false;
         }
     }
 
@@ -902,7 +974,7 @@ public class PcView extends AppCompatActivity implements AdapterFragmentCallback
                 if (computer.details.state == ComputerDetails.State.UNKNOWN ||
                     computer.details.state == ComputerDetails.State.OFFLINE) {
                     // Open the context menu if a PC is offline or refreshing
-                    openContextMenu(arg1);
+                    openPcContextMenu(pos);
                 } else if (computer.details.pairState != PairState.PAIRED) {
                     // Pair an unpaired machine by default
                     doPair(computer.details, null, null);
@@ -912,7 +984,10 @@ public class PcView extends AppCompatActivity implements AdapterFragmentCallback
             }
         });
         UiHelper.applyStatusBarPadding(listView);
-        registerForContextMenu(listView);
+        listView.setOnItemLongClickListener((parent, view, position, id) -> {
+            openPcContextMenu(position);
+            return true;
+        });
     }
 
     public static class ComputerObject {

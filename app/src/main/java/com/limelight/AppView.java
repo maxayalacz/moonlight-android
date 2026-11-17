@@ -521,11 +521,84 @@ public class AppView extends AppCompatActivity implements AdapterFragmentCallbac
     public void onContextMenuClosed(Menu menu) {
     }
 
+    private void openAppContextMenu(final View targetView, int position) {
+        if (position < 0 || position >= appGridAdapter.getCount()) {
+            return;
+        }
+        final AppObject selectedApp = (AppObject) appGridAdapter.getItem(position);
+        if (selectedApp == null) {
+            return;
+        }
+
+        java.util.List<UiHelper.PopupMenuItem> items = new java.util.ArrayList<>();
+
+        if (lastRunningAppId == 0) {
+            if (prefConfig.useVirtualDisplay) {
+                items.add(new UiHelper.PopupMenuItem(START_OR_RESUME_ID, getResources().getString(R.string.applist_menu_start_primarydisplay)));
+            } else {
+                items.add(new UiHelper.PopupMenuItem(START_WITH_VDISPLAY, getResources().getString(R.string.applist_menu_start_vdisplay)));
+            }
+        } else {
+            if (lastRunningAppId == selectedApp.app.getAppId()) {
+                items.add(new UiHelper.PopupMenuItem(START_OR_RESUME_ID, getResources().getString(R.string.applist_menu_resume)));
+                items.add(new UiHelper.PopupMenuItem(QUIT_ID, getResources().getString(R.string.applist_menu_quit)));
+            } else {
+                if (prefConfig.useVirtualDisplay) {
+                    items.add(new UiHelper.PopupMenuItem(START_WITH_QUIT_VDISPLAY, getResources().getString(R.string.applist_menu_quit_and_start)));
+                    items.add(new UiHelper.PopupMenuItem(START_WITH_QUIT, getResources().getString(R.string.applist_menu_quit_and_start_primarydisplay)));
+                } else {
+                    items.add(new UiHelper.PopupMenuItem(START_WITH_QUIT, getResources().getString(R.string.applist_menu_quit_and_start)));
+                    items.add(new UiHelper.PopupMenuItem(START_WITH_QUIT_VDISPLAY, getResources().getString(R.string.applist_menu_quit_and_start_vdisplay)));
+                }
+            }
+        }
+
+        // Only show the hide checkbox if this is not the currently running app or it's already hidden
+        if (lastRunningAppId != selectedApp.app.getAppId() || selectedApp.isHidden) {
+            items.add(new UiHelper.PopupMenuItem(
+                    HIDE_APP_ID,
+                    getResources().getString(R.string.applist_menu_hide_app),
+                    true,
+                    selectedApp.isHidden));
+        }
+
+        items.add(new UiHelper.PopupMenuItem(VIEW_DETAILS_ID, getResources().getString(R.string.applist_menu_details)));
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && targetView != null) {
+            // Only add an option to create shortcut if box art is loaded
+            // and when we're in grid-mode (not list-mode).
+            ImageView appImageView = targetView.findViewById(R.id.grid_image);
+            if (appImageView != null) {
+                // We have a grid ImageView, so we must be in grid-mode
+                BitmapDrawable drawable = (BitmapDrawable) appImageView.getDrawable();
+                if (drawable != null && drawable.getBitmap() != null) {
+                    // We have a bitmap loaded too
+                    items.add(new UiHelper.PopupMenuItem(CREATE_SHORTCUT_ID, getResources().getString(R.string.applist_menu_scut)));
+                }
+            }
+        }
+
+        items.add(new UiHelper.PopupMenuItem(EXPORT_LAUNCHER_FILE_ID, getResources().getString(R.string.applist_menu_export_launcher)));
+
+        UiHelper.showBlurredPopupMenu(
+                this,
+                selectedApp.app.getAppName(),
+                items,
+                itemId -> handleAppContextMenuSelection(itemId, selectedApp, targetView),
+                null);
+    }
+
     @Override
     public boolean onContextItemSelected(MenuItem item) {
         AdapterContextMenuInfo info = (AdapterContextMenuInfo) item.getMenuInfo();
         final AppObject app = (AppObject) appGridAdapter.getItem(info.position);
-        int itemId = item.getItemId();
+        if (handleAppContextMenuSelection(item.getItemId(), app, info.targetView)) {
+            return true;
+        }
+        return super.onContextItemSelected(item);
+    }
+
+    private boolean handleAppContextMenuSelection(int itemId, final AppObject app, View targetView) {
         switch (itemId) {
             case START_WITH_QUIT:
             case START_WITH_QUIT_VDISPLAY: {
@@ -599,7 +672,7 @@ public class AppView extends AppCompatActivity implements AdapterFragmentCallbac
             }
 
             case HIDE_APP_ID: {
-                if (item.isChecked()) {
+                if (app.isHidden) {
                     // Transitioning hidden to shown
                     hiddenAppIds.remove(app.app.getAppId());
                 } else {
@@ -611,10 +684,14 @@ public class AppView extends AppCompatActivity implements AdapterFragmentCallbac
             }
 
             case CREATE_SHORTCUT_ID: {
-                ImageView appImageView = info.targetView.findViewById(R.id.grid_image);
-                Bitmap appBits = ((BitmapDrawable) appImageView.getDrawable()).getBitmap();
-                if (!shortcutHelper.createPinnedGameShortcut(computer, app.app, appBits)) {
-                    Toast.makeText(AppView.this, getResources().getString(R.string.unable_to_pin_shortcut), Toast.LENGTH_LONG).show();
+                if (targetView != null) {
+                    ImageView appImageView = targetView.findViewById(R.id.grid_image);
+                    if (appImageView != null && appImageView.getDrawable() instanceof BitmapDrawable) {
+                        Bitmap appBits = ((BitmapDrawable) appImageView.getDrawable()).getBitmap();
+                        if (appBits != null && !shortcutHelper.createPinnedGameShortcut(computer, app.app, appBits)) {
+                            Toast.makeText(AppView.this, getResources().getString(R.string.unable_to_pin_shortcut), Toast.LENGTH_LONG).show();
+                        }
+                    }
                 }
                 return true;
             }
@@ -637,7 +714,7 @@ public class AppView extends AppCompatActivity implements AdapterFragmentCallbac
             }
 
             default: {
-                return super.onContextItemSelected(item);
+                return false;
             }
         }
     }
@@ -774,7 +851,7 @@ public class AppView extends AppCompatActivity implements AdapterFragmentCallbac
                     if (prefConfig.resumeWithoutConfirm && lastRunningAppId == app.app.getAppId()) {
                         ServerHelper.doStart(AppView.this, app.app, computer, managerBinder, prefConfig.useVirtualDisplay);
                     } else {
-                        openContextMenu(arg1);
+                        openAppContextMenu(arg1, pos);
                     }
                 } else {
                     if (prefConfig.useVirtualDisplay && !(computer.vDisplaySupported && computer.vDisplayDriverReady)) {
@@ -791,7 +868,10 @@ public class AppView extends AppCompatActivity implements AdapterFragmentCallbac
             }
         });
         UiHelper.applyStatusBarPadding(listView);
-        registerForContextMenu(listView);
+        listView.setOnItemLongClickListener((parent, view, position, id) -> {
+            openAppContextMenu(view, position);
+            return true;
+        });
         listView.requestFocus();
     }
 

@@ -241,6 +241,83 @@ public class UiHelper {
         }
     }
 
+    public static class PopupMenuItem {
+        public final int id;
+        public final CharSequence title;
+        public final boolean checkable;
+        public final boolean checked;
+
+        public PopupMenuItem(int id, CharSequence title) {
+            this(id, title, false, false);
+        }
+
+        public PopupMenuItem(int id, CharSequence title, boolean checkable, boolean checked) {
+            this.id = id;
+            this.title = title;
+            this.checkable = checkable;
+            this.checked = checked;
+        }
+    }
+
+    public static androidx.appcompat.app.AlertDialog showBlurredPopupMenu(
+            final Activity activity,
+            CharSequence title,
+            final java.util.List<PopupMenuItem> items,
+            final java.util.function.IntConsumer onItemSelected,
+            final Runnable onDismiss) {
+        if (activity == null || activity.isFinishing() || items == null || items.isEmpty()) {
+            if (onDismiss != null) {
+                onDismiss.run();
+            }
+            return null;
+        }
+
+        Context themedContext = new android.view.ContextThemeWrapper(activity, R.style.OneUI_DialogTheme);
+        androidx.appcompat.app.AlertDialog.Builder builder =
+                new androidx.appcompat.app.AlertDialog.Builder(themedContext, R.style.OneUI_DialogTheme);
+        if (title != null && title.length() > 0) {
+            builder.setTitle(title);
+        }
+
+        final android.widget.ArrayAdapter<PopupMenuItem> adapter =
+                new android.widget.ArrayAdapter<PopupMenuItem>(themedContext, R.layout.oneui_game_menu_item, items) {
+                    @Override
+                    public android.view.View getView(int position, android.view.View convertView, android.view.ViewGroup parent) {
+                        TextView tv = (TextView) super.getView(position, convertView, parent);
+                        PopupMenuItem item = getItem(position);
+                        if (item != null) {
+                            if (item.checkable) {
+                                tv.setText((item.checked ? "\u2713  " : "     ") + item.title);
+                            } else {
+                                tv.setText(item.title);
+                            }
+                        }
+                        return tv;
+                    }
+                };
+
+        builder.setAdapter(adapter, (dialog, which) -> {
+            PopupMenuItem selected = adapter.getItem(which);
+            if (selected != null && onItemSelected != null) {
+                onItemSelected.accept(selected.id);
+            }
+        });
+
+        if (onDismiss != null) {
+            builder.setOnDismissListener(dialog -> onDismiss.run());
+        }
+
+        androidx.appcompat.app.AlertDialog dialog = builder.create();
+        styleDialogSquircle(dialog);
+        dialog.show();
+        styleDialogSquircle(dialog);
+
+        if (dialog.getListView() != null) {
+            dialog.getListView().requestFocus();
+        }
+        return dialog;
+    }
+
     /**
      * Styles a dialog as a One UI "Liquid Glass" squircle card.
      *
@@ -259,10 +336,12 @@ public class UiHelper {
         if (window == null) {
             return;
         }
+        window.setFormat(android.graphics.PixelFormat.TRANSLUCENT);
         // Never blur the whole screen behind the dialog; only the card's own bounds.
         window.clearFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND);
 
         View decorView = window.getDecorView();
+        decorView.setClipToOutline(true);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             window.setBackgroundDrawableResource(R.drawable.bg_oneui_dialog_squircle);
             decorView.setRenderEffect(null);
