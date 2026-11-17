@@ -56,6 +56,11 @@ public class CachedAppAssetLoader {
     private final DiskAssetLoader diskLoader;
     private final Bitmap placeholderBitmap;
     private final Bitmap noAppImageBitmap;
+    private boolean alwaysShowText;
+
+    public void setAlwaysShowText(boolean alwaysShowText) {
+        this.alwaysShowText = alwaysShowText;
+    }
 
     public CachedAppAssetLoader(ComputerDetails computer, double scalingDivider,
                                 NetworkAssetLoader networkLoader, MemoryAssetLoader memoryLoader,
@@ -219,8 +224,8 @@ public class CachedAppAssetLoader {
             if (getLoaderTask(imageView) == this) {
                 // Fade in the box art
                 if (bitmap != null) {
-                    // Show the text if it's a placeholder
-                    textView.setVisibility(isBitmapPlaceholder(bitmap) ? View.VISIBLE : View.GONE);
+                    // Show the text if it's a placeholder or alwaysShowText is enabled
+                    textView.setVisibility((alwaysShowText || isBitmapPlaceholder(bitmap)) ? View.VISIBLE : View.GONE);
 
                     if (imageView.getVisibility() == View.VISIBLE) {
                         // Fade out the placeholder first
@@ -351,8 +356,8 @@ public class CachedAppAssetLoader {
             imgView.setVisibility(View.VISIBLE);
             imgView.setImageBitmap(bmp.bitmap);
 
-            // Show the text if it's a placeholder bitmap
-            textView.setVisibility(isBitmapPlaceholder(bmp) ? View.VISIBLE : View.GONE);
+            // Show the text if it's a placeholder bitmap or alwaysShowText is enabled
+            textView.setVisibility((alwaysShowText || isBitmapPlaceholder(bmp)) ? View.VISIBLE : View.GONE);
             return true;
         }
 
@@ -360,7 +365,7 @@ public class CachedAppAssetLoader {
         // via AsyncDrawable to this view.
         final LoaderTask task = new LoaderTask(imgView, textView, true);
         final AsyncDrawable asyncDrawable = new AsyncDrawable(imgView.getResources(), placeholderBitmap, task);
-        textView.setVisibility(View.INVISIBLE);
+        textView.setVisibility(alwaysShowText ? View.VISIBLE : View.INVISIBLE);
         imgView.setVisibility(View.INVISIBLE);
         imgView.setImageDrawable(asyncDrawable);
 

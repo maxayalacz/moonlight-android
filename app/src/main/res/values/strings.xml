@@ -743,4 +743,10 @@
 
     <string name="title_checkbox_full_screen">Enable Full Screen</string>
     <string name="summary_checkbox_full_screen">Hide system bars with immersive mode</string>
+
+    <string name="title_backdrop_style">Dynamic Background Style</string>
+    <string name="summary_backdrop_style">Choose how merging metaball blobs and the plexus network are balanced</string>
+    <string name="backdrop_style_balanced">Balanced (Metaballs + Subtle Plexus)</string>
+    <string name="backdrop_style_bold_plexus">Bold Plexus Network</string>
+    <string name="backdrop_style_plexus_hero">Plexus Hero (Subtle Dark Metaballs)</string>
 </resources>

@@ -2,6 +2,9 @@ package com.limelight.grid;
 
 import android.content.Context;
 import android.graphics.BitmapFactory;
+import android.graphics.RenderEffect;
+import android.graphics.Shader;
+import android.os.Build;
 import android.view.View;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
@@ -17,6 +20,8 @@ import com.limelight.grid.assets.MemoryAssetLoader;
 import com.limelight.grid.assets.NetworkAssetLoader;
 import com.limelight.nvstream.http.ComputerDetails;
 import com.limelight.preferences.PreferenceConfiguration;
+import com.limelight.ui.FlowingAuroraView;
+import com.limelight.utils.UiHelper;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -111,6 +116,7 @@ public class AppGridAdapter extends GenericGridAdapter<AppView.AppObject> {
                 new MemoryAssetLoader(),
                 new DiskAssetLoader(context),
                 BitmapFactory.decodeResource(context.getResources(), R.drawable.no_app_image));
+        this.loader.setAlwaysShowText(true);
 
         // This will trigger the view to reload with the new layout
         setLayoutId(getLayoutIdForPreferences(prefs));
@@ -172,15 +178,49 @@ public class AppGridAdapter extends GenericGridAdapter<AppView.AppObject> {
         // Let the cached asset loader handle it
         loader.populateImageView(obj.app, imgView, txtView);
 
+        // Blur box art as a soft card-local backdrop while keeping foreground text & icons razor-sharp
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            float blurPx = UiHelper.dpToPx(imgView.getContext(), 14f);
+            imgView.setRenderEffect(RenderEffect.createBlurEffect(blurPx, blurPx, Shader.TileMode.CLAMP));
+            imgView.setAlpha(0.75f);
+        }
+        else {
+            imgView.setAlpha(0.45f);
+        }
+
+        // Keep app title centered, sharp, and high-contrast over the frosted glass
+        txtView.setText(obj.app.getAppName());
+        txtView.setVisibility(View.VISIBLE);
+        txtView.setTextColor(0xFFFFFFFF);
+        txtView.setShadowLayer(8f, 0f, 2f, 0xCC000000);
+
         if (obj.isRunning) {
-            // Show the play button overlay
+            // Show the play button overlay in a frosted badge
             overlayView.setImageResource(R.drawable.ic_play);
+            overlayView.setBackgroundResource(R.drawable.bg_oneui_glass_icon_button);
+            int pad = (int) UiHelper.dpToPx(overlayView.getContext(), 10f);
+            overlayView.setPadding(pad, pad, pad, pad);
             overlayView.setVisibility(View.VISIBLE);
-            gridMask.setBackgroundResource(R.drawable.bg_oneui_liquid_glass_dark);
         }
         else {
             overlayView.setVisibility(View.GONE);
-            gridMask.setBackgroundResource(R.drawable.bg_oneui_squircle_card);
+            overlayView.setBackground(null);
+            overlayView.setPadding(0, 0, 0, 0);
+        }
+
+        if (imgView.getVisibility() != View.VISIBLE) {
+            // No box art visible yet: diffuse the live metaball/plexus backdrop through the card
+            if (!UiHelper.applyFrostedCardBackground(
+                    gridMask,
+                    FlowingAuroraView.CornerMode.ALL,
+                    28f,
+                    obj.isRunning ? 0x38202C44 : 0x26FFFFFF)) {
+                gridMask.setBackgroundResource(R.drawable.bg_oneui_glass_card_interactive);
+            }
+        }
+        else {
+            // Box art is visible behind gridMask: use interactive translucent glass tint + specular rim
+            gridMask.setBackgroundResource(R.drawable.bg_oneui_glass_card_interactive);
         }
 
         if (obj.isHidden) {

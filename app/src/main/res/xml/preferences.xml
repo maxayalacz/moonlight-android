@@ -533,8 +533,16 @@
     <PreferenceCategory
         android:key="category_ui_settings"
         android:title="@string/category_ui_settings"
-        app:initialExpandedChildrenCount="3"
+        app:initialExpandedChildrenCount="4"
         app:iconSpaceReserved="false">
+        <ListPreference
+            android:defaultValue="balanced"
+            android:entries="@array/backdrop_style_names"
+            android:entryValues="@array/backdrop_style_values"
+            android:key="list_backdrop_style"
+            android:summary="@string/summary_backdrop_style"
+            android:title="@string/title_backdrop_style"
+            app:iconSpaceReserved="false" />
         <CheckBoxPreference
             android:defaultValue="false"
             android:key="checkbox_resume_without_confirm"

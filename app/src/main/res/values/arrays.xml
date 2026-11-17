@@ -200,4 +200,15 @@
         <item>right</item>
     </string-array>
 
+    <string-array name="backdrop_style_names">
+        <item>@string/backdrop_style_balanced</item>
+        <item>@string/backdrop_style_bold_plexus</item>
+        <item>@string/backdrop_style_plexus_hero</item>
+    </string-array>
+    <string-array name="backdrop_style_values" translatable="false">
+        <item>balanced</item>
+        <item>bold_plexus</item>
+        <item>plexus_hero</item>
+    </string-array>
+
 </resources>

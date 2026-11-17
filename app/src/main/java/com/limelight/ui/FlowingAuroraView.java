@@ -2,39 +2,41 @@ package com.limelight.ui;
 
 import android.animation.ValueAnimator;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.ColorFilter;
-import android.graphics.LinearGradient;
-import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.PixelFormat;
-import android.graphics.RadialGradient;
 import android.graphics.Rect;
 import android.graphics.RectF;
-import android.graphics.Shader;
 import android.graphics.drawable.Drawable;
+import android.os.SystemClock;
 import android.util.AttributeSet;
 import android.view.View;
 import android.view.animation.LinearInterpolator;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.preference.PreferenceManager;
 
 import java.lang.ref.WeakReference;
 import java.util.Iterator;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * Hardware-accelerated flowing dark atmospheric backdrop with vivid cyan/blue/violet
- * light waves and orbs, plus a shared pre-blurred light-field buffer for real-time
- * frosted glass cards, pills, and Settings sections.
+ * Continuous real-time motion-graphics backdrop featuring organic merging/separating
+ * gradient metaballs and a live 2D plexus particle network, with 3 configurable presets
+ * ("balanced", "bold_plexus", "plexus_hero") and a shared pre-blurred buffer for
+ * real-time frosted glass cards.
  */
-public class FlowingAuroraView extends View {
-    private static final long CYCLE_DURATION_MS = 16000L;
-    private static final int BLUR_BUF_W = 96;
-    private static final int BLUR_BUF_H = 192;
+public class FlowingAuroraView extends View implements SharedPreferences.OnSharedPreferenceChangeListener {
+    private static final String PREF_BACKDROP_STYLE = "list_backdrop_style";
+    private static final int FIELD_W = 64;
+    private static final int FIELD_H = 128;
+    private static final int MAX_NODES = 38;
+    private static final int BLOB_COUNT = 5;
 
     public enum CornerMode {
         ALL,
@@ -43,96 +45,302 @@ public class FlowingAuroraView extends View {
         BOTTOM
     }
 
-    private final Paint basePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint orbPaint1 = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint orbPaint2 = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint orbPaint3 = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint wavePaint1 = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint wavePaint2 = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Path wavePath1 = new Path();
-    private final Path wavePath2 = new Path();
-    private final Matrix shaderMatrix = new Matrix();
+    public enum BackdropStyle {
+        BALANCED,
+        BOLD_PLEXUS,
+        PLEXUS_HERO
+    }
 
-    private RadialGradient orbGrad1;
-    private RadialGradient orbGrad2;
-    private RadialGradient orbGrad3;
-    private float phase = 0f;
-    private ValueAnimator animator;
+    private static class Blob {
+        float x, y;     // normalized 0..1
+        float vx, vy;   // normalized units/sec
+        float radius;   // normalized
+        int r, g, b;
+    }
 
-    private final Bitmap rawField = Bitmap.createBitmap(BLUR_BUF_W, BLUR_BUF_H, Bitmap.Config.ARGB_8888);
-    private final Bitmap blurredField = Bitmap.createBitmap(BLUR_BUF_W, BLUR_BUF_H, Bitmap.Config.ARGB_8888);
-    private final Canvas rawCanvas = new Canvas(rawField);
-    private final int[] blurPix = new int[BLUR_BUF_W * BLUR_BUF_H];
-    private final int[] blurTmp = new int[BLUR_BUF_W * BLUR_BUF_H];
+    private static class Node {
+        float x, y;     // normalized 0..1
+        float vx, vy;   // normalized units/sec
+        float sizeDp;
+    }
+
+    private final Blob[] blobs = new Blob[BLOB_COUNT];
+    private final Node[] nodes = new Node[MAX_NODES];
+
+    private final Bitmap rawField = Bitmap.createBitmap(FIELD_W, FIELD_H, Bitmap.Config.ARGB_8888);
+    private final Bitmap blurredField = Bitmap.createBitmap(FIELD_W, FIELD_H, Bitmap.Config.ARGB_8888);
+    private final int[] rawPix = new int[FIELD_W * FIELD_H];
+    private final int[] blurPix = new int[FIELD_W * FIELD_H];
+    private final int[] blurTmp = new int[FIELD_W * FIELD_H];
+
+    private final Paint bitmapPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+    private final Paint linePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint nodePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint nodeGlowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final RectF fullDst = new RectF();
+
+    private BackdropStyle style = BackdropStyle.BALANCED;
+    private ValueAnimator ticker;
+    private long lastTickMs = 0L;
     private boolean fieldDirty = true;
 
     private final CopyOnWriteArrayList<WeakReference<Drawable>> frostedListeners = new CopyOnWriteArrayList<>();
 
     public FlowingAuroraView(Context context) {
         super(context);
-        init();
+        init(context);
     }
 
     public FlowingAuroraView(Context context, AttributeSet attrs) {
         super(context, attrs);
-        init();
+        init(context);
     }
 
-    private void init() {
+    private void init(Context context) {
         setClickable(false);
         setFocusable(false);
         setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
-        basePaint.setColor(0xFF050811);
 
-        wavePaint1.setStyle(Paint.Style.STROKE);
-        wavePaint1.setStrokeCap(Paint.Cap.ROUND);
+        linePaint.setStyle(Paint.Style.STROKE);
+        nodePaint.setStyle(Paint.Style.FILL);
+        nodeGlowPaint.setStyle(Paint.Style.FILL);
 
-        wavePaint2.setStyle(Paint.Style.STROKE);
-        wavePaint2.setStrokeCap(Paint.Cap.ROUND);
+        // 5 organic gradient metaballs (cyan, electric blue, violet, teal, indigo)
+        int[][] colors = {
+                {0, 212, 255},   // electric cyan
+                {59, 130, 246},  // electric blue
+                {139, 92, 246},  // vivid violet
+                {6, 182, 212},   // teal cyan
+                {99, 102, 241}   // indigo
+        };
+        float[][] initBlobs = {
+                {0.25f, 0.25f, 0.042f, 0.028f, 0.17f},
+                {0.75f, 0.35f, -0.036f, 0.034f, 0.16f},
+                {0.45f, 0.68f, 0.032f, -0.038f, 0.18f},
+                {0.22f, 0.78f, 0.045f, -0.026f, 0.14f},
+                {0.78f, 0.72f, -0.030f, -0.032f, 0.15f}
+        };
+        for (int i = 0; i < BLOB_COUNT; i++) {
+            Blob b = new Blob();
+            b.x = initBlobs[i][0];
+            b.y = initBlobs[i][1];
+            b.vx = initBlobs[i][2];
+            b.vy = initBlobs[i][3];
+            b.radius = initBlobs[i][4];
+            b.r = colors[i][0];
+            b.g = colors[i][1];
+            b.b = colors[i][2];
+            blobs[i] = b;
+        }
+
+        // Deterministic, well-distributed initial plexus nodes with continuous velocities
+        for (int i = 0; i < MAX_NODES; i++) {
+            Node n = new Node();
+            float a = i * 2.3999632f; // golden angle distribution
+            n.x = ((i * 0.6180339f) % 1.0f);
+            n.y = (((i * 0.3819660f) + 0.17f) % 1.0f);
+            float speed = 0.018f + (i % 5) * 0.005f;
+            n.vx = (float) Math.cos(a) * speed;
+            n.vy = (float) Math.sin(a) * speed;
+            n.sizeDp = 1.8f + (i % 3) * 0.7f;
+            nodes[i] = n;
+        }
+
+        loadStyleFromPrefs(context);
+    }
+
+    private void loadStyleFromPrefs(Context context) {
+        String val = PreferenceManager.getDefaultSharedPreferences(context)
+                .getString(PREF_BACKDROP_STYLE, "balanced");
+        if ("bold_plexus".equals(val)) {
+            style = BackdropStyle.BOLD_PLEXUS;
+        } else if ("plexus_hero".equals(val)) {
+            style = BackdropStyle.PLEXUS_HERO;
+        } else {
+            style = BackdropStyle.BALANCED;
+        }
+        fieldDirty = true;
     }
 
     @Override
-    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
-        super.onSizeChanged(w, h, oldw, oldh);
-        if (w <= 0 || h <= 0) {
+    public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, @Nullable String key) {
+        if (PREF_BACKDROP_STYLE.equals(key)) {
+            loadStyleFromPrefs(getContext());
+            invalidate();
+            notifyFrostedListeners();
+        }
+    }
+
+    private void stepSimulation(float dt) {
+        if (dt <= 0f) {
             return;
         }
-        float minDim = Math.min(w, h);
+        // Step metaballs with soft boundary bounce
+        for (Blob b : blobs) {
+            b.x += b.vx * dt;
+            b.y += b.vy * dt;
+            if (b.x < 0.08f) {
+                b.x = 0.08f;
+                b.vx = Math.abs(b.vx);
+            } else if (b.x > 0.92f) {
+                b.x = 0.92f;
+                b.vx = -Math.abs(b.vx);
+            }
+            if (b.y < 0.08f) {
+                b.y = 0.08f;
+                b.vy = Math.abs(b.vy);
+            } else if (b.y > 0.92f) {
+                b.y = 0.92f;
+                b.vy = -Math.abs(b.vy);
+            }
+        }
 
-        // Vivid electric blue orb
-        orbGrad1 = new RadialGradient(0f, 0f, minDim * 0.62f,
-                new int[]{0xCC2563EB, 0x551D4ED8, 0x00050811},
-                new float[]{0f, 0.48f, 1f},
-                Shader.TileMode.CLAMP);
-        orbPaint1.setShader(orbGrad1);
-
-        // Vivid cyan orb
-        orbGrad2 = new RadialGradient(0f, 0f, minDim * 0.56f,
-                new int[]{0xBF06B6D4, 0x4D0891B2, 0x00050811},
-                new float[]{0f, 0.45f, 1f},
-                Shader.TileMode.CLAMP);
-        orbPaint2.setShader(orbGrad2);
-
-        // Vivid violet orb
-        orbGrad3 = new RadialGradient(0f, 0f, minDim * 0.54f,
-                new int[]{0xB38B5CF6, 0x446D28D9, 0x00050811},
-                new float[]{0f, 0.45f, 1f},
-                Shader.TileMode.CLAMP);
-        orbPaint3.setShader(orbGrad3);
-
-        wavePaint1.setStrokeWidth(minDim * 0.18f);
-        wavePaint1.setShader(new LinearGradient(0f, 0f, w, h,
-                new int[]{0x8800E5FF, 0x993B82F6, 0x778B5CF6},
-                new float[]{0f, 0.5f, 1f},
-                Shader.TileMode.CLAMP));
-
-        wavePaint2.setStrokeWidth(minDim * 0.14f);
-        wavePaint2.setShader(new LinearGradient(w, 0f, 0f, h,
-                new int[]{0x77A855F7, 0x8806B6D4, 0x662563EB},
-                new float[]{0f, 0.5f, 1f},
-                Shader.TileMode.CLAMP));
-
+        // Step plexus nodes continuously
+        int activeNodes = getActiveNodeCount();
+        for (int i = 0; i < activeNodes; i++) {
+            Node n = nodes[i];
+            n.x += n.vx * dt;
+            n.y += n.vy * dt;
+            if (n.x < 0f) {
+                n.x = 0f;
+                n.vx = Math.abs(n.vx);
+            } else if (n.x > 1f) {
+                n.x = 1f;
+                n.vx = -Math.abs(n.vx);
+            }
+            if (n.y < 0f) {
+                n.y = 0f;
+                n.vy = Math.abs(n.vy);
+            } else if (n.y > 1f) {
+                n.y = 1f;
+                n.vy = -Math.abs(n.vy);
+            }
+        }
         fieldDirty = true;
+    }
+
+    private int getActiveNodeCount() {
+        switch (style) {
+            case BOLD_PLEXUS:
+                return 38;
+            case PLEXUS_HERO:
+                return 34;
+            case BALANCED:
+            default:
+                return 26;
+        }
+    }
+
+    private void renderMetaballField() {
+        float blobStrength;
+        float blobSoftness;
+        if (style == BackdropStyle.PLEXUS_HERO) {
+            blobStrength = 0.42f;
+            blobSoftness = 0.85f;
+        } else if (style == BackdropStyle.BOLD_PLEXUS) {
+            blobStrength = 0.65f;
+            blobSoftness = 1.05f;
+        } else {
+            blobStrength = 1.0f;
+            blobSoftness = 1.0f;
+        }
+
+        final float aspect = (float) getHeight() / Math.max(1f, (float) getWidth());
+        final int baseR = 5, baseG = 8, baseB = 18;
+
+        for (int py = 0; py < FIELD_H; py++) {
+            float ny = (py + 0.5f) / FIELD_H;
+            int row = py * FIELD_W;
+            for (int px = 0; px < FIELD_W; px++) {
+                float nx = (px + 0.5f) / FIELD_W;
+
+                float fieldSum = 0f;
+                float rAcc = 0f, gAcc = 0f, bAcc = 0f;
+
+                for (int i = 0; i < BLOB_COUNT; i++) {
+                    Blob b = blobs[i];
+                    float dx = nx - b.x;
+                    float dy = (ny - b.y) * Math.min(2.2f, Math.max(0.5f, aspect));
+                    float r = b.radius * blobSoftness;
+                    float distSq = dx * dx + dy * dy + 0.0025f;
+                    float contrib = (r * r) / distSq;
+                    fieldSum += contrib;
+                    rAcc += b.r * contrib;
+                    gAcc += b.g * contrib;
+                    bAcc += b.b * contrib;
+                }
+
+                // Smooth metaball threshold: merges blobs cleanly when fieldSum crosses ~1.0
+                float intensity;
+                if (fieldSum <= 0.35f) {
+                    intensity = fieldSum * 0.25f;
+                } else {
+                    float t = Math.min(1f, (fieldSum - 0.35f) / 0.95f);
+                    // Smoothstep for organic frosted blob edge
+                    intensity = 0.0875f + (t * t * (3f - 2f * t)) * 0.9125f;
+                }
+                intensity = Math.min(1f, intensity * blobStrength);
+
+                float invSum = fieldSum > 0.0001f ? (1f / fieldSum) : 0f;
+                float cr = rAcc * invSum;
+                float cg = gAcc * invSum;
+                float cb = bAcc * invSum;
+
+                int outR = Math.min(255, (int) (baseR + (cr - baseR) * intensity));
+                int outG = Math.min(255, (int) (baseG + (cg - baseG) * intensity));
+                int outB = Math.min(255, (int) (baseB + (cb - baseB) * intensity));
+                rawPix[row + px] = 0xFF000000 | (outR << 16) | (outG << 8) | outB;
+            }
+        }
+        rawField.setPixels(rawPix, 0, FIELD_W, 0, 0, FIELD_W, FIELD_H);
+    }
+
+    private void updateBlurredField() {
+        if (!fieldDirty) {
+            return;
+        }
+        fieldDirty = false;
+        renderMetaballField();
+
+        // 2-pass box blur on 64x128 buffer -> silky frosted diffusion for FrostedCardDrawable
+        System.arraycopy(rawPix, 0, blurPix, 0, rawPix.length);
+        int radius = 5;
+        int div = radius * 2 + 1;
+        for (int pass = 0; pass < 2; pass++) {
+            for (int y = 0; y < FIELD_H; y++) {
+                int row = y * FIELD_W;
+                for (int x = 0; x < FIELD_W; x++) {
+                    int r = 0, g = 0, b = 0;
+                    for (int k = -radius; k <= radius; k++) {
+                        int sxIdx = Math.max(0, Math.min(FIELD_W - 1, x + k));
+                        int c = blurPix[row + sxIdx];
+                        r += (c >> 16) & 0xFF;
+                        g += (c >> 8) & 0xFF;
+                        b += c & 0xFF;
+                    }
+                    blurTmp[row + x] = 0xFF000000 | ((r / div) << 16) | ((g / div) << 8) | (b / div);
+                }
+            }
+            for (int x = 0; x < FIELD_W; x++) {
+                for (int y = 0; y < FIELD_H; y++) {
+                    int r = 0, g = 0, b = 0;
+                    for (int k = -radius; k <= radius; k++) {
+                        int syIdx = Math.max(0, Math.min(FIELD_H - 1, y + k));
+                        int c = blurTmp[syIdx * FIELD_W + x];
+                        r += (c >> 16) & 0xFF;
+                        g += (c >> 8) & 0xFF;
+                        b += c & 0xFF;
+                    }
+                    blurPix[y * FIELD_W + x] = 0xFF000000 | ((r / div) << 16) | ((g / div) << 8) | (b / div);
+                }
+            }
+        }
+        blurredField.setPixels(blurPix, 0, FIELD_W, 0, 0, FIELD_W, FIELD_H);
+    }
+
+    public Bitmap getBlurredFieldBitmap() {
+        updateBlurredField();
+        return blurredField;
     }
 
     @Override
@@ -143,103 +351,71 @@ public class FlowingAuroraView extends View {
         if (w <= 0 || h <= 0) {
             return;
         }
-        drawAuroraScene(canvas, w, h);
+
+        if (fieldDirty) {
+            updateBlurredField();
+        }
+
+        fullDst.set(0f, 0f, w, h);
+        // Draw blurred metaball field for smooth frosted organic blobs
+        canvas.drawBitmap(blurredField, null, fullDst, bitmapPaint);
+
+        // Draw real-time 2D plexus network on top
+        drawPlexusNetwork(canvas, w, h);
     }
 
-    private void drawAuroraScene(Canvas canvas, int w, int h) {
-        canvas.drawRect(0f, 0f, w, h, basePaint);
+    private void drawPlexusNetwork(Canvas canvas, int w, int h) {
+        int activeNodes = getActiveNodeCount();
+        float minDim = Math.min(w, h);
+        float maxDist = minDim * (style == BackdropStyle.BALANCED ? 0.28f : 0.33f);
+        float maxDistSq = maxDist * maxDist;
+        float density = getResources().getDisplayMetrics().density;
 
-        if (orbGrad1 != null) {
-            float x1 = w * (0.24f + 0.24f * (float) Math.sin(phase));
-            float y1 = h * (0.22f + 0.18f * (float) Math.cos(phase * 0.8f));
-            shaderMatrix.setTranslate(x1, y1);
-            orbGrad1.setLocalMatrix(shaderMatrix);
-            canvas.drawRect(0f, 0f, w, h, orbPaint1);
+        int maxLineAlpha;
+        int nodeAlpha;
+        float lineWidthPx;
+        if (style == BackdropStyle.BOLD_PLEXUS) {
+            maxLineAlpha = 165;
+            nodeAlpha = 225;
+            lineWidthPx = 1.4f * density;
+        } else if (style == BackdropStyle.PLEXUS_HERO) {
+            maxLineAlpha = 195;
+            nodeAlpha = 240;
+            lineWidthPx = 1.5f * density;
+        } else {
+            maxLineAlpha = 95;
+            nodeAlpha = 160;
+            lineWidthPx = 1.1f * density;
         }
+        linePaint.setStrokeWidth(lineWidthPx);
 
-        if (orbGrad2 != null) {
-            float x2 = w * (0.76f + 0.22f * (float) Math.cos(phase + 1.1f));
-            float y2 = h * (0.66f + 0.20f * (float) Math.sin(phase * 1.1f + 0.6f));
-            shaderMatrix.setTranslate(x2, y2);
-            orbGrad2.setLocalMatrix(shaderMatrix);
-            canvas.drawRect(0f, 0f, w, h, orbPaint2);
-        }
-
-        if (orbGrad3 != null) {
-            float x3 = w * (0.48f + 0.28f * (float) Math.sin(phase * 0.7f + 2.3f));
-            float y3 = h * (0.46f + 0.26f * (float) Math.cos(phase * 1.2f + 1.7f));
-            shaderMatrix.setTranslate(x3, y3);
-            orbGrad3.setLocalMatrix(shaderMatrix);
-            canvas.drawRect(0f, 0f, w, h, orbPaint3);
-        }
-
-        // Flowing luminous wave 1
-        float yWave1Start = h * (0.28f + 0.12f * (float) Math.sin(phase));
-        float yWave1Mid1 = h * (0.14f + 0.18f * (float) Math.cos(phase * 1.2f));
-        float yWave1Mid2 = h * (0.58f + 0.16f * (float) Math.sin(phase + 1.8f));
-        float yWave1End = h * (0.40f + 0.14f * (float) Math.cos(phase * 0.9f));
-        wavePath1.reset();
-        wavePath1.moveTo(-w * 0.15f, yWave1Start);
-        wavePath1.cubicTo(w * 0.28f, yWave1Mid1, w * 0.68f, yWave1Mid2, w * 1.15f, yWave1End);
-        canvas.drawPath(wavePath1, wavePaint1);
-
-        // Flowing luminous wave 2
-        float yWave2Start = h * (0.72f + 0.12f * (float) Math.cos(phase + 0.8f));
-        float yWave2Mid1 = h * (0.48f + 0.18f * (float) Math.sin(phase * 1.1f + 2.1f));
-        float yWave2Mid2 = h * (0.86f + 0.12f * (float) Math.cos(phase + 2.7f));
-        float yWave2End = h * (0.64f + 0.16f * (float) Math.sin(phase * 0.8f));
-        wavePath2.reset();
-        wavePath2.moveTo(-w * 0.15f, yWave2Start);
-        wavePath2.cubicTo(w * 0.32f, yWave2Mid1, w * 0.72f, yWave2Mid2, w * 1.15f, yWave2End);
-        canvas.drawPath(wavePath2, wavePaint2);
-    }
-
-    public Bitmap getBlurredFieldBitmap() {
-        if (fieldDirty && getWidth() > 0 && getHeight() > 0) {
-            fieldDirty = false;
-            rawCanvas.save();
-            float sx = BLUR_BUF_W / (float) getWidth();
-            float sy = BLUR_BUF_H / (float) getHeight();
-            rawCanvas.scale(sx, sy);
-            drawAuroraScene(rawCanvas, getWidth(), getHeight());
-            rawCanvas.restore();
-
-            // Fast 2-pass box blur on 96x192 buffer -> silky frosted diffusion
-            rawField.getPixels(blurPix, 0, BLUR_BUF_W, 0, 0, BLUR_BUF_W, BLUR_BUF_H);
-            int radius = 7;
-            int div = radius * 2 + 1;
-            for (int pass = 0; pass < 2; pass++) {
-                for (int y = 0; y < BLUR_BUF_H; y++) {
-                    int row = y * BLUR_BUF_W;
-                    for (int x = 0; x < BLUR_BUF_W; x++) {
-                        int r = 0, g = 0, b = 0;
-                        for (int k = -radius; k <= radius; k++) {
-                            int sxIdx = Math.max(0, Math.min(BLUR_BUF_W - 1, x + k));
-                            int c = blurPix[row + sxIdx];
-                            r += (c >> 16) & 0xFF;
-                            g += (c >> 8) & 0xFF;
-                            b += c & 0xFF;
-                        }
-                        blurTmp[row + x] = 0xFF000000 | ((r / div) << 16) | ((g / div) << 8) | (b / div);
-                    }
-                }
-                for (int x = 0; x < BLUR_BUF_W; x++) {
-                    for (int y = 0; y < BLUR_BUF_H; y++) {
-                        int r = 0, g = 0, b = 0;
-                        for (int k = -radius; k <= radius; k++) {
-                            int syIdx = Math.max(0, Math.min(BLUR_BUF_H - 1, y + k));
-                            int c = blurTmp[syIdx * BLUR_BUF_W + x];
-                            r += (c >> 16) & 0xFF;
-                            g += (c >> 8) & 0xFF;
-                            b += c & 0xFF;
-                        }
-                        blurPix[y * BLUR_BUF_W + x] = 0xFF000000 | ((r / div) << 16) | ((g / div) << 8) | (b / div);
-                    }
+        for (int i = 0; i < activeNodes; i++) {
+            float x1 = nodes[i].x * w;
+            float y1 = nodes[i].y * h;
+            for (int j = i + 1; j < activeNodes; j++) {
+                float x2 = nodes[j].x * w;
+                float y2 = nodes[j].y * h;
+                float dx = x2 - x1;
+                float dy = y2 - y1;
+                float distSq = dx * dx + dy * dy;
+                if (distSq < maxDistSq) {
+                    float t = 1f - (float) Math.sqrt(distSq) / maxDist;
+                    int alpha = Math.max(4, Math.round(maxLineAlpha * t * t));
+                    linePaint.setColor((alpha << 24) | 0x5CE1FF);
+                    canvas.drawLine(x1, y1, x2, y2, linePaint);
                 }
             }
-            blurredField.setPixels(blurPix, 0, BLUR_BUF_W, 0, 0, BLUR_BUF_W, BLUR_BUF_H);
         }
-        return blurredField;
+
+        for (int i = 0; i < activeNodes; i++) {
+            float x = nodes[i].x * w;
+            float y = nodes[i].y * h;
+            float r = nodes[i].sizeDp * density;
+            nodeGlowPaint.setColor(((nodeAlpha / 4) << 24) | 0x38BDF8);
+            canvas.drawCircle(x, y, r * 2.4f, nodeGlowPaint);
+            nodePaint.setColor((nodeAlpha << 24) | 0xE0F7FF);
+            canvas.drawCircle(x, y, r, nodePaint);
+        }
     }
 
     public void registerFrostedDrawable(Drawable drawable) {
@@ -263,34 +439,40 @@ public class FlowingAuroraView extends View {
     }
 
     private void startFlow() {
-        if (animator == null) {
-            animator = ValueAnimator.ofFloat(0f, (float) (Math.PI * 2.0));
-            animator.setDuration(CYCLE_DURATION_MS);
-            animator.setRepeatCount(ValueAnimator.INFINITE);
-            animator.setInterpolator(new LinearInterpolator());
-            animator.addUpdateListener(anim -> {
-                phase = (float) anim.getAnimatedValue();
-                fieldDirty = true;
+        lastTickMs = SystemClock.uptimeMillis();
+        if (ticker == null) {
+            ticker = ValueAnimator.ofFloat(0f, 1f);
+            ticker.setDuration(1000L);
+            ticker.setRepeatCount(ValueAnimator.INFINITE);
+            ticker.setInterpolator(new LinearInterpolator());
+            ticker.addUpdateListener(anim -> {
+                long now = SystemClock.uptimeMillis();
+                float dt = Math.min(0.05f, Math.max(0f, (now - lastTickMs) / 1000f));
+                lastTickMs = now;
+                stepSimulation(dt);
                 invalidate();
                 notifyFrostedListeners();
             });
         }
-        if (!animator.isStarted()) {
-            animator.start();
-        } else if (animator.isPaused()) {
-            animator.resume();
+        if (!ticker.isStarted()) {
+            ticker.start();
+        } else if (ticker.isPaused()) {
+            ticker.resume();
         }
     }
 
     private void pauseFlow() {
-        if (animator != null && animator.isRunning()) {
-            animator.pause();
+        if (ticker != null && ticker.isRunning()) {
+            ticker.pause();
         }
     }
 
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
+        PreferenceManager.getDefaultSharedPreferences(getContext())
+                .registerOnSharedPreferenceChangeListener(this);
+        loadStyleFromPrefs(getContext());
         if (getWindowVisibility() == VISIBLE) {
             startFlow();
         }
@@ -300,6 +482,7 @@ public class FlowingAuroraView extends View {
     protected void onWindowVisibilityChanged(int visibility) {
         super.onWindowVisibilityChanged(visibility);
         if (visibility == VISIBLE && isAttachedToWindow()) {
+            loadStyleFromPrefs(getContext());
             startFlow();
         } else {
             pauseFlow();
@@ -308,9 +491,11 @@ public class FlowingAuroraView extends View {
 
     @Override
     protected void onDetachedFromWindow() {
-        if (animator != null) {
-            animator.cancel();
-            animator = null;
+        PreferenceManager.getDefaultSharedPreferences(getContext())
+                .unregisterOnSharedPreferenceChangeListener(this);
+        if (ticker != null) {
+            ticker.cancel();
+            ticker = null;
         }
         frostedListeners.clear();
         super.onDetachedFromWindow();
@@ -416,13 +601,13 @@ public class FlowingAuroraView extends View {
                 aurora.getLocationInWindow(auroraLoc);
                 int relX = hostLoc[0] - auroraLoc[0];
                 int relY = hostLoc[1] - auroraLoc[1];
-                float sx = BLUR_BUF_W / (float) aurora.getWidth();
-                float sy = BLUR_BUF_H / (float) aurora.getHeight();
+                float sx = FIELD_W / (float) aurora.getWidth();
+                float sy = FIELD_H / (float) aurora.getHeight();
                 srcRect.set(
                         Math.max(0, Math.round(relX * sx)),
                         Math.max(0, Math.round(relY * sy)),
-                        Math.min(BLUR_BUF_W, Math.round((relX + bounds.width()) * sx)),
-                        Math.min(BLUR_BUF_H, Math.round((relY + bounds.height()) * sy)));
+                        Math.min(FIELD_W, Math.round((relX + bounds.width()) * sx)),
+                        Math.min(FIELD_H, Math.round((relY + bounds.height()) * sy)));
                 if (!srcRect.isEmpty()) {
                     canvas.drawBitmap(aurora.getBlurredFieldBitmap(), srcRect, rectF, bitmapPaint);
                 }
