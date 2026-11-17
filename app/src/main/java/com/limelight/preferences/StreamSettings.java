@@ -341,6 +341,127 @@ public class StreamSettings extends AppCompatActivity {
             return view;
         }
 
+        @Override
+        public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
+            super.onViewCreated(view, savedInstanceState);
+            setDivider(null);
+            final androidx.recyclerview.widget.RecyclerView rv = getListView();
+            if (rv != null) {
+                final int sidePad = (int) UiHelper.dpToPx(requireContext(), 8f);
+                final int bottomPad = (int) UiHelper.dpToPx(requireContext(), 24f);
+                final int cardGap = (int) UiHelper.dpToPx(requireContext(), 14f);
+                final int dividerInset = (int) UiHelper.dpToPx(requireContext(), 18f);
+                final android.graphics.Paint dividerPaint = new android.graphics.Paint();
+                dividerPaint.setColor(0x1EFFFFFF);
+                dividerPaint.setStrokeWidth(Math.max(1f, UiHelper.dpToPx(requireContext(), 0.75f)));
+
+                rv.setClipToPadding(false);
+                rv.setPadding(sidePad, rv.getPaddingTop(), sidePad, bottomPad);
+                rv.addItemDecoration(new androidx.recyclerview.widget.RecyclerView.ItemDecoration() {
+                    @Override
+                    public void getItemOffsets(@NonNull android.graphics.Rect outRect, @NonNull View item,
+                                               @NonNull androidx.recyclerview.widget.RecyclerView parent,
+                                               @NonNull androidx.recyclerview.widget.RecyclerView.State state) {
+                        androidx.recyclerview.widget.RecyclerView.Adapter<?> rawAdapter = parent.getAdapter();
+                        if (!(rawAdapter instanceof androidx.preference.PreferenceGroupAdapter)) {
+                            return;
+                        }
+                        int pos = parent.getChildAdapterPosition(item);
+                        if (pos == androidx.recyclerview.widget.RecyclerView.NO_POSITION) {
+                            return;
+                        }
+                        androidx.preference.PreferenceGroupAdapter adapter =
+                                (androidx.preference.PreferenceGroupAdapter) rawAdapter;
+                        Preference pref = adapter.getItem(pos);
+                        if (pref instanceof PreferenceCategory && pos > 0) {
+                            outRect.top = cardGap;
+                        } else if (pos == 0 && pref != null
+                                && pref.getClass().getSimpleName().contains("SearchPreference")) {
+                            outRect.bottom = cardGap;
+                        }
+                    }
+
+                    @Override
+                    public void onDrawOver(@NonNull android.graphics.Canvas c,
+                                           @NonNull androidx.recyclerview.widget.RecyclerView parent,
+                                           @NonNull androidx.recyclerview.widget.RecyclerView.State state) {
+                        androidx.recyclerview.widget.RecyclerView.Adapter<?> rawAdapter = parent.getAdapter();
+                        if (!(rawAdapter instanceof androidx.preference.PreferenceGroupAdapter)) {
+                            return;
+                        }
+                        androidx.preference.PreferenceGroupAdapter adapter =
+                                (androidx.preference.PreferenceGroupAdapter) rawAdapter;
+                        for (int i = 0; i < parent.getChildCount(); i++) {
+                            View child = parent.getChildAt(i);
+                            int pos = parent.getChildAdapterPosition(child);
+                            if (pos == androidx.recyclerview.widget.RecyclerView.NO_POSITION
+                                    || pos + 1 >= adapter.getItemCount()) {
+                                continue;
+                            }
+                            Preference pref = adapter.getItem(pos);
+                            Preference nextPref = adapter.getItem(pos + 1);
+                            if (pref == null || pref instanceof PreferenceCategory
+                                    || pref.getClass().getSimpleName().contains("SearchPreference")) {
+                                continue;
+                            }
+                            if (nextPref != null && !(nextPref instanceof PreferenceCategory)) {
+                                float y = child.getBottom() + child.getTranslationY();
+                                c.drawLine(child.getLeft() + dividerInset, y,
+                                        child.getRight() - dividerInset, y, dividerPaint);
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        @NonNull
+        @Override
+        @SuppressWarnings("RestrictedApi")
+        protected androidx.recyclerview.widget.RecyclerView.Adapter onCreateAdapter(
+                @NonNull PreferenceScreen preferenceScreen) {
+            return new androidx.preference.PreferenceGroupAdapter(preferenceScreen) {
+                @Override
+                public void onBindViewHolder(@NonNull androidx.preference.PreferenceViewHolder holder, int position) {
+                    super.onBindViewHolder(holder, position);
+                    Preference pref = getItem(position);
+                    Preference nextPref = (position + 1 < getItemCount()) ? getItem(position + 1) : null;
+                    View itemView = holder.itemView;
+                    if (pref == null) {
+                        return;
+                    }
+                    if (pref.getClass().getSimpleName().contains("SearchPreference")) {
+                        itemView.setBackgroundResource(R.drawable.bg_oneui_floating_pill);
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                            itemView.setElevation(UiHelper.dpToPx(itemView.getContext(), 6f));
+                        }
+                    } else if (pref instanceof PreferenceCategory) {
+                        boolean hasChildren = nextPref != null && !(nextPref instanceof PreferenceCategory);
+                        itemView.setBackgroundResource(hasChildren
+                                ? R.drawable.bg_oneui_glass_card_top
+                                : R.drawable.bg_oneui_squircle_card);
+                        View title = holder.findViewById(android.R.id.title);
+                        if (title instanceof android.widget.TextView) {
+                            ((android.widget.TextView) title).setTextColor(0xD9FFFFFF);
+                        }
+                    } else {
+                        boolean isLastInCard = nextPref == null || nextPref instanceof PreferenceCategory;
+                        itemView.setBackgroundResource(isLastInCard
+                                ? R.drawable.bg_oneui_glass_card_bottom
+                                : R.drawable.bg_oneui_glass_card_middle);
+                        View title = holder.findViewById(android.R.id.title);
+                        if (title instanceof android.widget.TextView) {
+                            ((android.widget.TextView) title).setTextColor(0xFFFFFFFF);
+                        }
+                        View summary = holder.findViewById(android.R.id.summary);
+                        if (summary instanceof android.widget.TextView) {
+                            ((android.widget.TextView) summary).setTextColor(0xB3FFFFFF);
+                        }
+                    }
+                }
+            };
+        }
+
         public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState, boolean unused) {
             return super.onCreateView(inflater, container, savedInstanceState);
         }

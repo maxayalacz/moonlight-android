@@ -60,6 +60,11 @@ public class UiHelper {
 
         if (view.getId() == R.id.notificationOverlay) {
             view.setBackgroundResource(R.drawable.bg_oneui_notification_glass);
+        } else if (view.getId() == R.id.pcToolbarContainer || view.getId() == R.id.appListText) {
+            view.setBackgroundResource(R.drawable.bg_oneui_floating_pill);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                view.setElevation(dpToPx(context, 8f));
+            }
         } else {
             view.setBackgroundResource(R.drawable.bg_oneui_liquid_glass);
         }
@@ -784,6 +789,30 @@ public class UiHelper {
         }
     }
 
+    private static void attachFlowingAuroraBackground(Activity activity, View rootView) {
+        if (activity instanceof Game || activity instanceof ExternalDisplayControlActivity) {
+            return;
+        }
+        if (!(rootView instanceof android.widget.FrameLayout)) {
+            return;
+        }
+        android.widget.FrameLayout contentFrame = (android.widget.FrameLayout) rootView;
+        if (contentFrame.findViewWithTag("oneui_flowing_aurora") != null) {
+            return;
+        }
+        com.limelight.ui.FlowingAuroraView auroraView = new com.limelight.ui.FlowingAuroraView(activity);
+        auroraView.setTag("oneui_flowing_aurora");
+        contentFrame.addView(auroraView, 0, new android.widget.FrameLayout.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT));
+        if (contentFrame.getChildCount() > 1) {
+            View firstContent = contentFrame.getChildAt(1);
+            if (firstContent != null) {
+                firstContent.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+            }
+        }
+    }
+
     public static void notifyNewRootView(final Activity activity)
     {
         View rootView = activity.findViewById(android.R.id.content);
@@ -792,6 +821,7 @@ public class UiHelper {
         // Set GameState.MODE_NONE initially for all activities
         setGameModeStatus(activity, false, false);
 
+        attachFlowingAuroraBackground(activity, rootView);
         applyReachabilitySpacing(activity);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {

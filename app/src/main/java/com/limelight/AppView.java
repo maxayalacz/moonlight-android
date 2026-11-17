@@ -867,6 +867,14 @@ public class AppView extends AppCompatActivity implements AdapterFragmentCallbac
                 }
             }
         });
+        listView.setClipToPadding(false);
+        int topPad = getResources().getDimensionPixelSize(R.dimen.oneui_reachability_top_margin)
+                + (int) UiHelper.dpToPx(this, 68f);
+        listView.setPadding(
+                listView.getPaddingLeft(),
+                topPad,
+                listView.getPaddingRight(),
+                listView.getPaddingBottom());
         UiHelper.applyStatusBarPadding(listView);
         listView.setOnItemLongClickListener((parent, view, position, id) -> {
             openAppContextMenu(view, position);

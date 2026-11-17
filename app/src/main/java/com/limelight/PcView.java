@@ -983,6 +983,16 @@ public class PcView extends AppCompatActivity implements AdapterFragmentCallback
                 }
             }
         });
+        if (findViewById(R.id.oneuiHeaderContainer) != null) {
+            listView.setClipToPadding(false);
+            int topPad = getResources().getDimensionPixelSize(R.dimen.oneui_reachability_top_margin)
+                    + (int) UiHelper.dpToPx(this, 78f);
+            listView.setPadding(
+                    listView.getPaddingLeft(),
+                    topPad,
+                    listView.getPaddingRight(),
+                    listView.getPaddingBottom());
+        }
         UiHelper.applyStatusBarPadding(listView);
         listView.setOnItemLongClickListener((parent, view, position, id) -> {
             openPcContextMenu(position);

@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_pressed="true">
+        <layer-list>
+            <item>
+                <shape android:shape="rectangle">
+                    <solid android:color="#24FFFFFF" />
+                    <corners
+                        android:topLeftRadius="0dp"
+                        android:topRightRadius="0dp"
+                        android:bottomLeftRadius="@dimen/oneui_squircle_radius"
+                        android:bottomRightRadius="@dimen/oneui_squircle_radius" />
+                </shape>
+            </item>
+            <item android:left="1dp" android:right="1dp" android:bottom="1dp">
+                <shape android:shape="rectangle">
+                    <solid android:color="#442E3B56" />
+                    <corners
+                        android:topLeftRadius="0dp"
+                        android:topRightRadius="0dp"
+                        android:bottomLeftRadius="@dimen/oneui_squircle_radius"
+                        android:bottomRightRadius="@dimen/oneui_squircle_radius" />
+                </shape>
+            </item>
+        </layer-list>
+    </item>
+    <item android:state_focused="true">
+        <layer-list>
+            <item>
+                <shape android:shape="rectangle">
+                    <solid android:color="#66FFFFFF" />
+                    <corners
+                        android:topLeftRadius="0dp"
+                        android:topRightRadius="0dp"
+                        android:bottomLeftRadius="@dimen/oneui_squircle_radius"
+                        android:bottomRightRadius="@dimen/oneui_squircle_radius" />
+                </shape>
+            </item>
+            <item android:left="1.5dp" android:right="1.5dp" android:bottom="1.5dp">
+                <shape android:shape="rectangle">
+                    <solid android:color="#402A3750" />
+                    <corners
+                        android:topLeftRadius="0dp"
+                        android:topRightRadius="0dp"
+                        android:bottomLeftRadius="@dimen/oneui_squircle_radius"
+                        android:bottomRightRadius="@dimen/oneui_squircle_radius" />
+                </shape>
+            </item>
+        </layer-list>
+    </item>
+    <item>
+        <layer-list>
+            <item>
+                <shape android:shape="rectangle">
+                    <solid android:color="#1CFFFFFF" />
+                    <corners
+                        android:topLeftRadius="0dp"
+                        android:topRightRadius="0dp"
+                        android:bottomLeftRadius="@dimen/oneui_squircle_radius"
+                        android:bottomRightRadius="@dimen/oneui_squircle_radius" />
+                </shape>
+            </item>
+            <item android:left="1dp" android:right="1dp" android:bottom="1dp">
+                <shape android:shape="rectangle">
+                    <solid android:color="#2C1A2233" />
+                    <corners
+                        android:topLeftRadius="0dp"
+                        android:topRightRadius="0dp"
+                        android:bottomLeftRadius="@dimen/oneui_squircle_radius"
+                        android:bottomRightRadius="@dimen/oneui_squircle_radius" />
+                </shape>
+            </item>
+        </layer-list>
+    </item>
+</selector>
