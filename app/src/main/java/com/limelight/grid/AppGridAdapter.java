@@ -2,10 +2,12 @@ package com.limelight.grid;
 
 import android.content.Context;
 import android.graphics.BitmapFactory;
+import android.graphics.Outline;
 import android.graphics.RenderEffect;
 import android.graphics.Shader;
 import android.os.Build;
 import android.view.View;
+import android.view.ViewOutlineProvider;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
@@ -116,7 +118,6 @@ public class AppGridAdapter extends GenericGridAdapter<AppView.AppObject> {
                 new MemoryAssetLoader(),
                 new DiskAssetLoader(context),
                 BitmapFactory.decodeResource(context.getResources(), R.drawable.no_app_image));
-        this.loader.setAlwaysShowText(true);
 
         // This will trigger the view to reload with the new layout
         setLayoutId(getLayoutIdForPreferences(prefs));
@@ -175,22 +176,39 @@ public class AppGridAdapter extends GenericGridAdapter<AppView.AppObject> {
 
     @Override
     public void populateView(View parentView, ImageView imgView, RelativeLayout gridMask, ProgressBar prgView, TextView txtView, ImageView overlayView, AppView.AppObject obj) {
-        // Let the cached asset loader handle it
-        loader.populateImageView(obj.app, imgView, txtView);
+        ImageView glowView = parentView.findViewById(R.id.grid_glow);
 
-        // Blur box art as a soft card-local backdrop while keeping foreground text & icons razor-sharp
+        // Configure ambient glow layer behind the dark frosted glass frame so box art emits light
+        if (glowView != null) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                float blurPx = UiHelper.dpToPx(glowView.getContext(), 20f);
+                glowView.setRenderEffect(RenderEffect.createBlurEffect(blurPx, blurPx, Shader.TileMode.CLAMP));
+                glowView.setAlpha(0.75f);
+            } else {
+                glowView.setAlpha(0.38f);
+            }
+        }
+
+        // Keep foreground box art razor-sharp and framed with rounded corners inside the frosted card
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            float blurPx = UiHelper.dpToPx(imgView.getContext(), 14f);
-            imgView.setRenderEffect(RenderEffect.createBlurEffect(blurPx, blurPx, Shader.TileMode.CLAMP));
-            imgView.setAlpha(0.75f);
+            imgView.setRenderEffect(null);
         }
-        else {
-            imgView.setAlpha(0.45f);
+        imgView.setAlpha(1.0f);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && !imgView.getClipToOutline()) {
+            final float cornerPx = UiHelper.dpToPx(imgView.getContext(), 18f);
+            imgView.setOutlineProvider(new ViewOutlineProvider() {
+                @Override
+                public void getOutline(View view, Outline outline) {
+                    outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), cornerPx);
+                }
+            });
+            imgView.setClipToOutline(true);
         }
 
-        // Keep app title centered, sharp, and high-contrast over the frosted glass
-        txtView.setText(obj.app.getAppName());
-        txtView.setVisibility(View.VISIBLE);
+        // Let the cached asset loader populate both the sharp box art and the ambient glow layer
+        loader.populateImageView(obj.app, imgView, glowView, txtView);
+
+        // Style placeholder title text cleanly over the dark frosted glass
         txtView.setTextColor(0xFFFFFFFF);
         txtView.setShadowLayer(8f, 0f, 2f, 0xCC000000);
 
@@ -208,19 +226,13 @@ public class AppGridAdapter extends GenericGridAdapter<AppView.AppObject> {
             overlayView.setPadding(0, 0, 0, 0);
         }
 
-        if (imgView.getVisibility() != View.VISIBLE) {
-            // No box art visible yet: diffuse the live metaball/plexus backdrop through the card
-            if (!UiHelper.applyFrostedCardBackground(
-                    gridMask,
-                    FlowingAuroraView.CornerMode.ALL,
-                    28f,
-                    obj.isRunning ? 0x38202C44 : 0x26FFFFFF)) {
-                gridMask.setBackgroundResource(R.drawable.bg_oneui_glass_card_interactive);
-            }
-        }
-        else {
-            // Box art is visible behind gridMask: use interactive translucent glass tint + specular rim
-            gridMask.setBackgroundResource(R.drawable.bg_oneui_glass_card_interactive);
+        // Dark frosted glass card tint matching popup menus (not milky white)
+        if (!UiHelper.applyFrostedCardBackground(
+                gridMask,
+                FlowingAuroraView.CornerMode.ALL,
+                28f,
+                obj.isRunning ? 0x5E1A2438 : 0x52121826)) {
+            gridMask.setBackgroundResource(R.drawable.bg_oneui_liquid_glass_dark);
         }
 
         if (obj.isHidden) {

@@ -149,13 +149,15 @@ public class CachedAppAssetLoader {
 
     private class LoaderTask extends AsyncTask<LoaderTuple, Void, ScaledBitmap> {
         private final WeakReference<ImageView> imageViewRef;
+        private final WeakReference<ImageView> glowViewRef;
         private final WeakReference<TextView> textViewRef;
         private final boolean diskOnly;
 
         private LoaderTuple tuple;
 
-        public LoaderTask(ImageView imageView, TextView textView, boolean diskOnly) {
+        public LoaderTask(ImageView imageView, ImageView glowView, TextView textView, boolean diskOnly) {
             this.imageViewRef = new WeakReference<>(imageView);
+            this.glowViewRef = new WeakReference<>(glowView);
             this.textViewRef = new WeakReference<>(textView);
             this.diskOnly = diskOnly;
         }
@@ -198,15 +200,19 @@ public class CachedAppAssetLoader {
 
             // If the current loader task for this view isn't us, do nothing
             final ImageView imageView = imageViewRef.get();
+            final ImageView glowView = glowViewRef.get();
             final TextView textView = textViewRef.get();
             if (getLoaderTask(imageView) == this) {
                 // Set off another loader task on the network executor. This time our AsyncDrawable
                 // will use the app image placeholder bitmap, rather than an empty bitmap.
-                LoaderTask task = new LoaderTask(imageView, textView, false);
+                LoaderTask task = new LoaderTask(imageView, glowView, textView, false);
                 AsyncDrawable asyncDrawable = new AsyncDrawable(imageView.getResources(), noAppImageBitmap, task);
                 imageView.setImageDrawable(asyncDrawable);
                 imageView.startAnimation(AnimationUtils.loadAnimation(imageView.getContext(), R.anim.boxart_fadein));
                 imageView.setVisibility(View.VISIBLE);
+                if (glowView != null) {
+                    glowView.setVisibility(View.GONE);
+                }
                 textView.setVisibility(View.VISIBLE);
                 task.executeOnExecutor(networkExecutor, tuple);
             }
@@ -220,12 +226,23 @@ public class CachedAppAssetLoader {
             }
 
             final ImageView imageView = imageViewRef.get();
+            final ImageView glowView = glowViewRef.get();
             final TextView textView = textViewRef.get();
             if (getLoaderTask(imageView) == this) {
                 // Fade in the box art
                 if (bitmap != null) {
+                    boolean placeholder = isBitmapPlaceholder(bitmap);
                     // Show the text if it's a placeholder or alwaysShowText is enabled
-                    textView.setVisibility((alwaysShowText || isBitmapPlaceholder(bitmap)) ? View.VISIBLE : View.GONE);
+                    textView.setVisibility((alwaysShowText || placeholder) ? View.VISIBLE : View.GONE);
+
+                    if (glowView != null) {
+                        if (!placeholder) {
+                            glowView.setImageBitmap(bitmap.bitmap);
+                            glowView.setVisibility(View.VISIBLE);
+                        } else {
+                            glowView.setVisibility(View.GONE);
+                        }
+                    }
 
                     if (imageView.getVisibility() == View.VISIBLE) {
                         // Fade out the placeholder first
@@ -337,6 +354,10 @@ public class CachedAppAssetLoader {
     }
 
     public boolean populateImageView(NvApp app, ImageView imgView, TextView textView) {
+        return populateImageView(app, imgView, null, textView);
+    }
+
+    public boolean populateImageView(NvApp app, ImageView imgView, ImageView glowView, TextView textView) {
         LoaderTuple tuple = new LoaderTuple(computer, app);
 
         // If there's already a task in progress for this view,
@@ -352,20 +373,33 @@ public class CachedAppAssetLoader {
         // First, try the memory cache in the current context
         ScaledBitmap bmp = memoryLoader.loadBitmapFromCache(tuple);
         if (bmp != null) {
+            boolean placeholder = isBitmapPlaceholder(bmp);
             // Show the bitmap immediately
             imgView.setVisibility(View.VISIBLE);
             imgView.setImageBitmap(bmp.bitmap);
 
+            if (glowView != null) {
+                if (!placeholder) {
+                    glowView.setImageBitmap(bmp.bitmap);
+                    glowView.setVisibility(View.VISIBLE);
+                } else {
+                    glowView.setVisibility(View.GONE);
+                }
+            }
+
             // Show the text if it's a placeholder bitmap or alwaysShowText is enabled
-            textView.setVisibility((alwaysShowText || isBitmapPlaceholder(bmp)) ? View.VISIBLE : View.GONE);
+            textView.setVisibility((alwaysShowText || placeholder) ? View.VISIBLE : View.GONE);
             return true;
         }
 
         // If it's not in memory, create an async task to load it. This task will be attached
         // via AsyncDrawable to this view.
-        final LoaderTask task = new LoaderTask(imgView, textView, true);
+        final LoaderTask task = new LoaderTask(imgView, glowView, textView, true);
         final AsyncDrawable asyncDrawable = new AsyncDrawable(imgView.getResources(), placeholderBitmap, task);
         textView.setVisibility(alwaysShowText ? View.VISIBLE : View.INVISIBLE);
+        if (glowView != null) {
+            glowView.setVisibility(View.INVISIBLE);
+        }
         imgView.setVisibility(View.INVISIBLE);
         imgView.setImageDrawable(asyncDrawable);
 

@@ -59,7 +59,7 @@ public class PcGridAdapter extends GenericGridAdapter<PcView.ComputerObject> {
                         cardSurface,
                         com.limelight.ui.FlowingAuroraView.CornerMode.ALL,
                         32f,
-                        0x26FFFFFF);
+                        0x52121826);
             }
         }
         imgView.setImageResource(R.drawable.ic_computer);

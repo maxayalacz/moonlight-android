@@ -533,7 +533,7 @@
     <PreferenceCategory
         android:key="category_ui_settings"
         android:title="@string/category_ui_settings"
-        app:initialExpandedChildrenCount="4"
+        app:initialExpandedChildrenCount="6"
         app:iconSpaceReserved="false">
         <ListPreference
             android:defaultValue="balanced"
@@ -542,6 +542,22 @@
             android:key="list_backdrop_style"
             android:summary="@string/summary_backdrop_style"
             android:title="@string/title_backdrop_style"
+            app:iconSpaceReserved="false" />
+        <ListPreference
+            android:defaultValue="soft"
+            android:entries="@array/metaball_sharpness_names"
+            android:entryValues="@array/metaball_sharpness_values"
+            android:key="list_metaball_sharpness"
+            android:summary="@string/summary_metaball_sharpness"
+            android:title="@string/title_metaball_sharpness"
+            app:iconSpaceReserved="false" />
+        <ListPreference
+            android:defaultValue="normal"
+            android:entries="@array/plexus_density_names"
+            android:entryValues="@array/plexus_density_values"
+            android:key="list_plexus_density"
+            android:summary="@string/summary_plexus_density"
+            android:title="@string/title_plexus_density"
             app:iconSpaceReserved="false" />
         <CheckBoxPreference
             android:defaultValue="false"

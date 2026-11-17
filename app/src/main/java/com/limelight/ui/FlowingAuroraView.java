@@ -23,19 +23,22 @@ import androidx.preference.PreferenceManager;
 
 import java.lang.ref.WeakReference;
 import java.util.Iterator;
+import java.util.Random;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Continuous real-time motion-graphics backdrop featuring organic merging/separating
- * gradient metaballs and a live 2D plexus particle network, with 3 configurable presets
- * ("balanced", "bold_plexus", "plexus_hero") and a shared pre-blurred buffer for
+ * gradient metaballs and a live 2D plexus particle network, with configurable presets,
+ * metaball sharpness, plexus dot density, and a shared pre-blurred buffer for
  * real-time frosted glass cards.
  */
 public class FlowingAuroraView extends View implements SharedPreferences.OnSharedPreferenceChangeListener {
     private static final String PREF_BACKDROP_STYLE = "list_backdrop_style";
+    private static final String PREF_METABALL_SHARPNESS = "list_metaball_sharpness";
+    private static final String PREF_PLEXUS_DENSITY = "list_plexus_density";
     private static final int FIELD_W = 64;
     private static final int FIELD_H = 128;
-    private static final int MAX_NODES = 38;
+    private static final int MAX_NODES = 80;
     private static final int BLOB_COUNT = 5;
 
     public enum CornerMode {
@@ -49,6 +52,18 @@ public class FlowingAuroraView extends View implements SharedPreferences.OnShare
         BALANCED,
         BOLD_PLEXUS,
         PLEXUS_HERO
+    }
+
+    public enum MetaballSharpness {
+        SOFT,
+        MEDIUM,
+        SHARP
+    }
+
+    public enum PlexusDensity {
+        NORMAL,
+        HIGH,
+        ULTRA
     }
 
     private static class Blob {
@@ -80,6 +95,8 @@ public class FlowingAuroraView extends View implements SharedPreferences.OnShare
     private final RectF fullDst = new RectF();
 
     private BackdropStyle style = BackdropStyle.BALANCED;
+    private MetaballSharpness sharpness = MetaballSharpness.SOFT;
+    private PlexusDensity plexusDensity = PlexusDensity.NORMAL;
     private ValueAnimator ticker;
     private long lastTickMs = 0L;
     private boolean fieldDirty = true;
@@ -133,16 +150,17 @@ public class FlowingAuroraView extends View implements SharedPreferences.OnShare
             blobs[i] = b;
         }
 
-        // Deterministic, well-distributed initial plexus nodes with continuous velocities
+        // Randomize starting positions and continuous velocities for plexus nodes on every launch
+        Random rng = new Random();
         for (int i = 0; i < MAX_NODES; i++) {
             Node n = new Node();
-            float a = i * 2.3999632f; // golden angle distribution
-            n.x = ((i * 0.6180339f) % 1.0f);
-            n.y = (((i * 0.3819660f) + 0.17f) % 1.0f);
-            float speed = 0.018f + (i % 5) * 0.005f;
-            n.vx = (float) Math.cos(a) * speed;
-            n.vy = (float) Math.sin(a) * speed;
-            n.sizeDp = 1.8f + (i % 3) * 0.7f;
+            n.x = rng.nextFloat();
+            n.y = rng.nextFloat();
+            float angle = (float) (rng.nextFloat() * Math.PI * 2.0);
+            float speed = 0.016f + rng.nextFloat() * 0.022f;
+            n.vx = (float) Math.cos(angle) * speed;
+            n.vy = (float) Math.sin(angle) * speed;
+            n.sizeDp = 1.6f + rng.nextFloat() * 1.5f;
             nodes[i] = n;
         }
 
@@ -150,8 +168,8 @@ public class FlowingAuroraView extends View implements SharedPreferences.OnShare
     }
 
     private void loadStyleFromPrefs(Context context) {
-        String val = PreferenceManager.getDefaultSharedPreferences(context)
-                .getString(PREF_BACKDROP_STYLE, "balanced");
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+        String val = prefs.getString(PREF_BACKDROP_STYLE, "balanced");
         if ("bold_plexus".equals(val)) {
             style = BackdropStyle.BOLD_PLEXUS;
         } else if ("plexus_hero".equals(val)) {
@@ -159,12 +177,33 @@ public class FlowingAuroraView extends View implements SharedPreferences.OnShare
         } else {
             style = BackdropStyle.BALANCED;
         }
+
+        String sharpVal = prefs.getString(PREF_METABALL_SHARPNESS, "soft");
+        if ("sharp".equals(sharpVal)) {
+            sharpness = MetaballSharpness.SHARP;
+        } else if ("medium".equals(sharpVal)) {
+            sharpness = MetaballSharpness.MEDIUM;
+        } else {
+            sharpness = MetaballSharpness.SOFT;
+        }
+
+        String densityVal = prefs.getString(PREF_PLEXUS_DENSITY, "normal");
+        if ("ultra".equals(densityVal)) {
+            plexusDensity = PlexusDensity.ULTRA;
+        } else if ("high".equals(densityVal)) {
+            plexusDensity = PlexusDensity.HIGH;
+        } else {
+            plexusDensity = PlexusDensity.NORMAL;
+        }
+
         fieldDirty = true;
     }
 
     @Override
     public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, @Nullable String key) {
-        if (PREF_BACKDROP_STYLE.equals(key)) {
+        if (PREF_BACKDROP_STYLE.equals(key)
+                || PREF_METABALL_SHARPNESS.equals(key)
+                || PREF_PLEXUS_DENSITY.equals(key)) {
             loadStyleFromPrefs(getContext());
             invalidate();
             notifyFrostedListeners();
@@ -220,15 +259,25 @@ public class FlowingAuroraView extends View implements SharedPreferences.OnShare
     }
 
     private int getActiveNodeCount() {
+        int base;
         switch (style) {
             case BOLD_PLEXUS:
-                return 38;
+                base = 38;
+                break;
             case PLEXUS_HERO:
-                return 34;
+                base = 34;
+                break;
             case BALANCED:
             default:
-                return 26;
+                base = 26;
+                break;
         }
+        if (plexusDensity == PlexusDensity.ULTRA) {
+            return Math.min(MAX_NODES, Math.round(base * 2.1f));
+        } else if (plexusDensity == PlexusDensity.HIGH) {
+            return Math.min(MAX_NODES, Math.round(base * 1.5f));
+        }
+        return base;
     }
 
     private void renderMetaballField() {
@@ -243,6 +292,27 @@ public class FlowingAuroraView extends View implements SharedPreferences.OnShare
         } else {
             blobStrength = 1.0f;
             blobSoftness = 1.0f;
+        }
+
+        float eps;
+        float threshLow;
+        float threshSpan;
+        float lowSlope;
+        if (sharpness == MetaballSharpness.SHARP) {
+            eps = 0.0006f;
+            threshLow = 0.78f;
+            threshSpan = 0.24f;
+            lowSlope = 0.04f;
+        } else if (sharpness == MetaballSharpness.MEDIUM) {
+            eps = 0.0012f;
+            threshLow = 0.56f;
+            threshSpan = 0.48f;
+            lowSlope = 0.12f;
+        } else {
+            eps = 0.0025f;
+            threshLow = 0.35f;
+            threshSpan = 0.95f;
+            lowSlope = 0.25f;
         }
 
         final float aspect = (float) getHeight() / Math.max(1f, (float) getWidth());
@@ -262,7 +332,7 @@ public class FlowingAuroraView extends View implements SharedPreferences.OnShare
                     float dx = nx - b.x;
                     float dy = (ny - b.y) * Math.min(2.2f, Math.max(0.5f, aspect));
                     float r = b.radius * blobSoftness;
-                    float distSq = dx * dx + dy * dy + 0.0025f;
+                    float distSq = dx * dx + dy * dy + eps;
                     float contrib = (r * r) / distSq;
                     fieldSum += contrib;
                     rAcc += b.r * contrib;
@@ -272,12 +342,13 @@ public class FlowingAuroraView extends View implements SharedPreferences.OnShare
 
                 // Smooth metaball threshold: merges blobs cleanly when fieldSum crosses ~1.0
                 float intensity;
-                if (fieldSum <= 0.35f) {
-                    intensity = fieldSum * 0.25f;
+                if (fieldSum <= threshLow) {
+                    intensity = fieldSum * lowSlope;
                 } else {
-                    float t = Math.min(1f, (fieldSum - 0.35f) / 0.95f);
-                    // Smoothstep for organic frosted blob edge
-                    intensity = 0.0875f + (t * t * (3f - 2f * t)) * 0.9125f;
+                    float baseInt = threshLow * lowSlope;
+                    float t = Math.min(1f, (fieldSum - threshLow) / threshSpan);
+                    // Smoothstep for organic metaball edge
+                    intensity = baseInt + (t * t * (3f - 2f * t)) * (1f - baseInt);
                 }
                 intensity = Math.min(1f, intensity * blobStrength);
 
@@ -302,11 +373,12 @@ public class FlowingAuroraView extends View implements SharedPreferences.OnShare
         fieldDirty = false;
         renderMetaballField();
 
-        // 2-pass box blur on 64x128 buffer -> silky frosted diffusion for FrostedCardDrawable
+        // Box blur on 64x128 buffer -> silky frosted diffusion for FrostedCardDrawable and soft/medium backdrops
         System.arraycopy(rawPix, 0, blurPix, 0, rawPix.length);
-        int radius = 5;
+        int radius = (sharpness == MetaballSharpness.MEDIUM) ? 2 : 5;
+        int passes = (sharpness == MetaballSharpness.MEDIUM) ? 1 : 2;
         int div = radius * 2 + 1;
-        for (int pass = 0; pass < 2; pass++) {
+        for (int pass = 0; pass < passes; pass++) {
             for (int y = 0; y < FIELD_H; y++) {
                 int row = y * FIELD_W;
                 for (int x = 0; x < FIELD_W; x++) {
@@ -357,8 +429,8 @@ public class FlowingAuroraView extends View implements SharedPreferences.OnShare
         }
 
         fullDst.set(0f, 0f, w, h);
-        // Draw blurred metaball field for smooth frosted organic blobs
-        canvas.drawBitmap(blurredField, null, fullDst, bitmapPaint);
+        // Draw crisp or diffused metaball field depending on user sharpness setting
+        canvas.drawBitmap(sharpness == MetaballSharpness.SHARP ? rawField : blurredField, null, fullDst, bitmapPaint);
 
         // Draw real-time 2D plexus network on top
         drawPlexusNetwork(canvas, w, h);

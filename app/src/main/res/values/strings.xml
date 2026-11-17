@@ -749,4 +749,16 @@
     <string name="backdrop_style_balanced">Balanced (Metaballs + Subtle Plexus)</string>
     <string name="backdrop_style_bold_plexus">Bold Plexus Network</string>
     <string name="backdrop_style_plexus_hero">Plexus Hero (Subtle Dark Metaballs)</string>
+
+    <string name="title_metaball_sharpness">Metaball Edge Sharpness</string>
+    <string name="summary_metaball_sharpness">Control whether the background metaballs are softly diffused or crisp</string>
+    <string name="metaball_sharpness_soft">Soft (Frosted)</string>
+    <string name="metaball_sharpness_medium">Medium (Defined)</string>
+    <string name="metaball_sharpness_sharp">Sharp (Crisp Liquid)</string>
+
+    <string name="title_plexus_density">Plexus Dot Quantity</string>
+    <string name="summary_plexus_density">Adjust the number of animated dots in the plexus network</string>
+    <string name="plexus_density_normal">Normal</string>
+    <string name="plexus_density_high">High (+50% Dots)</string>
+    <string name="plexus_density_ultra">Ultra (2x Dots)</string>
 </resources>

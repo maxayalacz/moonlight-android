@@ -211,4 +211,26 @@
         <item>plexus_hero</item>
     </string-array>
 
+    <string-array name="metaball_sharpness_names">
+        <item>@string/metaball_sharpness_soft</item>
+        <item>@string/metaball_sharpness_medium</item>
+        <item>@string/metaball_sharpness_sharp</item>
+    </string-array>
+    <string-array name="metaball_sharpness_values" translatable="false">
+        <item>soft</item>
+        <item>medium</item>
+        <item>sharp</item>
+    </string-array>
+
+    <string-array name="plexus_density_names">
+        <item>@string/plexus_density_normal</item>
+        <item>@string/plexus_density_high</item>
+        <item>@string/plexus_density_ultra</item>
+    </string-array>
+    <string-array name="plexus_density_values" translatable="false">
+        <item>normal</item>
+        <item>high</item>
+        <item>ultra</item>
+    </string-array>
+
 </resources>
