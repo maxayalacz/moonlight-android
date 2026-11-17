@@ -1,7 +1,7 @@
 package com.limelight;
 
 import android.app.Activity;
-import androidx.appcompat.app.AlertDialog;
+import android.app.AlertDialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.hardware.Sensor;

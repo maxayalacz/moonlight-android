@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="OneUI.DialogTheme" parent="Theme.MaterialComponents.Dialog.Alert">
+    <style name="OneUI.DialogTheme" parent="Theme.Material3.Dark.Dialog.Alert">
         <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowIsFloating">true</item>
         <item name="android:windowBackground">@drawable/bg_oneui_dialog_squircle</item>

@@ -1,7 +1,7 @@
 package com.limelight.utils;
 
 import android.app.Activity;
-import androidx.appcompat.app.AlertDialog;
+import android.app.AlertDialog;
 import android.app.GameManager;
 import android.app.GameState;
 import android.app.LocaleManager;
@@ -11,7 +11,6 @@ import android.content.DialogInterface;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.graphics.Insets;
-import android.graphics.PixelFormat;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
 import android.graphics.RenderEffect;
@@ -157,13 +156,13 @@ public class UiHelper {
             lp.bottomMargin = headerBottom;
             oneuiHeader.setLayoutParams(lp);
             oneuiHeader.setPadding(horizontalMargin, oneuiHeader.getPaddingTop(), horizontalMargin, oneuiHeader.getPaddingBottom());
-        }
 
-        View pcToolbar = activity.findViewById(R.id.pcToolbarContainer);
-        if (pcToolbar != null && pcToolbar.getLayoutParams() != null) {
-            android.view.ViewGroup.LayoutParams lp = pcToolbar.getLayoutParams();
-            lp.height = (int) dpToPx(activity, isLandscape ? 54f : 64f);
-            pcToolbar.setLayoutParams(lp);
+            View pcToolbar = activity.findViewById(R.id.pcToolbarContainer);
+            if (pcToolbar != null && pcToolbar.getLayoutParams() != null) {
+                android.view.ViewGroup.LayoutParams toolbarLp = pcToolbar.getLayoutParams();
+                toolbarLp.height = (int) dpToPx(activity, isLandscape ? 54f : 64f);
+                pcToolbar.setLayoutParams(toolbarLp);
+            }
         }
 
         View appListText = activity.findViewById(R.id.appListText);
@@ -183,9 +182,19 @@ public class UiHelper {
             android.view.ViewGroup.MarginLayoutParams lp = (android.view.ViewGroup.MarginLayoutParams) profilesDesc.getLayoutParams();
             lp.topMargin = reachabilityTop;
             lp.bottomMargin = headerBottom;
+            lp.leftMargin = horizontalMargin;
+            lp.rightMargin = horizontalMargin;
             profilesDesc.setLayoutParams(lp);
             int pad = (int) dpToPx(activity, isLandscape ? 12f : 18f);
             profilesDesc.setPadding(pad, pad, pad, pad);
+        }
+
+        View profilesRecycler = activity.findViewById(R.id.profilesRecyclerView);
+        if (profilesRecycler != null && profilesRecycler.getLayoutParams() instanceof android.view.ViewGroup.MarginLayoutParams) {
+            android.view.ViewGroup.MarginLayoutParams lp = (android.view.ViewGroup.MarginLayoutParams) profilesRecycler.getLayoutParams();
+            lp.leftMargin = horizontalMargin;
+            lp.rightMargin = horizontalMargin;
+            profilesRecycler.setLayoutParams(lp);
         }
 
         View manualPcText = activity.findViewById(R.id.manuallyAddPcText);
@@ -196,20 +205,38 @@ public class UiHelper {
             manualPcText.setLayoutParams(lp);
         }
 
+        View addPcCard = activity.findViewById(R.id.addPcCardContainer);
+        if (addPcCard != null && addPcCard.getLayoutParams() instanceof android.view.ViewGroup.MarginLayoutParams) {
+            android.view.ViewGroup.MarginLayoutParams lp = (android.view.ViewGroup.MarginLayoutParams) addPcCard.getLayoutParams();
+            lp.leftMargin = horizontalMargin;
+            lp.rightMargin = horizontalMargin;
+            addPcCard.setLayoutParams(lp);
+        }
+
         View editToolbar = activity.findViewById(R.id.toolbar);
         if (editToolbar != null && editToolbar.getLayoutParams() instanceof android.view.ViewGroup.MarginLayoutParams) {
             android.view.ViewGroup.MarginLayoutParams lp = (android.view.ViewGroup.MarginLayoutParams) editToolbar.getLayoutParams();
             lp.topMargin = headerTitleTop;
             lp.bottomMargin = headerBottom;
+            lp.leftMargin = horizontalMargin;
+            lp.rightMargin = horizontalMargin;
             editToolbar.setLayoutParams(lp);
+        }
+
+        View prefsContainer = activity.findViewById(R.id.preferences_container);
+        if (prefsContainer != null && prefsContainer.getLayoutParams() instanceof android.view.ViewGroup.MarginLayoutParams) {
+            android.view.ViewGroup.MarginLayoutParams lp = (android.view.ViewGroup.MarginLayoutParams) prefsContainer.getLayoutParams();
+            lp.leftMargin = horizontalMargin;
+            lp.rightMargin = horizontalMargin;
+            prefsContainer.setLayoutParams(lp);
         }
 
         View streamSettings = activity.findViewById(R.id.stream_settings);
         if (streamSettings != null) {
             streamSettings.setPadding(
-                    streamSettings.getPaddingLeft(),
+                    horizontalMargin,
                     headerTitleTop,
-                    streamSettings.getPaddingRight(),
+                    horizontalMargin,
                     streamSettings.getPaddingBottom());
         }
     }
@@ -220,7 +247,9 @@ public class UiHelper {
      * On API 31+ the blur is a window *background* blur: SurfaceFlinger blurs only the
      * content behind the dialog window, clipped to the window background drawable's
      * rounded bounds. Nothing outside the card is blurred and the dialog's own text is
-     * never blurred.
+     * never blurred. When the OS disables cross-window blur (battery saver, reduce
+     * transparency, some game modes) or on API < 31, an opaque elevated surface is used
+     * so text stays legible.
      */
     public static void styleDialogSquircle(final android.app.Dialog dialog) {
         if (dialog == null) {
@@ -230,15 +259,16 @@ public class UiHelper {
         if (window == null) {
             return;
         }
-        window.setFormat(PixelFormat.TRANSLUCENT);
-        window.setBackgroundDrawableResource(R.drawable.bg_oneui_dialog_squircle);
         // Never blur the whole screen behind the dialog; only the card's own bounds.
         window.clearFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND);
 
         View decorView = window.getDecorView();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            window.setBackgroundDrawableResource(R.drawable.bg_oneui_dialog_squircle);
             decorView.setRenderEffect(null);
             applyBoundedWindowBlur(window, dialog.getContext());
+        } else {
+            window.setBackgroundDrawableResource(R.drawable.bg_oneui_dialog_squircle_opaque);
         }
         clearOpaquePanelBackgrounds(decorView);
     }
@@ -247,44 +277,39 @@ public class UiHelper {
     private static void applyBoundedWindowBlur(final Window window, Context context) {
         final WindowManager wm = context.getSystemService(WindowManager.class);
         final int blurRadiusPx = (int) dpToPx(context, ONEUI_BLUR_RADIUS_DP);
-
-        // Always retain the translucent squircle glass drawable
-        window.setBackgroundDrawableResource(R.drawable.bg_oneui_dialog_squircle);
-        window.setBackgroundBlurRadius(blurRadiusPx);
-
-        if (wm == null) {
-            return;
-        }
-
-        final View decorView = window.getDecorView();
-        if (decorView.getTag(R.id.oneuiHeaderContainer) != null) {
-            return;
-        }
-        decorView.setTag(R.id.oneuiHeaderContainer, Boolean.TRUE);
-
         final java.util.function.Consumer<Boolean> updateBlur = enabled -> {
+            window.setBackgroundDrawableResource(enabled
+                    ? R.drawable.bg_oneui_dialog_squircle
+                    : R.drawable.bg_oneui_dialog_squircle_opaque);
             window.setBackgroundBlurRadius(enabled ? blurRadiusPx : 0);
         };
 
+        boolean blurEnabled = wm != null && wm.isCrossWindowBlurEnabled();
+        if (wm == null) {
+            LimeLog.warning("OneUI: WindowManager unavailable, using opaque dialog surface");
+        } else if (!blurEnabled) {
+            LimeLog.info("OneUI: cross-window blur is disabled by the system, using opaque dialog surface");
+        }
+        updateBlur.accept(blurEnabled);
+
+        final View decorView = window.getDecorView();
+        if (wm == null || decorView.getTag(R.id.oneuiHeaderContainer) != null) {
+            return;
+        }
+        decorView.setTag(R.id.oneuiHeaderContainer, Boolean.TRUE);
         decorView.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
             @Override
             public void onViewAttachedToWindow(View v) {
-                try {
-                    wm.addCrossWindowBlurEnabledListener(updateBlur);
-                } catch (Exception ignored) {}
+                wm.addCrossWindowBlurEnabledListener(updateBlur);
             }
 
             @Override
             public void onViewDetachedFromWindow(View v) {
-                try {
-                    wm.removeCrossWindowBlurEnabledListener(updateBlur);
-                } catch (Exception ignored) {}
+                wm.removeCrossWindowBlurEnabledListener(updateBlur);
             }
         });
         if (decorView.isAttachedToWindow()) {
-            try {
-                wm.addCrossWindowBlurEnabledListener(updateBlur);
-            } catch (Exception ignored) {}
+            wm.addCrossWindowBlurEnabledListener(updateBlur);
         }
     }
 
@@ -297,25 +322,24 @@ public class UiHelper {
             return;
         }
         android.view.ViewGroup group = (android.view.ViewGroup) decorView;
-        // Do NOT clear decorView itself, as decorView holds the window's background drawable!
         for (int i = 0; i < group.getChildCount(); i++) {
-            clearViewGroupPanelBackgrounds(group.getChildAt(i));
+            group.getChildAt(i).setBackground(null);
         }
         View content = decorView.findViewById(android.R.id.content);
         if (content != null) {
             content.setBackground(null);
         }
-    }
-
-    private static void clearViewGroupPanelBackgrounds(View view) {
-        if (view == null) {
-            return;
-        }
-        if (view instanceof android.view.ViewGroup) {
-            android.view.ViewGroup group = (android.view.ViewGroup) view;
-            group.setBackground(null);
-            for (int i = 0; i < group.getChildCount(); i++) {
-                clearViewGroupPanelBackgrounds(group.getChildAt(i));
+        Context ctx = decorView.getContext();
+        int[] panelIds = {
+                ctx.getResources().getIdentifier("parentPanel", "id", "android"),
+                ctx.getResources().getIdentifier("parentPanel", "id", ctx.getPackageName()),
+        };
+        for (int id : panelIds) {
+            if (id != 0) {
+                View panel = decorView.findViewById(id);
+                if (panel != null) {
+                    panel.setBackground(null);
+                }
             }
         }
     }
