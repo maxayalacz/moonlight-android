@@ -396,70 +396,177 @@ public class UiHelper {
         if (activity.isFinishing() || !decorView.isAttachedToWindow()) {
             return;
         }
-        final int dialogW = decorView.getWidth();
-        final int dialogH = decorView.getHeight();
-        if (dialogW <= 0 || dialogH <= 0) {
-            return;
-        }
 
-        final float scale = 0.25f;
-        final int bw = Math.max(1, Math.round(dialogW * scale));
-        final int bh = Math.max(1, Math.round(dialogH * scale));
-        final int[] dialogLoc = new int[2];
-        decorView.getLocationOnScreen(dialogLoc);
+        final android.view.SurfaceView surfaceView = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N
+                ? findStreamSurfaceView(activity)
+                : null;
 
-        // If we're in GameActivity over a live SurfaceView, capture it with PixelCopy on API 24+.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            android.view.SurfaceView surfaceView = findStreamSurfaceView(activity);
-            if (surfaceView != null && surfaceView.getWidth() > 0 && surfaceView.getHeight() > 0
-                    && surfaceView.getHolder().getSurface().isValid()) {
+        final boolean[] stopped = { false };
+        final boolean[] inFlight = { false };
+        final android.graphics.Bitmap[] buffers = new android.graphics.Bitmap[2];
+        final int[] bufferIndex = { 0 };
+        final int[] bufferSize = { 0, 0 };
+        final long[] lastCaptureMs = { 0L };
+        final android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+
+        final Runnable ensureBuffers = () -> {
+            int dialogW = decorView.getWidth();
+            int dialogH = decorView.getHeight();
+            if (dialogW <= 0 || dialogH <= 0) {
+                return;
+            }
+            int bw = Math.max(1, Math.round(dialogW * 0.25f));
+            int bh = Math.max(1, Math.round(dialogH * 0.25f));
+            if (buffers[0] == null || bufferSize[0] != bw || bufferSize[1] != bh) {
+                buffers[0] = android.graphics.Bitmap.createBitmap(bw, bh, android.graphics.Bitmap.Config.ARGB_8888);
+                buffers[1] = android.graphics.Bitmap.createBitmap(bw, bh, android.graphics.Bitmap.Config.ARGB_8888);
+                bufferSize[0] = bw;
+                bufferSize[1] = bh;
+            }
+        };
+
+        if (surfaceView != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            final Runnable[] tickHolder = new Runnable[1];
+            tickHolder[0] = () -> {
+                if (stopped[0] || activity.isFinishing() || !decorView.isAttachedToWindow()) {
+                    return;
+                }
+                if (inFlight[0] || surfaceView.getWidth() <= 0 || surfaceView.getHeight() <= 0
+                        || !surfaceView.getHolder().getSurface().isValid()) {
+                    mainHandler.postDelayed(tickHolder[0], 33L);
+                    return;
+                }
+                int dialogW = decorView.getWidth();
+                int dialogH = decorView.getHeight();
+                if (dialogW <= 0 || dialogH <= 0) {
+                    mainHandler.postDelayed(tickHolder[0], 33L);
+                    return;
+                }
+                ensureBuffers.run();
+                final int idx = bufferIndex[0];
+                final android.graphics.Bitmap target = buffers[idx];
+                int[] dialogLoc = new int[2];
                 int[] svLoc = new int[2];
+                decorView.getLocationOnScreen(dialogLoc);
                 surfaceView.getLocationOnScreen(svLoc);
                 android.graphics.Rect srcRect = new android.graphics.Rect(
                         Math.max(0, dialogLoc[0] - svLoc[0]),
                         Math.max(0, dialogLoc[1] - svLoc[1]),
                         Math.min(surfaceView.getWidth(), dialogLoc[0] - svLoc[0] + dialogW),
                         Math.min(surfaceView.getHeight(), dialogLoc[1] - svLoc[1] + dialogH));
-                if (!srcRect.isEmpty()) {
-                    final android.graphics.Bitmap svBitmap = android.graphics.Bitmap.createBitmap(
-                            bw, bh, android.graphics.Bitmap.Config.ARGB_8888);
-                    try {
-                        android.view.PixelCopy.request(
-                                surfaceView,
-                                srcRect,
-                                svBitmap,
-                                result -> {
-                                    if (result == android.view.PixelCopy.SUCCESS && decorView.isAttachedToWindow()) {
-                                        applyBitmapToDialogBackdrop(decorView, svBitmap);
-                                    } else {
-                                        svBitmap.recycle();
-                                    }
-                                },
-                                new android.os.Handler(android.os.Looper.getMainLooper()));
-                        return;
-                    } catch (IllegalArgumentException ignored) {
-                        svBitmap.recycle();
-                    }
+                if (srcRect.isEmpty()) {
+                    mainHandler.postDelayed(tickHolder[0], 33L);
+                    return;
                 }
-            }
-        }
+                inFlight[0] = true;
+                try {
+                    android.view.PixelCopy.request(
+                            surfaceView,
+                            srcRect,
+                            target,
+                            result -> {
+                                inFlight[0] = false;
+                                if (!stopped[0] && result == android.view.PixelCopy.SUCCESS
+                                        && decorView.isAttachedToWindow()) {
+                                    applyBitmapToDialogBackdrop(decorView, target);
+                                    bufferIndex[0] = 1 - idx;
+                                }
+                                if (!stopped[0] && decorView.isAttachedToWindow()) {
+                                    mainHandler.postDelayed(tickHolder[0], 33L);
+                                }
+                            },
+                            mainHandler);
+                } catch (IllegalArgumentException ignored) {
+                    inFlight[0] = false;
+                }
+            };
 
-        View activityDecor = activity.getWindow().getDecorView();
-        if (activityDecor.getWidth() <= 0 || activityDecor.getHeight() <= 0) {
+            decorView.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
+                @Override
+                public void onViewAttachedToWindow(View v) {
+                }
+
+                @Override
+                public void onViewDetachedFromWindow(View v) {
+                    stopped[0] = true;
+                    mainHandler.removeCallbacks(tickHolder[0]);
+                    android.widget.ImageView backdrop = decorView.findViewWithTag("oneui_dialog_blur_backdrop");
+                    if (backdrop != null) {
+                        backdrop.setImageDrawable(null);
+                    }
+                    v.removeOnAttachStateChangeListener(this);
+                }
+            });
+            tickHolder[0].run();
             return;
         }
-        int[] activityLoc = new int[2];
-        activityDecor.getLocationOnScreen(activityLoc);
-        int offsetX = dialogLoc[0] - activityLoc[0];
-        int offsetY = dialogLoc[1] - activityLoc[1];
 
-        android.graphics.Bitmap bitmap = android.graphics.Bitmap.createBitmap(
-                bw, bh, android.graphics.Bitmap.Config.ARGB_8888);
-        android.graphics.Canvas canvas = new android.graphics.Canvas(bitmap);
-        canvas.scale(scale, scale);
-        canvas.translate(-offsetX, -offsetY);
-        activityDecor.draw(canvas);
-        applyBitmapToDialogBackdrop(decorView, bitmap);
+        final View activityDecor = activity.getWindow().getDecorView();
+        final Runnable captureActivityFrame = () -> {
+            if (stopped[0] || activity.isFinishing() || !decorView.isAttachedToWindow()) {
+                return;
+            }
+            if (activityDecor.getWidth() <= 0 || activityDecor.getHeight() <= 0
+                    || decorView.getWidth() <= 0 || decorView.getHeight() <= 0) {
+                return;
+            }
+            ensureBuffers.run();
+            int idx = bufferIndex[0];
+            android.graphics.Bitmap target = buffers[idx];
+            int[] dialogLoc = new int[2];
+            int[] activityLoc = new int[2];
+            decorView.getLocationOnScreen(dialogLoc);
+            activityDecor.getLocationOnScreen(activityLoc);
+            int offsetX = dialogLoc[0] - activityLoc[0];
+            int offsetY = dialogLoc[1] - activityLoc[1];
+
+            target.eraseColor(android.graphics.Color.TRANSPARENT);
+            android.graphics.Canvas canvas = new android.graphics.Canvas(target);
+            canvas.scale(0.25f, 0.25f);
+            canvas.translate(-offsetX, -offsetY);
+            activityDecor.draw(canvas);
+            applyBitmapToDialogBackdrop(decorView, target);
+            bufferIndex[0] = 1 - idx;
+            lastCaptureMs[0] = android.os.SystemClock.uptimeMillis();
+        };
+
+        final android.view.ViewTreeObserver.OnPreDrawListener preDrawListener = () -> {
+            if (!stopped[0] && decorView.isAttachedToWindow() && !inFlight[0]) {
+                long now = android.os.SystemClock.uptimeMillis();
+                if (now - lastCaptureMs[0] >= 33L) {
+                    inFlight[0] = true;
+                    decorView.post(() -> {
+                        try {
+                            captureActivityFrame.run();
+                        } finally {
+                            inFlight[0] = false;
+                        }
+                    });
+                }
+            }
+            return true;
+        };
+
+        activityDecor.getViewTreeObserver().addOnPreDrawListener(preDrawListener);
+        decorView.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
+            @Override
+            public void onViewAttachedToWindow(View v) {
+            }
+
+            @Override
+            public void onViewDetachedFromWindow(View v) {
+                stopped[0] = true;
+                if (activityDecor.getViewTreeObserver().isAlive()) {
+                    activityDecor.getViewTreeObserver().removeOnPreDrawListener(preDrawListener);
+                }
+                android.widget.ImageView backdrop = decorView.findViewWithTag("oneui_dialog_blur_backdrop");
+                if (backdrop != null) {
+                    backdrop.setImageDrawable(null);
+                }
+                v.removeOnAttachStateChangeListener(this);
+            }
+        });
+        captureActivityFrame.run();
     }
 
     private static android.view.SurfaceView findStreamSurfaceView(Activity activity) {
@@ -495,30 +602,32 @@ public class UiHelper {
             group.addView(backdrop, 0, new android.widget.FrameLayout.LayoutParams(
                     android.view.ViewGroup.LayoutParams.MATCH_PARENT,
                     android.view.ViewGroup.LayoutParams.MATCH_PARENT));
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                float radiusPx = dpToPx(ctx, 22f);
+                RenderEffect blur = RenderEffect.createBlurEffect(radiusPx, radiusPx, Shader.TileMode.CLAMP);
+                RenderEffect tinted = RenderEffect.createColorFilterEffect(
+                        new PorterDuffColorFilter(0x73141820, PorterDuff.Mode.SRC_OVER), blur);
+                backdrop.setRenderEffect(tinted);
+            } else {
+                backdrop.setColorFilter(0x73141820, PorterDuff.Mode.SRC_OVER);
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                GradientDrawable border = new GradientDrawable();
+                border.setShape(GradientDrawable.RECTANGLE);
+                border.setColor(android.graphics.Color.TRANSPARENT);
+                border.setCornerRadius(dpToPx(ctx, ONEUI_DIALOG_SQUIRCLE_RADIUS_DP));
+                border.setStroke((int) Math.max(1f, dpToPx(ctx, 1f)), 0x33FFFFFF);
+                decorView.setForeground(border);
+            }
+            decorView.setClipToOutline(true);
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            float radiusPx = dpToPx(ctx, 22f);
-            RenderEffect blur = RenderEffect.createBlurEffect(radiusPx, radiusPx, Shader.TileMode.CLAMP);
-            RenderEffect tinted = RenderEffect.createColorFilterEffect(
-                    new PorterDuffColorFilter(0x73141820, PorterDuff.Mode.SRC_OVER), blur);
-            backdrop.setRenderEffect(tinted);
-            backdrop.setImageBitmap(bitmap);
-        } else {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
             fastBoxBlur(bitmap, 6);
-            backdrop.setColorFilter(0x73141820, PorterDuff.Mode.SRC_OVER);
-            backdrop.setImageBitmap(bitmap);
         }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            GradientDrawable border = new GradientDrawable();
-            border.setShape(GradientDrawable.RECTANGLE);
-            border.setColor(android.graphics.Color.TRANSPARENT);
-            border.setCornerRadius(dpToPx(ctx, ONEUI_DIALOG_SQUIRCLE_RADIUS_DP));
-            border.setStroke((int) Math.max(1f, dpToPx(ctx, 1f)), 0x33FFFFFF);
-            decorView.setForeground(border);
-        }
-        decorView.setClipToOutline(true);
+        backdrop.setImageBitmap(bitmap);
     }
 
     private static void fastBoxBlur(android.graphics.Bitmap bitmap, int radius) {
