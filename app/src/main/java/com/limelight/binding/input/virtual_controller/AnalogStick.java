@@ -224,7 +224,7 @@ public class AnalogStick extends VirtualControllerElement {
         paint.setAntiAlias(true);
 
         if (!com.limelight.preferences.PreferenceConfiguration.readPreferences(getContext()).enableOnScreenStyleOfficial) {
-            int oscOpacity = com.limelight.preferences.PreferenceConfiguration.readPreferences(getContext()).oscOpacity;
+            int oscOpacity = getEffectiveOscOpacity();
             float opacityFactor = Math.max(0.05f, Math.min(1.0f, oscOpacity / 100f));
             float cx = getWidth() * 0.5f;
             float cy = getHeight() * 0.5f;

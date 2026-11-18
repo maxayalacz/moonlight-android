@@ -173,38 +173,38 @@ public class VirtualControllerConfigurationLoader {
     }
 
 
-    private static final int TRIGGER_L_BASE_X = 1;
-    private static final int TRIGGER_R_BASE_X = 92;
-    private static final int TRIGGER_DISTANCE = 23;
-    private static final int TRIGGER_BASE_Y = 31;
+    private static final int TRIGGER_L_BASE_X = 2;
+    private static final int TRIGGER_R_BASE_X = 99;
+    private static final int TRIGGER_DISTANCE = 14;
+    private static final int TRIGGER_BASE_Y = 3;
     private static final int TRIGGER_WIDTH = 12;
-    private static final int TRIGGER_HEIGHT = 9;
+    private static final int TRIGGER_HEIGHT = 8;
 
     // Face buttons are defined based on the Y button (button number 9)
-    private static final int BUTTON_BASE_X = 106;
-    private static final int BUTTON_BASE_Y = 1;
-    private static final int BUTTON_SIZE = 10;
+    private static final int BUTTON_BASE_X = 109;
+    private static final int BUTTON_BASE_Y = 13;
+    private static final int BUTTON_SIZE = 9;
 
     private static final int DPAD_BASE_X = 4;
-    private static final int DPAD_BASE_Y = 41;
-    private static final int DPAD_SIZE = 30;
+    private static final int DPAD_BASE_Y = 14;
+    private static final int DPAD_SIZE = 26;
 
-    private static final int ANALOG_L_BASE_X = 6;
-    private static final int ANALOG_L_BASE_Y = 4;
-    private static final int ANALOG_R_BASE_X = 98;
-    private static final int ANALOG_R_BASE_Y = 42;
-    private static final int ANALOG_SIZE = 26;
+    private static final int ANALOG_L_BASE_X = 5;
+    private static final int ANALOG_L_BASE_Y = 43;
+    private static final int ANALOG_R_BASE_X = 100;
+    private static final int ANALOG_R_BASE_Y = 43;
+    private static final int ANALOG_SIZE = 24;
 
     private static final int L3_R3_BASE_Y = 60;
+    private static final int L3_X = 32;
+    private static final int R3_X = 85;
 
-    private static final int START_X = 83;
-    private static final int BACK_X = 34;
-    private static final int START_BACK_Y = 64;
-    private static final int START_BACK_WIDTH = 12;
+    private static final int BACK_X = 45;
+    private static final int GUIDE_X = 58;
+    private static final int START_X = 71;
+    private static final int START_BACK_Y = 60;
+    private static final int START_BACK_WIDTH = 11;
     private static final int START_BACK_HEIGHT = 7;
-
-    // Make the Guide Menu be in the center of START and BACK menu
-    private static final int GUIDE_X = START_X-BACK_X;
     private static final int GUIDE_Y = START_BACK_Y;
 
     public static void createDefaultLayout(final VirtualController controller, final Context context) {
@@ -214,6 +214,7 @@ public class VirtualControllerConfigurationLoader {
 
         // Displace controls on the right by this amount of pixels to account for different aspect ratios
         int rightDisplacement = screen.widthPixels - screen.heightPixels * 16 / 9;
+        int centerDisplacement = rightDisplacement / 2;
 
         int height = screen.heightPixels;
 
@@ -335,7 +336,7 @@ public class VirtualControllerConfigurationLoader {
             controller.addElement(createDigitalButton(
                     VirtualControllerElement.EID_BACK,
                     ControllerPacket.BACK_FLAG, 0, 2, "BACK", R.drawable.facebutton_minus,R.drawable.facebutton_minus_press, controller, context),
-                    screenScale(BACK_X, height),
+                    screenScale(BACK_X, height) + centerDisplacement,
                     screenScale(START_BACK_Y, height),
                     screenScale(START_BACK_WIDTH, height),
                     screenScale(START_BACK_HEIGHT, height)
@@ -344,7 +345,7 @@ public class VirtualControllerConfigurationLoader {
             controller.addElement(createDigitalButton(
                     VirtualControllerElement.EID_START,
                     ControllerPacket.PLAY_FLAG, 0, 3, "START", R.drawable.facebutton_plus,R.drawable.facebutton_plus_press, controller, context),
-                    screenScale(START_X, height) + rightDisplacement,
+                    screenScale(START_X, height) + centerDisplacement,
                     screenScale(START_BACK_Y, height),
                     screenScale(START_BACK_WIDTH, height),
                     screenScale(START_BACK_HEIGHT, height)
@@ -353,7 +354,7 @@ public class VirtualControllerConfigurationLoader {
             controller.addElement(createDigitalButton(
                             VirtualControllerElement.EID_LSB,
                             ControllerPacket.LS_CLK_FLAG, 0, 1, "L3", R.drawable.facebutton_l3,R.drawable.facebutton_l3_press, controller, context),
-                    screenScale(TRIGGER_L_BASE_X, height),
+                    screenScale(L3_X, height),
                     screenScale(L3_R3_BASE_Y, height),
                     screenScale(TRIGGER_WIDTH, height),
                     screenScale(TRIGGER_HEIGHT, height)
@@ -362,7 +363,7 @@ public class VirtualControllerConfigurationLoader {
             controller.addElement(createDigitalButton(
                             VirtualControllerElement.EID_RSB,
                             ControllerPacket.RS_CLK_FLAG, 0, 1, "R3", R.drawable.facebutton_r3,R.drawable.facebutton_r3_press, controller, context),
-                    screenScale(TRIGGER_R_BASE_X + TRIGGER_DISTANCE, height) + rightDisplacement,
+                    screenScale(R3_X, height) + rightDisplacement,
                     screenScale(L3_R3_BASE_Y, height),
                     screenScale(TRIGGER_WIDTH, height),
                     screenScale(TRIGGER_HEIGHT, height)
@@ -371,9 +372,9 @@ public class VirtualControllerConfigurationLoader {
             controller.addElement(createDigitalButton(
                             VirtualControllerElement.EID_TOUCHPAD,
                             ControllerPacket.TOUCHPAD_FLAG, 0, 1, "Trackpad", R.drawable.facebutton_touchpad_press,R.drawable.facebutton_touchpad, controller, context),
-                    screenScale(50, height),
-                    screenScale(50, height),
-                    screenScale(20, height),
+                    screenScale(52, height) + centerDisplacement,
+                    screenScale(45, height),
+                    screenScale(24, height),
                     screenScale(12, height)
             );
         }
@@ -381,7 +382,7 @@ public class VirtualControllerConfigurationLoader {
             controller.addElement(createDigitalButton(
                     VirtualControllerElement.EID_LSB,
                     ControllerPacket.LS_CLK_FLAG, 0, 1, "L3", -1, -1,controller, context),
-                    screenScale(TRIGGER_L_BASE_X, height),
+                    screenScale(L3_X, height),
                     screenScale(L3_R3_BASE_Y, height),
                     screenScale(TRIGGER_WIDTH, height),
                     screenScale(TRIGGER_HEIGHT, height)
@@ -390,7 +391,7 @@ public class VirtualControllerConfigurationLoader {
             controller.addElement(createDigitalButton(
                     VirtualControllerElement.EID_RSB,
                     ControllerPacket.RS_CLK_FLAG, 0, 1, "R3", -1,-1, controller, context),
-                    screenScale(TRIGGER_R_BASE_X + TRIGGER_DISTANCE, height) + rightDisplacement,
+                    screenScale(R3_X, height) + rightDisplacement,
                     screenScale(L3_R3_BASE_Y, height),
                     screenScale(TRIGGER_WIDTH, height),
                     screenScale(TRIGGER_HEIGHT, height)
@@ -401,7 +402,7 @@ public class VirtualControllerConfigurationLoader {
         if(config.showGuideButton){
             controller.addElement(createDigitalButton(VirtualControllerElement.EID_GDB,
                             ControllerPacket.SPECIAL_BUTTON_FLAG, 0, 1, "GUIDE", -1, -1, controller, context),
-                    screenScale(GUIDE_X, height)+ rightDisplacement,
+                    screenScale(GUIDE_X, height) + centerDisplacement,
                     screenScale(GUIDE_Y, height),
                     screenScale(START_BACK_WIDTH, height),
                     screenScale(START_BACK_HEIGHT, height)
@@ -411,9 +412,13 @@ public class VirtualControllerConfigurationLoader {
         controller.setOpacity(config.oscOpacity);
     }
 
+    private static final String KEY_LAYOUT_VERSION = "layout_version";
+    private static final int CURRENT_LAYOUT_VERSION = 2;
+
     public static void saveProfile(final VirtualController controller,
                                    final Context context) {
         SharedPreferences.Editor prefEditor = context.getSharedPreferences(OSC_PREFERENCE, Activity.MODE_PRIVATE).edit();
+        prefEditor.putInt(KEY_LAYOUT_VERSION, CURRENT_LAYOUT_VERSION);
 
         for (VirtualControllerElement element : controller.getElements()) {
             String prefKey = ""+element.elementId;
@@ -429,6 +434,13 @@ public class VirtualControllerConfigurationLoader {
 
     public static void loadFromPreferences(final VirtualController controller, final Context context) {
         SharedPreferences pref = context.getSharedPreferences(OSC_PREFERENCE, Activity.MODE_PRIVATE);
+        PreferenceConfiguration config = PreferenceConfiguration.readPreferences(context);
+
+        if (pref.getInt(KEY_LAYOUT_VERSION, 1) < CURRENT_LAYOUT_VERSION) {
+            pref.edit().clear().putInt(KEY_LAYOUT_VERSION, CURRENT_LAYOUT_VERSION).apply();
+            controller.setOpacity(config.oscOpacity);
+            return;
+        }
 
         for (VirtualControllerElement element : controller.getElements()) {
             String prefKey = ""+element.elementId;
@@ -445,5 +457,7 @@ public class VirtualControllerConfigurationLoader {
                 }
             }
         }
+
+        controller.setOpacity(config.oscOpacity);
     }
 }

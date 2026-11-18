@@ -56,7 +56,7 @@ public class DigitalPad extends VirtualControllerElement {
         paint.setStrokeWidth(getDefaultStrokeWidth());
         //虚拟手柄皮肤 (Vector style)
         if(!PreferenceConfiguration.readPreferences(getContext()).enableOnScreenStyleOfficial) {
-            int oscOpacity = PreferenceConfiguration.readPreferences(getContext()).oscOpacity;
+            int oscOpacity = getEffectiveOscOpacity();
             float opacityFactor = Math.max(0.05f, Math.min(1.0f, oscOpacity / 100f));
 
             paint.setAntiAlias(true);

@@ -53,6 +53,7 @@ public abstract class VirtualControllerElement extends View {
     private int configSelectedColor = 0xF000FF00;
 
     private int configDisabledColor = 0xF0AAAAAA;
+    protected int elementOpacity = -1;
     protected int startSize_x;
     protected int startSize_y;
 
@@ -320,11 +321,19 @@ public abstract class VirtualControllerElement extends View {
 
 
     public void setOpacity(int opacity) {
-        int hexOpacity = opacity * 255 / 100;
+        this.elementOpacity = Math.max(0, Math.min(100, opacity));
+        int hexOpacity = this.elementOpacity * 255 / 100;
         this.normalColor = (hexOpacity << 24) | (normalColor & 0x00FFFFFF);
         this.pressedColor = (hexOpacity << 24) | (pressedColor & 0x00FFFFFF);
 
         invalidate();
+    }
+
+    protected int getEffectiveOscOpacity() {
+        if (elementOpacity >= 0) {
+            return elementOpacity;
+        }
+        return com.limelight.preferences.PreferenceConfiguration.readPreferences(getContext()).oscOpacity;
     }
 
     protected final float getPercent(float value, float percent) {

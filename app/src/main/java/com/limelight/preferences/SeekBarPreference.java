@@ -132,6 +132,7 @@ public class SeekBarPreference extends Preference
         });
 
         layout.addView(seekBar, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        applyNeonSliderStyle();
 
         if (shouldPersist()) {
             currentValue = getPersistedInt(defaultValue);
@@ -161,6 +162,63 @@ public class SeekBarPreference extends Preference
         dialog = dialogBuilder.create();
         UiHelper.styleDialogSquircle(dialog);
         return dialog;
+    }
+
+    private void applyNeonSliderStyle() {
+        if (seekBar == null || valueText == null) {
+            return;
+        }
+        com.limelight.ui.AppThemePalette palette = com.limelight.ui.AppThemePalette.getCurrent(context);
+        int neonAccent = palette.getNeonAccent();
+
+        valueText.setTextColor(neonAccent);
+        valueText.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        valueText.setShadowLayer(10f, 0f, 0f, com.limelight.ui.AppThemePalette.withAlpha(neonAccent, 0.55f));
+
+        int trackH = Math.max(4, Math.round(UiHelper.dpToPx(context, 4f)));
+        float trackR = trackH * 0.5f;
+
+        android.graphics.drawable.GradientDrawable bgTrack = new android.graphics.drawable.GradientDrawable();
+        bgTrack.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
+        bgTrack.setCornerRadius(trackR);
+        bgTrack.setColor(0x2EFFFFFF);
+        bgTrack.setSize(-1, trackH);
+
+        android.graphics.drawable.GradientDrawable activeTrack = new android.graphics.drawable.GradientDrawable();
+        activeTrack.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
+        activeTrack.setCornerRadius(trackR);
+        activeTrack.setColor(neonAccent);
+        activeTrack.setSize(-1, trackH);
+
+        android.graphics.drawable.ClipDrawable progressClip = new android.graphics.drawable.ClipDrawable(
+                activeTrack, Gravity.START, android.graphics.drawable.ClipDrawable.HORIZONTAL);
+
+        android.graphics.drawable.LayerDrawable layers = new android.graphics.drawable.LayerDrawable(
+                new android.graphics.drawable.Drawable[]{bgTrack, progressClip});
+        layers.setId(0, android.R.id.background);
+        layers.setId(1, android.R.id.progress);
+
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            layers.setLayerHeight(0, trackH);
+            layers.setLayerHeight(1, trackH);
+            layers.setLayerGravity(0, Gravity.CENTER_VERTICAL);
+            layers.setLayerGravity(1, Gravity.CENTER_VERTICAL);
+        }
+
+        int thumbSize = Math.round(UiHelper.dpToPx(context, 18f));
+        android.graphics.drawable.GradientDrawable thumb = new android.graphics.drawable.GradientDrawable();
+        thumb.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+        thumb.setSize(thumbSize, thumbSize);
+        thumb.setColor(neonAccent);
+        thumb.setStroke(Math.max(2, Math.round(UiHelper.dpToPx(context, 2f))), 0xFFFFFFFF);
+
+        seekBar.setProgressDrawable(layers);
+        seekBar.setThumb(thumb);
+        seekBar.setThumbOffset(0);
+        seekBar.setSplitTrack(false);
+        int padH = Math.round(UiHelper.dpToPx(context, 18f));
+        int padV = Math.round(UiHelper.dpToPx(context, 14f));
+        seekBar.setPadding(padH, padV, padH, padV);
     }
 
     protected void updateSeekbar() {
@@ -195,6 +253,7 @@ public class SeekBarPreference extends Preference
 
     public void showDialog() {
         AlertDialog dialog = getDialog();
+        applyNeonSliderStyle();
         updateSeekbar();
         UiHelper.styleDialogSquircle(dialog);
         dialog.show();

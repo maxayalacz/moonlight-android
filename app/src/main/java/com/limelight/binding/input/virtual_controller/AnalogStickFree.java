@@ -254,10 +254,35 @@ public class AnalogStickFree extends VirtualControllerElement {
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeWidth(getDefaultStrokeWidth());
 
+        PreferenceConfiguration cfg = PreferenceConfiguration.readPreferences(getContext());
+        int oscOpacity = getEffectiveOscOpacity();
+        float opacityFactor = Math.max(0.05f, Math.min(1.0f, oscOpacity / 100f));
+        float freeBgFactor = Math.max(0.0f, Math.min(1.0f, cfg.enableNewAnalogStickOpacity / 100f));
+
+        if (!bIsFingerOnScreen) {
+            if (!cfg.enableOnScreenStyleOfficial && !bIsMoving && !bIsResizing && !bIsEnable) {
+                float cx = getWidth() * 0.5f;
+                float cy = getHeight() * 0.5f;
+                if (freeBgFactor > 0.01f) {
+                    paint.setStyle(Paint.Style.FILL);
+                    paint.setColor(freeStickWithAlpha(0xFFF5F5F9, freeBgFactor * 0.45f));
+                    canvas.drawCircle(cx, cy, radius_complete, paint);
+                }
+                paint.setStyle(Paint.Style.STROKE);
+                paint.setStrokeWidth(Math.max(2f, getDefaultStrokeWidth()));
+                paint.setColor(freeStickWithAlpha(0xFFFFFFFF, 0.32f * opacityFactor));
+                canvas.drawCircle(cx, cy, radius_complete, paint);
+
+                float idleKnobR = Math.max(radius_analog_stick * 1.1f, radius_complete * 0.26f);
+                paint.setStyle(Paint.Style.FILL);
+                paint.setColor(freeStickWithAlpha(0xFFFFFFFF, 0.36f * opacityFactor));
+                canvas.drawCircle(cx, cy, idleKnobR, paint);
+            }
+            return;
+        }
+
         if (bIsFingerOnScreen) {
             canvas.drawColor(Color.TRANSPARENT);
-            PreferenceConfiguration cfg = PreferenceConfiguration.readPreferences(getContext());
-            float opacityFactor = Math.max(0.08f, Math.min(1.0f, cfg.oscOpacity / 100f));
 
             if (!cfg.enableOnScreenStyleOfficial) {
                 switch (stick_state) {
@@ -269,13 +294,15 @@ public class AnalogStickFree extends VirtualControllerElement {
                     }
                     case MOVED_IN_DEAD_ZONE:
                     case MOVED_ACTIVE: {
-                        paint.setStyle(Paint.Style.FILL);
-                        paint.setColor(bgCircleColor);
-                        canvas.drawCircle(touchStartX, touchStartY, radius_complete, paint);
+                        if (freeBgFactor > 0.01f) {
+                            paint.setStyle(Paint.Style.FILL);
+                            paint.setColor(freeStickWithAlpha(0xFFF5F5F9, freeBgFactor * 0.72f));
+                            canvas.drawCircle(touchStartX, touchStartY, radius_complete, paint);
+                        }
 
                         paint.setStyle(Paint.Style.STROKE);
                         paint.setStrokeWidth(Math.max(2f, getDefaultStrokeWidth()));
-                        paint.setColor(freeStickWithAlpha(0xFFFFFFFF, 0.45f * opacityFactor));
+                        paint.setColor(freeStickWithAlpha(0xFFFFFFFF, 0.48f * opacityFactor));
                         canvas.drawCircle(touchStartX, touchStartY, radius_complete, paint);
 
                         paint.setStrokeWidth(Math.max(1.5f, getDefaultStrokeWidth() * 0.7f));

@@ -170,7 +170,7 @@ public class DigitalButton extends VirtualControllerElement {
             return;
         }
 
-        int oscOpacity = PreferenceConfiguration.readPreferences(getContext()).oscOpacity;
+        int oscOpacity = getEffectiveOscOpacity();
         float opacityFactor = Math.max(0.05f, Math.min(1.0f, oscOpacity / 100f));
         float w = getWidth();
         float h = getHeight();

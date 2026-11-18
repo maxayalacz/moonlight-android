@@ -2,18 +2,21 @@ package com.limelight.ui;
 
 import android.animation.ValueAnimator;
 import android.content.Context;
+import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.LinearGradient;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
 import android.graphics.RadialGradient;
+import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.Shader;
 import android.graphics.drawable.Drawable;
+import android.os.SystemClock;
 import android.util.AttributeSet;
 import android.view.View;
-import android.view.animation.AccelerateDecelerateInterpolator;
 import android.view.animation.LinearInterpolator;
 
 import androidx.annotation.NonNull;
@@ -25,15 +28,19 @@ import com.limelight.nvstream.http.ComputerDetails;
 import com.limelight.nvstream.http.PairingManager;
 import com.limelight.utils.UiHelper;
 
+import java.lang.ref.WeakReference;
+
 /**
  * Circular ambience portal drawn procedurally for Focus Mode (matching jujostream's
- * _FocusServerCircle), featuring a status-tinted outer ring, breathing accent bloom,
- * ambient radial interior gradient, glass specular rim, and crisp vector glyphs.
+ * _FocusServerCircle), featuring a frosted glass refracting backdrop, status-tinted
+ * outer ring, seamless continuous breathing/floating loop, and crisp vector glyphs.
  */
 public class FocusCirclePortalView extends View {
 
     private final Paint glowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint accentGlowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint frostedBitmapPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+    private final Paint frostedTintPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint interiorPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint sheenPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint vignettePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -42,6 +49,11 @@ public class FocusCirclePortalView extends View {
     private final Paint innerBadgePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint spinnerPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF spinnerRect = new RectF();
+    private final RectF circleDstRect = new RectF();
+    private final Rect auroraSrcRect = new Rect();
+    private final Path circleClipPath = new Path();
+    private final int[] hostLoc = new int[2];
+    private final int[] auroraLoc = new int[2];
 
     private AppThemePalette palette = AppThemePalette.MIDNIGHT;
     private int statusColor = 0xFFFF5252;
@@ -51,12 +63,16 @@ public class FocusCirclePortalView extends View {
     private boolean isActivePage = true;
     private boolean isPressedOrFocused = false;
 
-    private float glowPhase = 0.25f;
-    private float floatPhase = 0f;
-    private float spinAngle = 0f;
+    private ValueAnimator continuousTicker;
+    private WeakReference<FlowingAuroraView> auroraRef;
 
-    private ValueAnimator breathAnimator;
-    private ValueAnimator floatAnimator;
+    private int cachedW = -1;
+    private int cachedH = -1;
+    private int cachedStatusColor = 0;
+    private String cachedPaletteKey = "";
+    private boolean cachedOnline = false;
+    private boolean cachedPressed = false;
+    private float cachedBloomAlpha = -1f;
 
     private Drawable computerDrawable;
     private Drawable lockDrawable;
@@ -72,13 +88,14 @@ public class FocusCirclePortalView extends View {
     }
 
     private void init(Context context) {
-        setLayerType(LAYER_TYPE_SOFTWARE, null);
         ringPaint.setStyle(Paint.Style.STROKE);
         specularPaint.setStyle(Paint.Style.STROKE);
         spinnerPaint.setStyle(Paint.Style.STROKE);
         spinnerPaint.setStrokeCap(Paint.Cap.ROUND);
         glowPaint.setStyle(Paint.Style.FILL);
         accentGlowPaint.setStyle(Paint.Style.FILL);
+        frostedTintPaint.setStyle(Paint.Style.FILL);
+        frostedTintPaint.setColor(0x52121826);
         innerBadgePaint.setStyle(Paint.Style.FILL);
 
         computerDrawable = ContextCompat.getDrawable(context, R.drawable.ic_computer);
@@ -122,42 +139,121 @@ public class FocusCirclePortalView extends View {
         if (!isAttachedToWindow()) {
             return;
         }
-        if (breathAnimator == null) {
-            breathAnimator = ValueAnimator.ofFloat(0.18f, 0.42f);
-            breathAnimator.setDuration(1800L);
-            breathAnimator.setRepeatCount(ValueAnimator.INFINITE);
-            breathAnimator.setRepeatMode(ValueAnimator.REVERSE);
-            breathAnimator.setInterpolator(new AccelerateDecelerateInterpolator());
-            breathAnimator.addUpdateListener(anim -> {
-                glowPhase = (float) anim.getAnimatedValue();
-                spinAngle = (spinAngle + 6f) % 360f;
+        if (continuousTicker == null) {
+            continuousTicker = ValueAnimator.ofFloat(0f, 1f);
+            continuousTicker.setDuration(1000L);
+            continuousTicker.setRepeatCount(ValueAnimator.INFINITE);
+            continuousTicker.setRepeatMode(ValueAnimator.RESTART);
+            continuousTicker.setInterpolator(new LinearInterpolator());
+            continuousTicker.addUpdateListener(anim -> {
+                if (isActivePage) {
+                    long now = SystemClock.uptimeMillis();
+                    float floatCycle = (now % 5500L) / 5500f;
+                    float offsetPx = UiHelper.dpToPx(getContext(), 6f)
+                            * (float) Math.sin(floatCycle * Math.PI * 2.0);
+                    setTranslationY(offsetPx);
+                } else {
+                    setTranslationY(0f);
+                }
                 invalidate();
-            });
-        }
-        if (floatAnimator == null) {
-            floatAnimator = ValueAnimator.ofFloat(0f, (float) (Math.PI * 2.0));
-            floatAnimator.setDuration(5500L);
-            floatAnimator.setRepeatCount(ValueAnimator.INFINITE);
-            floatAnimator.setRepeatMode(ValueAnimator.RESTART);
-            floatAnimator.setInterpolator(new LinearInterpolator());
-            floatAnimator.addUpdateListener(anim -> {
-                floatPhase = (float) anim.getAnimatedValue();
-                float offsetPx = UiHelper.dpToPx(getContext(), 6f) * (float) Math.sin(floatPhase);
-                setTranslationY(isActivePage ? offsetPx : 0f);
             });
         }
 
         if (isActivePage) {
-            if (!breathAnimator.isStarted()) {
-                breathAnimator.start();
-            }
-            if (!floatAnimator.isStarted()) {
-                floatAnimator.start();
+            if (!continuousTicker.isStarted()) {
+                continuousTicker.start();
             }
         } else {
-            breathAnimator.cancel();
-            floatAnimator.cancel();
+            if (continuousTicker.isStarted()) {
+                continuousTicker.cancel();
+            }
             setTranslationY(0f);
+        }
+    }
+
+    @Nullable
+    private FlowingAuroraView resolveAuroraView() {
+        FlowingAuroraView cached = auroraRef != null ? auroraRef.get() : null;
+        if (cached != null && cached.isAttachedToWindow()) {
+            return cached;
+        }
+        View root = getRootView();
+        if (root != null) {
+            View found = root.findViewWithTag("oneui_flowing_aurora");
+            if (found instanceof FlowingAuroraView) {
+                auroraRef = new WeakReference<>((FlowingAuroraView) found);
+                return (FlowingAuroraView) found;
+            }
+        }
+        return null;
+    }
+
+    private void ensureStaticShaders(int w, int h, float cx, float cy,
+                                     float outerRadius, float innerRadius, float glowMargin) {
+        boolean dimsChanged = (w != cachedW || h != cachedH);
+        boolean stateChanged = (statusColor != cachedStatusColor
+                || !palette.key.equals(cachedPaletteKey)
+                || isOnline != cachedOnline
+                || isPressedOrFocused != cachedPressed);
+        if (!dimsChanged && !stateChanged) {
+            return;
+        }
+        cachedW = w;
+        cachedH = h;
+        cachedStatusColor = statusColor;
+        cachedPaletteKey = palette.key;
+        cachedOnline = isOnline;
+        cachedPressed = isPressedOrFocused;
+
+        glowPaint.setShader(new RadialGradient(
+                cx, cy, outerRadius + glowMargin,
+                new int[]{
+                        AppThemePalette.withAlpha(statusColor, 0.34f),
+                        AppThemePalette.withAlpha(statusColor, 0.12f),
+                        0x00000000
+                },
+                new float[]{0.62f, 0.82f, 1.0f},
+                Shader.TileMode.CLAMP));
+
+        interiorPaint.setShader(new RadialGradient(
+                cx - innerRadius * 0.22f,
+                cy - innerRadius * 0.25f,
+                innerRadius * 1.45f,
+                new int[]{
+                        AppThemePalette.withAlpha(palette.accent, isOnline ? 0.26f : 0.12f),
+                        AppThemePalette.withAlpha(palette.secondary, 0.36f),
+                        AppThemePalette.withAlpha(palette.surface, 0.56f)
+                },
+                new float[]{0.0f, 0.52f, 1.0f},
+                Shader.TileMode.CLAMP));
+
+        sheenPaint.setShader(new LinearGradient(
+                cx - innerRadius, cy - innerRadius,
+                cx + innerRadius, cy + innerRadius,
+                new int[]{
+                        0x30FFFFFF,
+                        0x0AFFFFFF,
+                        0x00FFFFFF,
+                        0x18FFFFFF
+                },
+                new float[]{0.0f, 0.35f, 0.7f, 1.0f},
+                Shader.TileMode.CLAMP));
+
+        vignettePaint.setShader(new RadialGradient(
+                cx, cy, innerRadius,
+                new int[]{0x00000000, 0x52000000},
+                new float[]{0.58f, 1.0f},
+                Shader.TileMode.CLAMP));
+
+        if (!isPressedOrFocused) {
+            specularPaint.setShader(new LinearGradient(
+                    cx - innerRadius, cy - innerRadius,
+                    cx + innerRadius, cy + innerRadius,
+                    new int[]{0x66FFFFFF, 0x00FFFFFF, 0x22FFFFFF},
+                    new float[]{0.0f, 0.5f, 1.0f},
+                    Shader.TileMode.CLAMP));
+        } else {
+            specularPaint.setShader(null);
         }
     }
 
@@ -169,13 +265,9 @@ public class FocusCirclePortalView extends View {
 
     @Override
     protected void onDetachedFromWindow() {
-        if (breathAnimator != null) {
-            breathAnimator.cancel();
-            breathAnimator = null;
-        }
-        if (floatAnimator != null) {
-            floatAnimator.cancel();
-            floatAnimator = null;
+        if (continuousTicker != null) {
+            continuousTicker.cancel();
+            continuousTicker = null;
         }
         super.onDetachedFromWindow();
     }
@@ -189,6 +281,11 @@ public class FocusCirclePortalView extends View {
             return;
         }
 
+        long now = SystemClock.uptimeMillis();
+        float breathCycle = (now % 3600L) / 3600f;
+        float glowPhase = 0.28f + 0.12f * (float) Math.sin(breathCycle * Math.PI * 2.0);
+        float spinAngle = ((now % 1300L) / 1300f) * 360f;
+
         float cx = w * 0.5f;
         float cy = h * 0.5f;
         float ringStroke = UiHelper.dpToPx(getContext(), isPressedOrFocused ? 4.5f : 3.5f);
@@ -196,69 +293,65 @@ public class FocusCirclePortalView extends View {
         float outerRadius = Math.max(16f, Math.min(w, h) * 0.5f - glowMargin);
         float innerRadius = outerRadius - ringStroke * 0.5f;
 
+        ensureStaticShaders(w, h, cx, cy, outerRadius, innerRadius, glowMargin);
+
         // 1. Status perimeter halo
-        glowPaint.setShader(new RadialGradient(
-                cx, cy, outerRadius + glowMargin,
-                new int[]{
-                        AppThemePalette.withAlpha(statusColor, 0.34f),
-                        AppThemePalette.withAlpha(statusColor, 0.12f),
-                        0x00000000
-                },
-                new float[]{0.62f, 0.82f, 1.0f},
-                Shader.TileMode.CLAMP));
         canvas.drawCircle(cx, cy, outerRadius + glowMargin, glowPaint);
 
         // 2. Active page breathing accent bloom
         if (isActivePage || isPressedOrFocused) {
             float bloomAlpha = isPressedOrFocused ? 0.45f : glowPhase;
-            accentGlowPaint.setShader(new RadialGradient(
-                    cx, cy, outerRadius + glowMargin * 0.9f,
-                    new int[]{
-                            AppThemePalette.withAlpha(palette.accent, bloomAlpha),
-                            0x00000000
-                    },
-                    new float[]{0.55f, 1.0f},
-                    Shader.TileMode.CLAMP));
+            if (Math.abs(bloomAlpha - cachedBloomAlpha) > 0.01f || accentGlowPaint.getShader() == null) {
+                cachedBloomAlpha = bloomAlpha;
+                accentGlowPaint.setShader(new RadialGradient(
+                        cx, cy, outerRadius + glowMargin * 0.9f,
+                        new int[]{
+                                AppThemePalette.withAlpha(palette.accent, bloomAlpha),
+                                0x00000000
+                        },
+                        new float[]{0.55f, 1.0f},
+                        Shader.TileMode.CLAMP));
+            }
             canvas.drawCircle(cx, cy, outerRadius + glowMargin * 0.9f, accentGlowPaint);
         }
 
-        // 3. Ambient glass interior gradient
-        interiorPaint.setShader(new RadialGradient(
-                cx - innerRadius * 0.22f,
-                cy - innerRadius * 0.25f,
-                innerRadius * 1.45f,
-                new int[]{
-                        AppThemePalette.withAlpha(palette.accent, isOnline ? 0.36f : 0.16f),
-                        AppThemePalette.withAlpha(palette.secondary, 0.72f),
-                        AppThemePalette.withAlpha(palette.surface, 0.92f)
-                },
-                new float[]{0.0f, 0.52f, 1.0f},
-                Shader.TileMode.CLAMP));
+        // 3. Frosted glass refracting interior (clipped to circle)
+        circleClipPath.reset();
+        circleClipPath.addCircle(cx, cy, innerRadius, Path.Direction.CW);
+        int saveCount = canvas.save();
+        canvas.clipPath(circleClipPath);
+
+        FlowingAuroraView aurora = resolveAuroraView();
+        if (aurora != null && aurora.getWidth() > 0 && aurora.getHeight() > 0) {
+            Bitmap blurred = aurora.getBlurredFieldBitmap();
+            if (blurred != null && !blurred.isRecycled()) {
+                getLocationInWindow(hostLoc);
+                aurora.getLocationInWindow(auroraLoc);
+                float relX = (hostLoc[0] - auroraLoc[0]) + (cx - innerRadius);
+                float relY = (hostLoc[1] - auroraLoc[1]) + (cy - innerRadius);
+                float diameter = innerRadius * 2f;
+                float sx = blurred.getWidth() / (float) aurora.getWidth();
+                float sy = blurred.getHeight() / (float) aurora.getHeight();
+                auroraSrcRect.set(
+                        Math.max(0, Math.round(relX * sx)),
+                        Math.max(0, Math.round(relY * sy)),
+                        Math.min(blurred.getWidth(), Math.round((relX + diameter) * sx)),
+                        Math.min(blurred.getHeight(), Math.round((relY + diameter) * sy)));
+                if (!auroraSrcRect.isEmpty()) {
+                    circleDstRect.set(cx - innerRadius, cy - innerRadius, cx + innerRadius, cy + innerRadius);
+                    canvas.drawBitmap(blurred, auroraSrcRect, circleDstRect, frostedBitmapPaint);
+                }
+            }
+        }
+
+        // Dark frosted glass tint + ambient radial interior + sheen + vignette
+        canvas.drawCircle(cx, cy, innerRadius, frostedTintPaint);
         canvas.drawCircle(cx, cy, innerRadius, interiorPaint);
-
-        // 4. Diagonal frosted glass sheen
-        sheenPaint.setShader(new LinearGradient(
-                cx - innerRadius, cy - innerRadius,
-                cx + innerRadius, cy + innerRadius,
-                new int[]{
-                        0x26FFFFFF,
-                        0x08FFFFFF,
-                        0x00FFFFFF,
-                        0x14FFFFFF
-                },
-                new float[]{0.0f, 0.35f, 0.7f, 1.0f},
-                Shader.TileMode.CLAMP));
         canvas.drawCircle(cx, cy, innerRadius, sheenPaint);
-
-        // 5. Soft inner vignette (matching jujostream RadialGradient 0.6 -> 1.0 black alpha 0.3)
-        vignettePaint.setShader(new RadialGradient(
-                cx, cy, innerRadius,
-                new int[]{0x00000000, 0x4D000000},
-                new float[]{0.6f, 1.0f},
-                Shader.TileMode.CLAMP));
         canvas.drawCircle(cx, cy, innerRadius, vignettePaint);
+        canvas.restoreToCount(saveCount);
 
-        // 6. Center PC emblem
+        // 4. Center PC emblem
         if (computerDrawable != null) {
             int iconSize = Math.round(innerRadius * 0.62f);
             int half = iconSize / 2;
@@ -277,7 +370,7 @@ public class FocusCirclePortalView extends View {
             computerDrawable.draw(canvas);
         }
 
-        // 7. Unpaired lock overlay or discovering spinner arc
+        // 5. Unpaired lock overlay or discovering spinner arc
         if (isDiscovering) {
             float spinR = innerRadius * 0.56f;
             spinnerRect.set(cx - spinR, cy - spinR, cx + spinR, cy + spinR);
@@ -299,7 +392,7 @@ public class FocusCirclePortalView extends View {
             lockDrawable.draw(canvas);
         }
 
-        // 8. Crisp 3.5dp status ring & top-left glass specular highlight
+        // 6. Crisp 3.5dp status ring & top-left glass specular highlight
         ringPaint.setColor(statusColor);
         ringPaint.setStrokeWidth(ringStroke);
         canvas.drawCircle(cx, cy, outerRadius, ringPaint);
@@ -309,12 +402,6 @@ public class FocusCirclePortalView extends View {
             specularPaint.setStrokeWidth(UiHelper.dpToPx(getContext(), 2f));
             canvas.drawCircle(cx, cy, outerRadius + ringStroke * 0.65f, specularPaint);
         } else {
-            specularPaint.setShader(new LinearGradient(
-                    cx - innerRadius, cy - innerRadius,
-                    cx + innerRadius, cy + innerRadius,
-                    new int[]{0x59FFFFFF, 0x00FFFFFF, 0x1AFFFFFF},
-                    new float[]{0.0f, 0.5f, 1.0f},
-                    Shader.TileMode.CLAMP));
             specularPaint.setStrokeWidth(UiHelper.dpToPx(getContext(), 1.2f));
             canvas.drawCircle(cx, cy, innerRadius - UiHelper.dpToPx(getContext(), 0.6f), specularPaint);
         }

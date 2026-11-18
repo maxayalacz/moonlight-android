@@ -10,7 +10,7 @@
         android:layout_margin="10dp"
         android:foreground="@drawable/bg_oneui_glass_card_interactive"
         app:cardBackgroundColor="#25000000"
-        app:cardCornerRadius="@dimen/oneui_squircle_radius_large"
+        app:cardCornerRadius="@dimen/oneui_squircle_radius"
         app:cardElevation="8dp"
         app:cardMaxElevation="8dp">
 

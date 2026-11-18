@@ -248,6 +248,26 @@ public final class AppThemePalette {
         return fromKey(prefs.getString(PREF_COLOR_SCHEME, DEFAULT_THEME_KEY));
     }
 
+    public int getNeonAccent() {
+        float[] hsv = new float[3];
+        android.graphics.Color.colorToHSV(accentLight, hsv);
+        if (hsv[1] > 0.05f) {
+            hsv[1] = Math.min(1.0f, Math.max(hsv[1], 0.78f));
+        }
+        hsv[2] = Math.min(1.0f, Math.max(hsv[2], 0.98f));
+        return android.graphics.Color.HSVToColor(0xFF, hsv);
+    }
+
+    public int getNeonTextAccent() {
+        float[] hsv = new float[3];
+        android.graphics.Color.colorToHSV(accentLight, hsv);
+        if (hsv[1] > 0.05f) {
+            hsv[1] = Math.min(1.0f, Math.max(hsv[1] * 0.95f, 0.52f));
+        }
+        hsv[2] = 1.0f;
+        return android.graphics.Color.HSVToColor(0xFF, hsv);
+    }
+
     public static int withAlpha(int color, float alpha) {
         int a = Math.max(0, Math.min(255, Math.round(alpha * 255f)));
         return (a << 24) | (color & 0x00FFFFFF);

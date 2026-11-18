@@ -455,9 +455,12 @@ public class StreamSettings extends AppCompatActivity {
                                     ? R.drawable.bg_oneui_glass_card_top
                                     : R.drawable.bg_oneui_squircle_card);
                         }
+                        com.limelight.ui.AppThemePalette palette = com.limelight.ui.AppThemePalette.getCurrent(itemView.getContext());
                         View title = holder.findViewById(android.R.id.title);
                         if (title instanceof android.widget.TextView) {
-                            ((android.widget.TextView) title).setTextColor(0xE6FFFFFF);
+                            android.widget.TextView tv = (android.widget.TextView) title;
+                            tv.setTextColor(palette.getNeonAccent());
+                            tv.setShadowLayer(6f, 0f, 0f, com.limelight.ui.AppThemePalette.withAlpha(palette.getNeonAccent(), 0.45f));
                         }
                     } else {
                         boolean isLastInCard = nextPref == null || nextPref instanceof PreferenceCategory;
@@ -469,59 +472,86 @@ public class StreamSettings extends AppCompatActivity {
                                     ? R.drawable.bg_oneui_glass_card_bottom
                                     : R.drawable.bg_oneui_glass_card_middle);
                         }
+                        com.limelight.ui.AppThemePalette palette = com.limelight.ui.AppThemePalette.getCurrent(itemView.getContext());
                         View title = holder.findViewById(android.R.id.title);
                         if (title instanceof android.widget.TextView) {
                             ((android.widget.TextView) title).setTextColor(0xFFFFFFFF);
                         }
                         View summary = holder.findViewById(android.R.id.summary);
                         if (summary instanceof android.widget.TextView) {
-                            ((android.widget.TextView) summary).setTextColor(0xCCFFFFFF);
+                            ((android.widget.TextView) summary).setTextColor(
+                                    com.limelight.ui.AppThemePalette.withAlpha(palette.getNeonTextAccent(), 0.92f));
                         }
-                        applySwitchPalette(itemView, com.limelight.ui.AppThemePalette.getCurrent(itemView.getContext()));
+                        applySwitchPalette(itemView, palette);
                     }
                 }
 
+                private android.graphics.drawable.Drawable buildPillTrackDrawable(Context ctx, int neonAccent) {
+                    int w = Math.round(UiHelper.dpToPx(ctx, 48f));
+                    int h = Math.round(UiHelper.dpToPx(ctx, 26f));
+                    float radius = h * 0.5f;
+                    int strokeW = Math.max(1, Math.round(UiHelper.dpToPx(ctx, 1.4f)));
+
+                    android.graphics.drawable.GradientDrawable checked = new android.graphics.drawable.GradientDrawable();
+                    checked.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
+                    checked.setSize(w, h);
+                    checked.setCornerRadius(radius);
+                    checked.setColor(com.limelight.ui.AppThemePalette.withAlpha(neonAccent, 0.34f));
+                    checked.setStroke(strokeW, com.limelight.ui.AppThemePalette.withAlpha(neonAccent, 0.90f));
+
+                    android.graphics.drawable.GradientDrawable unchecked = new android.graphics.drawable.GradientDrawable();
+                    unchecked.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
+                    unchecked.setSize(w, h);
+                    unchecked.setCornerRadius(radius);
+                    unchecked.setColor(0x24FFFFFF);
+                    unchecked.setStroke(strokeW, 0x4DFFFFFF);
+
+                    android.graphics.drawable.StateListDrawable stateList = new android.graphics.drawable.StateListDrawable();
+                    stateList.addState(new int[]{android.R.attr.state_checked}, checked);
+                    stateList.addState(new int[]{}, unchecked);
+                    return stateList;
+                }
+
+                private android.graphics.drawable.Drawable buildPillThumbDrawable(Context ctx, int neonAccent) {
+                    int size = Math.round(UiHelper.dpToPx(ctx, 20f));
+                    int strokeW = Math.max(1, Math.round(UiHelper.dpToPx(ctx, 1f)));
+
+                    android.graphics.drawable.GradientDrawable checked = new android.graphics.drawable.GradientDrawable();
+                    checked.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+                    checked.setSize(size, size);
+                    checked.setColor(neonAccent);
+                    checked.setStroke(strokeW, 0x80FFFFFF);
+
+                    android.graphics.drawable.GradientDrawable unchecked = new android.graphics.drawable.GradientDrawable();
+                    unchecked.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+                    unchecked.setSize(size, size);
+                    unchecked.setColor(0xD9FFFFFF);
+                    unchecked.setStroke(strokeW, 0x33000000);
+
+                    android.graphics.drawable.StateListDrawable stateList = new android.graphics.drawable.StateListDrawable();
+                    stateList.addState(new int[]{android.R.attr.state_checked}, checked);
+                    stateList.addState(new int[]{}, unchecked);
+                    return stateList;
+                }
+
                 private void applySwitchPalette(View root, com.limelight.ui.AppThemePalette palette) {
+                    int neonAccent = palette.getNeonAccent();
                     if (root instanceof SwitchCompat) {
                         SwitchCompat sw = (SwitchCompat) root;
-                        int[][] states = new int[][]{
-                                new int[]{android.R.attr.state_checked},
-                                new int[]{}
-                        };
-                        ColorStateList thumbTint = new ColorStateList(states, new int[]{
-                                palette.accentLight,
-                                0x61FFFFFF
-                        });
-                        ColorStateList trackTint = new ColorStateList(states, new int[]{
-                                com.limelight.ui.AppThemePalette.withAlpha(palette.accent, 0.45f),
-                                0x22FFFFFF
-                        });
-                        sw.setThumbTintList(thumbTint);
-                        sw.setTrackTintList(trackTint);
+                        sw.setThumbTintList(null);
+                        sw.setTrackTintList(null);
+                        sw.setTrackDrawable(buildPillTrackDrawable(sw.getContext(), neonAccent));
+                        sw.setThumbDrawable(buildPillThumbDrawable(sw.getContext(), neonAccent));
+                        sw.setShowText(false);
                     } else if (root instanceof android.widget.Switch) {
                         android.widget.Switch sw = (android.widget.Switch) root;
-                        int[][] states = new int[][]{
-                                new int[]{android.R.attr.state_checked},
-                                new int[]{}
-                        };
-                        ColorStateList thumbTint = new ColorStateList(states, new int[]{
-                                palette.accentLight,
-                                0x61FFFFFF
-                        });
-                        ColorStateList trackTint = new ColorStateList(states, new int[]{
-                                com.limelight.ui.AppThemePalette.withAlpha(palette.accent, 0.45f),
-                                0x22FFFFFF
-                        });
-                        if (sw.getThumbDrawable() != null) {
-                            android.graphics.drawable.Drawable d = DrawableCompat.wrap(sw.getThumbDrawable().mutate());
-                            DrawableCompat.setTintList(d, thumbTint);
-                            sw.setThumbDrawable(d);
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                            sw.setThumbTintList(null);
+                            sw.setTrackTintList(null);
                         }
-                        if (sw.getTrackDrawable() != null) {
-                            android.graphics.drawable.Drawable d = DrawableCompat.wrap(sw.getTrackDrawable().mutate());
-                            DrawableCompat.setTintList(d, trackTint);
-                            sw.setTrackDrawable(d);
-                        }
+                        sw.setTrackDrawable(buildPillTrackDrawable(sw.getContext(), neonAccent));
+                        sw.setThumbDrawable(buildPillThumbDrawable(sw.getContext(), neonAccent));
+                        sw.setShowText(false);
                     } else if (root instanceof ViewGroup) {
                         ViewGroup vg = (ViewGroup) root;
                         for (int i = 0; i < vg.getChildCount(); i++) {

@@ -123,12 +123,18 @@ public class SessionMetricsActivity extends AppCompatActivity {
             });
         }
 
-        GradientDrawable cardBg = new GradientDrawable();
-        cardBg.setShape(GradientDrawable.RECTANGLE);
-        cardBg.setCornerRadius(dp(22f));
-        cardBg.setColor(AppThemePalette.withAlpha(palette.surface, 0.93f));
-        cardBg.setStroke(Math.max(1, Math.round(dp(1f))), 0x2EFFFFFF);
-        cardContainer.setBackground(cardBg);
+        if (!UiHelper.applyFrostedCardBackground(
+                cardContainer,
+                com.limelight.ui.FlowingAuroraView.CornerMode.ALL,
+                22f,
+                0x78121826)) {
+            GradientDrawable cardBg = new GradientDrawable();
+            cardBg.setShape(GradientDrawable.RECTANGLE);
+            cardBg.setCornerRadius(dp(22f));
+            cardBg.setColor(AppThemePalette.withAlpha(palette.surface, 0.88f));
+            cardBg.setStroke(Math.max(1, Math.round(dp(1f))), 0x38FFFFFF);
+            cardContainer.setBackground(cardBg);
+        }
 
         rootBackdrop.setOnClickListener(v -> finish());
         cardContainer.setOnClickListener(v -> resetCountdown());

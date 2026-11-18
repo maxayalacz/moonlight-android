@@ -195,7 +195,12 @@ public class AppGridAdapter extends GenericGridAdapter<AppView.AppObject> {
         }
         imgView.setAlpha(1.0f);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && !imgView.getClipToOutline()) {
-            final float cornerPx = UiHelper.dpToPx(imgView.getContext(), 18f);
+            float density = imgView.getResources().getDisplayMetrics().density;
+            float marginDp = 8f;
+            if (imgView.getLayoutParams() instanceof android.view.ViewGroup.MarginLayoutParams && density > 0f) {
+                marginDp = ((android.view.ViewGroup.MarginLayoutParams) imgView.getLayoutParams()).leftMargin / density;
+            }
+            final float cornerPx = UiHelper.dpToPx(imgView.getContext(), Math.max(8f, 28f - marginDp));
             imgView.setOutlineProvider(new ViewOutlineProvider() {
                 @Override
                 public void getOutline(View view, Outline outline) {
