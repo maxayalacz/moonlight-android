@@ -188,9 +188,7 @@ public class DigitalButton extends VirtualControllerElement {
 
             int baseRgb = resolveVectorButtonColor();
             boolean pressed = isPressed();
-            float fillAlpha = (pressed ? 0.56f : 0.22f) * opacityFactor;
-            float borderAlpha = (pressed ? 0.92f : 0.54f) * opacityFactor;
-            float fgAlpha = (pressed ? 1.0f : 0.90f) * opacityFactor;
+            float fgAlpha = (pressed ? 1.0f : 0.92f) * opacityFactor;
 
             rect.set(strokeW * 0.5f + 2f, strokeW * 0.5f + 2f, w - strokeW * 0.5f - 2f, h - strokeW * 0.5f - 2f);
 
@@ -198,25 +196,63 @@ public class DigitalButton extends VirtualControllerElement {
                     || elementId == EID_X || elementId == EID_Y
                     || elementId == EID_LSB || elementId == EID_RSB);
 
+            android.graphics.LinearGradient glassBaseShader = new android.graphics.LinearGradient(
+                    rect.left, rect.top, rect.right, rect.bottom,
+                    new int[]{
+                            withAlpha(0xFF2A3652, (pressed ? 0.82f : 0.72f) * opacityFactor),
+                            withAlpha(0xFF141B2B, (pressed ? 0.76f : 0.66f) * opacityFactor),
+                            withAlpha(0xFF0C111D, (pressed ? 0.84f : 0.74f) * opacityFactor)
+                    },
+                    new float[]{0f, 0.52f, 1f},
+                    android.graphics.Shader.TileMode.CLAMP);
+
+            android.graphics.LinearGradient glassSheenShader = new android.graphics.LinearGradient(
+                    rect.left, rect.top, rect.right * 0.85f, rect.bottom * 0.85f,
+                    new int[]{
+                            withAlpha(0xFFFFFFFF, (pressed ? 0.42f : 0.28f) * opacityFactor),
+                            withAlpha(baseRgb, (pressed ? 0.45f : 0.14f) * opacityFactor),
+                            withAlpha(0xFFFFFFFF, 0.03f * opacityFactor)
+                    },
+                    new float[]{0f, 0.45f, 1f},
+                    android.graphics.Shader.TileMode.CLAMP);
+
+            float borderAlpha = (pressed ? 0.95f : 0.62f) * opacityFactor;
+
             if (isCircle) {
                 float cx = w * 0.5f;
                 float cy = h * 0.5f;
                 float r = Math.max(4f, (minDim - strokeW) * 0.5f - 2f);
                 paint.setStyle(Paint.Style.FILL);
-                paint.setColor(withAlpha(baseRgb, fillAlpha));
+                paint.setShader(glassBaseShader);
                 canvas.drawCircle(cx, cy, r, paint);
+                paint.setShader(glassSheenShader);
+                canvas.drawCircle(cx, cy, r, paint);
+                paint.setShader(null);
 
+                // Inner frosted specular rim
                 paint.setStyle(Paint.Style.STROKE);
+                paint.setStrokeWidth(Math.max(1f, strokeW * 0.55f));
+                paint.setColor(withAlpha(0xFFFFFFFF, 0.22f * opacityFactor));
+                canvas.drawCircle(cx, cy, Math.max(2f, r - strokeW * 0.8f), paint);
+
                 paint.setStrokeWidth(strokeW);
                 paint.setColor(withAlpha(baseRgb, borderAlpha));
                 canvas.drawCircle(cx, cy, r, paint);
             } else {
                 float cornerR = (elementId == EID_TOUCHPAD) ? minDim * 0.18f : minDim * 0.40f;
                 paint.setStyle(Paint.Style.FILL);
-                paint.setColor(withAlpha(baseRgb, fillAlpha));
+                paint.setShader(glassBaseShader);
+                canvas.drawRoundRect(rect, cornerR, cornerR, paint);
+                paint.setShader(glassSheenShader);
+                canvas.drawRoundRect(rect, cornerR, cornerR, paint);
+                paint.setShader(null);
+
+                // Inner frosted specular rim
+                paint.setStyle(Paint.Style.STROKE);
+                paint.setStrokeWidth(Math.max(1f, strokeW * 0.55f));
+                paint.setColor(withAlpha(0xFFFFFFFF, 0.22f * opacityFactor));
                 canvas.drawRoundRect(rect, cornerR, cornerR, paint);
 
-                paint.setStyle(Paint.Style.STROKE);
                 paint.setStrokeWidth(strokeW);
                 paint.setColor(withAlpha(baseRgb, borderAlpha));
                 canvas.drawRoundRect(rect, cornerR, cornerR, paint);

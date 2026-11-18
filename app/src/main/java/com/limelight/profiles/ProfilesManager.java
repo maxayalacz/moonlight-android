@@ -248,12 +248,92 @@ public class ProfilesManager {
         @Override public boolean contains(String key) {
             return patch.containsKey(key) || base.contains(key);
         }
-        @Override public Editor edit() { return base.edit(); }
+        @Override public Editor edit() {
+            return new OverlayEditor(base.edit(), patch);
+        }
         @Override public void registerOnSharedPreferenceChangeListener(OnSharedPreferenceChangeListener listener) {
             base.registerOnSharedPreferenceChangeListener(listener);
         }
         @Override public void unregisterOnSharedPreferenceChangeListener(OnSharedPreferenceChangeListener listener) {
             base.unregisterOnSharedPreferenceChangeListener(listener);
+        }
+    }
+
+    private static class OverlayEditor implements SharedPreferences.Editor {
+        private final SharedPreferences.Editor baseEditor;
+        private final Map<String, Object> patch;
+        private final Map<String, Object> staged = new LinkedHashMap<>();
+        private boolean cleared = false;
+
+        OverlayEditor(SharedPreferences.Editor baseEditor, Map<String, Object> patch) {
+            this.baseEditor = baseEditor;
+            this.patch = patch;
+        }
+
+        @Override public SharedPreferences.Editor putString(String key, String value) {
+            staged.put(key, value);
+            baseEditor.putString(key, value);
+            return this;
+        }
+        @Override public SharedPreferences.Editor putStringSet(String key, Set<String> values) {
+            staged.put(key, values);
+            baseEditor.putStringSet(key, values);
+            return this;
+        }
+        @Override public SharedPreferences.Editor putInt(String key, int value) {
+            staged.put(key, value);
+            baseEditor.putInt(key, value);
+            return this;
+        }
+        @Override public SharedPreferences.Editor putLong(String key, long value) {
+            staged.put(key, value);
+            baseEditor.putLong(key, value);
+            return this;
+        }
+        @Override public SharedPreferences.Editor putFloat(String key, float value) {
+            staged.put(key, value);
+            baseEditor.putFloat(key, value);
+            return this;
+        }
+        @Override public SharedPreferences.Editor putBoolean(String key, boolean value) {
+            staged.put(key, value);
+            baseEditor.putBoolean(key, value);
+            return this;
+        }
+        @Override public SharedPreferences.Editor remove(String key) {
+            staged.put(key, null);
+            baseEditor.remove(key);
+            return this;
+        }
+        @Override public SharedPreferences.Editor clear() {
+            cleared = true;
+            staged.clear();
+            baseEditor.clear();
+            return this;
+        }
+        private void syncPatch() {
+            if (patch == null) return;
+            if (cleared) {
+                patch.clear();
+            }
+            for (Map.Entry<String, Object> entry : staged.entrySet()) {
+                if (entry.getValue() == null) {
+                    patch.remove(entry.getKey());
+                } else {
+                    patch.put(entry.getKey(), entry.getValue());
+                }
+            }
+            staged.clear();
+            cleared = false;
+            ProfilesManager.getInstance().saveIfPossible();
+        }
+        @Override public boolean commit() {
+            syncPatch();
+            return baseEditor.commit();
+        }
+        @Override public void apply() {
+            syncPatch();
+            baseEditor.apply();
         }
     }
 

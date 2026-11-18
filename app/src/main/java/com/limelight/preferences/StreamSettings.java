@@ -55,6 +55,7 @@ import com.limelight.PcView;
 import com.limelight.R;
 import com.limelight.binding.input.virtual_controller.keyboard.KeyBoardControllerConfigurationLoader;
 import com.limelight.binding.video.MediaCodecHelper;
+import com.limelight.profiles.ProfilesManager;
 import com.limelight.utils.Dialog;
 import com.limelight.utils.FileUriUtils;
 import com.limelight.utils.PerformanceDataTracker;
@@ -194,6 +195,9 @@ public class StreamSettings extends AppCompatActivity {
         }
 
         protected SharedPreferences getPrefs() {
+            if (getContext() != null) {
+                return ProfilesManager.getInstance().getOverlayingSharedPreferences(getContext());
+            }
             return getPreferenceManager().getSharedPreferences();
         }
 
@@ -582,6 +586,23 @@ public class StreamSettings extends AppCompatActivity {
 
         @Override
         public void onCreatePreferences(Bundle bundle, String s) {
+            if (getPreferenceManager().getPreferenceDataStore() == null && getContext() != null) {
+                final SharedPreferences overlayPrefs = ProfilesManager.getInstance().getOverlayingSharedPreferences(getContext());
+                getPreferenceManager().setPreferenceDataStore(new androidx.preference.PreferenceDataStore() {
+                    @Override public void putString(String key, String value) { overlayPrefs.edit().putString(key, value).apply(); }
+                    @Override public void putStringSet(String key, java.util.Set<String> values) { overlayPrefs.edit().putStringSet(key, values).apply(); }
+                    @Override public void putInt(String key, int value) { overlayPrefs.edit().putInt(key, value).apply(); }
+                    @Override public void putLong(String key, long value) { overlayPrefs.edit().putLong(key, value).apply(); }
+                    @Override public void putFloat(String key, float value) { overlayPrefs.edit().putFloat(key, value).apply(); }
+                    @Override public void putBoolean(String key, boolean value) { overlayPrefs.edit().putBoolean(key, value).apply(); }
+                    @Override public String getString(String key, String defValue) { return overlayPrefs.getString(key, defValue); }
+                    @Override public java.util.Set<String> getStringSet(String key, java.util.Set<String> defValues) { return overlayPrefs.getStringSet(key, defValues); }
+                    @Override public int getInt(String key, int defValue) { return overlayPrefs.getInt(key, defValue); }
+                    @Override public long getLong(String key, long defValue) { return overlayPrefs.getLong(key, defValue); }
+                    @Override public float getFloat(String key, float defValue) { return overlayPrefs.getFloat(key, defValue); }
+                    @Override public boolean getBoolean(String key, boolean defValue) { return overlayPrefs.getBoolean(key, defValue); }
+                });
+            }
             initializePreferences();
         }
 

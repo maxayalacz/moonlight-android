@@ -1156,6 +1156,10 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
             return;
         }
         prefConfig.onscreenController= virtualController.switchShowHide() != 0;
+        if (prefConfig.onscreenController) {
+            virtualController.refreshLayout();
+            virtualController.show();
+        }
     }
 
     private void setPreferredOrientationForActivity() {
@@ -3698,7 +3702,7 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
             @Override
             public void run() {
                 if (spinner != null) {
-                    spinner.dismiss();
+                    spinner.dismissWithPortalReveal();
                     spinner = null;
                 }
 
@@ -3716,7 +3720,7 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
                     public void run() {
                         setInputGrabState(true);
                     }
-                }, 500);
+                }, 1550);
 
                 // Keep the display on
                 getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);

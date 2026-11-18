@@ -237,36 +237,72 @@ public class AnalogStick extends VirtualControllerElement {
             float cy = getHeight() * 0.5f;
             float strokeW = Math.max(2f, getDefaultStrokeWidth());
 
-            // Base translucent disc + outer border ring
+            // Dark frosted glass base disc + specular sheen + outer border ring
+            android.graphics.LinearGradient baseGlassShader = new android.graphics.LinearGradient(
+                    cx - radius_complete, cy - radius_complete, cx + radius_complete, cy + radius_complete,
+                    new int[]{
+                            stickWithAlpha(0xFF2A3652, 0.70f * opacityFactor),
+                            stickWithAlpha(0xFF141B2B, 0.64f * opacityFactor),
+                            stickWithAlpha(0xFF0C111D, 0.72f * opacityFactor)
+                    },
+                    new float[]{0f, 0.52f, 1f},
+                    android.graphics.Shader.TileMode.CLAMP);
+            android.graphics.LinearGradient baseSheenShader = new android.graphics.LinearGradient(
+                    cx - radius_complete, cy - radius_complete, cx + radius_complete * 0.7f, cy + radius_complete * 0.7f,
+                    new int[]{
+                            stickWithAlpha(0xFFFFFFFF, 0.25f * opacityFactor),
+                            stickWithAlpha(0xFFFFFFFF, 0.06f * opacityFactor),
+                            stickWithAlpha(0xFFFFFFFF, 0.01f * opacityFactor)
+                    },
+                    new float[]{0f, 0.45f, 1f},
+                    android.graphics.Shader.TileMode.CLAMP);
+
             paint.setStyle(Paint.Style.FILL);
-            paint.setColor(stickWithAlpha(0xFFFFFFFF, 0.22f * opacityFactor));
+            paint.setShader(baseGlassShader);
             canvas.drawCircle(cx, cy, radius_complete, paint);
+            paint.setShader(baseSheenShader);
+            canvas.drawCircle(cx, cy, radius_complete, paint);
+            paint.setShader(null);
 
             paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(Math.max(1f, strokeW * 0.55f));
+            paint.setColor(stickWithAlpha(0xFFFFFFFF, 0.20f * opacityFactor));
+            canvas.drawCircle(cx, cy, Math.max(2f, radius_complete - strokeW * 0.8f), paint);
+
             paint.setStrokeWidth(strokeW);
-            paint.setColor(stickWithAlpha(0xFFFFFFFF, 0.48f * opacityFactor));
+            paint.setColor(stickWithAlpha(0xFFFFFFFF, 0.54f * opacityFactor));
             canvas.drawCircle(cx, cy, radius_complete, paint);
 
             // Subtle deadzone ring
             paint.setStrokeWidth(Math.max(1.5f, strokeW * 0.7f));
-            paint.setColor(stickWithAlpha(0xFFFFFFFF, 0.16f * opacityFactor));
+            paint.setColor(stickWithAlpha(0xFFFFFFFF, 0.20f * opacityFactor));
             canvas.drawCircle(cx, cy, radius_dead_zone, paint);
 
-            // Floating vector thumb knob
+            // Floating frosted glass thumb knob
             float drawX = stick_state == STICK_STATE.NO_MOVEMENT ? cx : position_stick_x;
             float drawY = stick_state == STICK_STATE.NO_MOVEMENT ? cy : position_stick_y;
             float knobR = Math.max(radius_analog_stick * 1.25f, radius_complete * 0.34f);
 
             int knobRgb = (isPressed() && click_state == CLICK_STATE.DOUBLE)
-                    ? com.limelight.ui.AppThemePalette.getCurrent(getContext()).accentLight
+                    ? com.limelight.ui.AppThemePalette.getCurrent(getContext()).getNeonAccent()
                     : 0xFFFFFFFF;
+            android.graphics.LinearGradient knobGlassShader = new android.graphics.LinearGradient(
+                    drawX - knobR, drawY - knobR, drawX + knobR, drawY + knobR,
+                    new int[]{
+                            stickWithAlpha(0xFF384768, (isPressed() ? 0.88f : 0.78f) * opacityFactor),
+                            stickWithAlpha(0xFF1E283D, (isPressed() ? 0.82f : 0.72f) * opacityFactor),
+                            stickWithAlpha(knobRgb, (isPressed() ? 0.58f : 0.32f) * opacityFactor)
+                    },
+                    new float[]{0f, 0.55f, 1f},
+                    android.graphics.Shader.TileMode.CLAMP);
             paint.setStyle(Paint.Style.FILL);
-            paint.setColor(stickWithAlpha(knobRgb, (isPressed() ? 0.76f : 0.62f) * opacityFactor));
+            paint.setShader(knobGlassShader);
             canvas.drawCircle(drawX, drawY, knobR, paint);
+            paint.setShader(null);
 
             paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(Math.max(1.5f, strokeW * 0.8f));
-            paint.setColor(stickWithAlpha(knobRgb, 0.85f * opacityFactor));
+            paint.setStrokeWidth(Math.max(1.5f, strokeW * 0.85f));
+            paint.setColor(stickWithAlpha(knobRgb, 0.88f * opacityFactor));
             canvas.drawCircle(drawX, drawY, knobR, paint);
             return;
         }

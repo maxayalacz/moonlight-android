@@ -700,7 +700,7 @@
     <PreferenceCategory
         android:key="category_onscreen_controls"
         android:title="@string/category_on_screen_controls_settings"
-        app:initialExpandedChildrenCount="1"
+        app:initialExpandedChildrenCount="12"
         app:iconSpaceReserved="false">
         <SwitchPreferenceCompat
             android:defaultValue="false"
@@ -710,28 +710,24 @@
             app:iconSpaceReserved="false" />
         <SwitchPreferenceCompat
             android:defaultValue="true"
-            android:dependency="checkbox_show_onscreen_controls"
             android:key="checkbox_hide_osc_when_has_gamepad"
             android:summary="@string/summary_hide_osc_when_has_gamepad"
             android:title="@string/title_hide_osc_when_has_gamepad"
             app:iconSpaceReserved="false" />
         <SwitchPreferenceCompat
             android:defaultValue="false"
-            android:dependency="checkbox_show_onscreen_controls"
             android:key="checkbox_onscreen_style_official"
             android:summary="@string/summary_checkbox_onscreen_style_official"
             android:title="@string/title_checkbox_onscreen_style_official"
             app:iconSpaceReserved="false" />
         <SwitchPreferenceCompat
             android:defaultValue="true"
-            android:dependency="checkbox_show_onscreen_controls"
             android:key="checkbox_vibrate_osc"
             android:summary="@string/summary_checkbox_vibrate_osc"
             android:title="@string/title_checkbox_vibrate_osc"
             app:iconSpaceReserved="false" />
         <SwitchPreferenceCompat
             android:defaultValue="false"
-            android:dependency="checkbox_show_onscreen_controls"
             android:key="checkbox_only_show_L3R3"
             android:summary="@string/summary_only_l3r3"
             android:title="@string/title_only_l3r3"
@@ -740,14 +736,12 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:defaultValue="true"
-            android:dependency="checkbox_show_onscreen_controls"
             android:key="checkbox_show_guide_button"
             android:summary="@string/summary_show_guide_button"
             android:title="@string/title_show_guide_button"
             app:iconSpaceReserved="false" />
         <com.limelight.preferences.SeekBarPreference
             android:defaultValue="90"
-            android:dependency="checkbox_show_onscreen_controls"
             android:dialogMessage="@string/summary_osc_opacity"
             android:key="seekbar_osc_opacity"
             android:max="100"
@@ -759,14 +753,12 @@
             seekbar:step="1" />
         <SwitchPreferenceCompat
             android:defaultValue="false"
-            android:dependency="checkbox_show_onscreen_controls"
             android:key="checkbox_enable_analog_stick_new"
             android:summary="@string/summary_free_analog_stick"
             android:title="@string/title_free_analog_stick"
             app:iconSpaceReserved="false" />
         <com.limelight.preferences.SeekBarPreference
             android:defaultValue="20"
-            android:dependency="checkbox_enable_analog_stick_new"
             android:dialogMessage="@string/summary_osc_opacity"
             android:key="seekbar_osc_free_analog_stick_opacity"
             android:max="100"

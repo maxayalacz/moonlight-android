@@ -152,7 +152,15 @@ public class SeekBarPreference extends Preference
             if (shouldPersist()) {
                 currentValue = seekBar.getProgress() + minValue;
                 persistInt(currentValue);
+                if (getKey() != null) {
+                    com.limelight.profiles.ProfilesManager.getInstance()
+                            .getOverlayingSharedPreferences(context)
+                            .edit()
+                            .putInt(getKey(), currentValue)
+                            .apply();
+                }
                 callChangeListener(currentValue);
+                notifyChanged();
             }
 
             dialog.dismiss();
@@ -162,6 +170,23 @@ public class SeekBarPreference extends Preference
         dialog = dialogBuilder.create();
         UiHelper.styleDialogSquircle(dialog);
         return dialog;
+    }
+
+    @Override
+    public CharSequence getSummary() {
+        CharSequence baseSummary = super.getSummary();
+        int val = shouldPersist() ? getPersistedInt(defaultValue) : currentValue;
+        String formatted;
+        if (divisor != 1) {
+            formatted = String.format((Locale) null, "%.1f", val / (float) divisor);
+        } else {
+            formatted = String.valueOf(val);
+        }
+        String valueDisplay = suffix == null ? formatted : formatted.concat(suffix.length() > 1 ? " " + suffix : suffix);
+        if (baseSummary == null || baseSummary.length() == 0) {
+            return valueDisplay;
+        }
+        return baseSummary + "  •  " + valueDisplay;
     }
 
     private void applyNeonSliderStyle() {

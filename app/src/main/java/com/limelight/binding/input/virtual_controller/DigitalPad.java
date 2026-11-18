@@ -239,14 +239,37 @@ public class DigitalPad extends VirtualControllerElement {
         dpadPath.quadTo(cx - armW, cy - armW, cx - armW, cy - armW - filletR);
         dpadPath.close();
 
+        android.graphics.LinearGradient glassBaseShader = new android.graphics.LinearGradient(
+                cx - halfSpan, cy - halfSpan, cx + halfSpan, cy + halfSpan,
+                new int[]{
+                        dpadWithAlpha(0xFF2A3652, 0.72f * opacityFactor),
+                        dpadWithAlpha(0xFF141B2B, 0.66f * opacityFactor),
+                        dpadWithAlpha(0xFF0C111D, 0.74f * opacityFactor)
+                },
+                new float[]{0f, 0.52f, 1f},
+                android.graphics.Shader.TileMode.CLAMP);
+
+        android.graphics.LinearGradient glassSheenShader = new android.graphics.LinearGradient(
+                cx - halfSpan, cy - halfSpan, cx + halfSpan * 0.75f, cy + halfSpan * 0.75f,
+                new int[]{
+                        dpadWithAlpha(0xFFFFFFFF, 0.28f * opacityFactor),
+                        dpadWithAlpha(0xFFFFFFFF, 0.08f * opacityFactor),
+                        dpadWithAlpha(0xFFFFFFFF, 0.02f * opacityFactor)
+                },
+                new float[]{0f, 0.45f, 1f},
+                android.graphics.Shader.TileMode.CLAMP);
+
         paint.setStyle(Paint.Style.FILL);
-        paint.setColor(dpadWithAlpha(0xFFFFFFFF, 0.17f * opacityFactor));
+        paint.setShader(glassBaseShader);
         canvas.drawPath(dpadPath, paint);
+        paint.setShader(glassSheenShader);
+        canvas.drawPath(dpadPath, paint);
+        paint.setShader(null);
 
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeWidth(strokeW);
         paint.setStrokeJoin(Paint.Join.ROUND);
-        paint.setColor(dpadWithAlpha(0xFFFFFFFF, 0.52f * opacityFactor));
+        paint.setColor(dpadWithAlpha(0xFFFFFFFF, 0.58f * opacityFactor));
         canvas.drawPath(dpadPath, paint);
 
         boolean leftOn = (direction & DIGITAL_PAD_DIRECTION_LEFT) != 0;
@@ -271,6 +294,7 @@ public class DigitalPad extends VirtualControllerElement {
         canvas.save();
         canvas.rotate(angleDeg, cx, cy);
 
+        int accentRgb = com.limelight.ui.AppThemePalette.getCurrent(getContext()).getNeonAccent();
         if (active) {
             rect.set(
                     cx + armW * 0.45f,
@@ -279,7 +303,7 @@ public class DigitalPad extends VirtualControllerElement {
                     cy + armW - armInset);
             float r = armW * 0.28f;
             paint.setStyle(Paint.Style.FILL);
-            paint.setColor(dpadWithAlpha(0xFFFFFFFF, 0.48f * opacityFactor));
+            paint.setColor(dpadWithAlpha(accentRgb, 0.42f * opacityFactor));
             canvas.drawRoundRect(rect, r, r, paint);
         }
 
@@ -290,7 +314,7 @@ public class DigitalPad extends VirtualControllerElement {
         paint.setStrokeCap(Paint.Cap.ROUND);
         paint.setStrokeJoin(Paint.Join.ROUND);
         paint.setStrokeWidth(Math.max(2f, strokeW * 1.15f));
-        paint.setColor(dpadWithAlpha(0xFFFFFFFF, (active ? 1.0f : 0.78f) * opacityFactor));
+        paint.setColor(dpadWithAlpha(active ? accentRgb : 0xFFFFFFFF, (active ? 1.0f : 0.85f) * opacityFactor));
         canvas.drawLine(backX, cy - chevSize, tipX, cy, paint);
         canvas.drawLine(tipX, cy, backX, cy + chevSize, paint);
 
