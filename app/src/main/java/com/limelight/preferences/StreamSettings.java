@@ -15,11 +15,13 @@ import android.app.Activity;
 import android.os.Handler;
 import android.os.Vibrator;
 
+import android.content.res.ColorStateList;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.SwitchCompat;
 import androidx.core.content.FileProvider;
+import androidx.core.graphics.drawable.DrawableCompat;
 import androidx.fragment.app.DialogFragment;
-import androidx.preference.CheckBoxPreference;
 import androidx.preference.EditTextPreference;
 import androidx.preference.ListPreference;
 import androidx.preference.Preference;
@@ -27,6 +29,7 @@ import androidx.preference.PreferenceCategory;
 import androidx.preference.PreferenceFragmentCompat;
 import androidx.preference.PreferenceManager;
 import androidx.preference.PreferenceScreen;
+import androidx.preference.TwoStatePreference;
 
 import android.text.InputFilter;
 import android.text.InputType;
@@ -117,6 +120,7 @@ public class StreamSettings extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        UiHelper.refreshBackdrop(this);
     }
 
     @Override
@@ -473,6 +477,56 @@ public class StreamSettings extends AppCompatActivity {
                         if (summary instanceof android.widget.TextView) {
                             ((android.widget.TextView) summary).setTextColor(0xCCFFFFFF);
                         }
+                        applySwitchPalette(itemView, com.limelight.ui.AppThemePalette.getCurrent(itemView.getContext()));
+                    }
+                }
+
+                private void applySwitchPalette(View root, com.limelight.ui.AppThemePalette palette) {
+                    if (root instanceof SwitchCompat) {
+                        SwitchCompat sw = (SwitchCompat) root;
+                        int[][] states = new int[][]{
+                                new int[]{android.R.attr.state_checked},
+                                new int[]{}
+                        };
+                        ColorStateList thumbTint = new ColorStateList(states, new int[]{
+                                palette.accentLight,
+                                0x61FFFFFF
+                        });
+                        ColorStateList trackTint = new ColorStateList(states, new int[]{
+                                com.limelight.ui.AppThemePalette.withAlpha(palette.accent, 0.45f),
+                                0x22FFFFFF
+                        });
+                        sw.setThumbTintList(thumbTint);
+                        sw.setTrackTintList(trackTint);
+                    } else if (root instanceof android.widget.Switch) {
+                        android.widget.Switch sw = (android.widget.Switch) root;
+                        int[][] states = new int[][]{
+                                new int[]{android.R.attr.state_checked},
+                                new int[]{}
+                        };
+                        ColorStateList thumbTint = new ColorStateList(states, new int[]{
+                                palette.accentLight,
+                                0x61FFFFFF
+                        });
+                        ColorStateList trackTint = new ColorStateList(states, new int[]{
+                                com.limelight.ui.AppThemePalette.withAlpha(palette.accent, 0.45f),
+                                0x22FFFFFF
+                        });
+                        if (sw.getThumbDrawable() != null) {
+                            android.graphics.drawable.Drawable d = DrawableCompat.wrap(sw.getThumbDrawable().mutate());
+                            DrawableCompat.setTintList(d, thumbTint);
+                            sw.setThumbDrawable(d);
+                        }
+                        if (sw.getTrackDrawable() != null) {
+                            android.graphics.drawable.Drawable d = DrawableCompat.wrap(sw.getTrackDrawable().mutate());
+                            DrawableCompat.setTintList(d, trackTint);
+                            sw.setTrackDrawable(d);
+                        }
+                    } else if (root instanceof ViewGroup) {
+                        ViewGroup vg = (ViewGroup) root;
+                        for (int i = 0; i < vg.getChildCount(); i++) {
+                            applySwitchPalette(vg.getChildAt(i), palette);
+                        }
                     }
                 }
             };
@@ -816,10 +870,12 @@ public class StreamSettings extends AppCompatActivity {
                     LimeLog.info("Disabling HDR toggle on old broken SHIELD TV firmware");
                     PreferenceCategory category =
                             (PreferenceCategory) findPreference("category_video_settings");
-                    CheckBoxPreference hdrPref = (CheckBoxPreference) category.findPreference("checkbox_enable_hdr");
-                    hdrPref.setEnabled(false);
-                    hdrPref.setChecked(false);
-                    hdrPref.setSummary("Update the firmware on your NVIDIA SHIELD Android TV to enable HDR");
+                    TwoStatePreference hdrPref = (TwoStatePreference) category.findPreference("checkbox_enable_hdr");
+                    if (hdrPref != null) {
+                        hdrPref.setEnabled(false);
+                        hdrPref.setChecked(false);
+                        hdrPref.setSummary("Update the firmware on your NVIDIA SHIELD Android TV to enable HDR");
+                    }
                 }
             }
 
@@ -893,6 +949,37 @@ public class StreamSettings extends AppCompatActivity {
                     return true;
                 }
             });
+
+            Preference colorSchemePref = findPreference(com.limelight.ui.AppThemePalette.PREF_COLOR_SCHEME);
+            if (colorSchemePref instanceof ListPreference) {
+                colorSchemePref.setSummaryProvider(ListPreference.SimpleSummaryProvider.getInstance());
+                colorSchemePref.setOnPreferenceChangeListener((preference, newValue) -> {
+                    final View root = getView();
+                    if (root != null) {
+                        root.post(() -> {
+                            UiHelper.refreshBackdrop(getActivity());
+                            androidx.recyclerview.widget.RecyclerView rv = getListView();
+                            if (rv != null && rv.getAdapter() != null) {
+                                rv.getAdapter().notifyDataSetChanged();
+                            }
+                        });
+                    }
+                    return true;
+                });
+            }
+            for (String key : new String[]{"list_backdrop_style", "list_metaball_sharpness", "list_plexus_density"}) {
+                Preference uiListPref = findPreference(key);
+                if (uiListPref instanceof ListPreference) {
+                    uiListPref.setSummaryProvider(ListPreference.SimpleSummaryProvider.getInstance());
+                    uiListPref.setOnPreferenceChangeListener((preference, newValue) -> {
+                        final View root = getView();
+                        if (root != null) {
+                            root.post(() -> UiHelper.refreshBackdrop(getActivity()));
+                        }
+                        return true;
+                    });
+                }
+            }
 
             Preference _pref;
             _pref = findPreference("import_keyboard_file");

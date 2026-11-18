@@ -221,6 +221,48 @@ public class AnalogStick extends VirtualControllerElement {
     protected void onElementDraw(Canvas canvas) {
         // set transparent background
         canvas.drawColor(Color.TRANSPARENT);
+        paint.setAntiAlias(true);
+
+        if (!com.limelight.preferences.PreferenceConfiguration.readPreferences(getContext()).enableOnScreenStyleOfficial) {
+            int oscOpacity = com.limelight.preferences.PreferenceConfiguration.readPreferences(getContext()).oscOpacity;
+            float opacityFactor = Math.max(0.05f, Math.min(1.0f, oscOpacity / 100f));
+            float cx = getWidth() * 0.5f;
+            float cy = getHeight() * 0.5f;
+            float strokeW = Math.max(2f, getDefaultStrokeWidth());
+
+            // Base translucent disc + outer border ring
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(stickWithAlpha(0xFFFFFFFF, 0.22f * opacityFactor));
+            canvas.drawCircle(cx, cy, radius_complete, paint);
+
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(strokeW);
+            paint.setColor(stickWithAlpha(0xFFFFFFFF, 0.48f * opacityFactor));
+            canvas.drawCircle(cx, cy, radius_complete, paint);
+
+            // Subtle deadzone ring
+            paint.setStrokeWidth(Math.max(1.5f, strokeW * 0.7f));
+            paint.setColor(stickWithAlpha(0xFFFFFFFF, 0.16f * opacityFactor));
+            canvas.drawCircle(cx, cy, radius_dead_zone, paint);
+
+            // Floating vector thumb knob
+            float drawX = stick_state == STICK_STATE.NO_MOVEMENT ? cx : position_stick_x;
+            float drawY = stick_state == STICK_STATE.NO_MOVEMENT ? cy : position_stick_y;
+            float knobR = Math.max(radius_analog_stick * 1.25f, radius_complete * 0.34f);
+
+            int knobRgb = (isPressed() && click_state == CLICK_STATE.DOUBLE)
+                    ? com.limelight.ui.AppThemePalette.getCurrent(getContext()).accentLight
+                    : 0xFFFFFFFF;
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(stickWithAlpha(knobRgb, (isPressed() ? 0.76f : 0.62f) * opacityFactor));
+            canvas.drawCircle(drawX, drawY, knobR, paint);
+
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(Math.max(1.5f, strokeW * 0.8f));
+            paint.setColor(stickWithAlpha(knobRgb, 0.85f * opacityFactor));
+            canvas.drawCircle(drawX, drawY, knobR, paint);
+            return;
+        }
 
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeWidth(getDefaultStrokeWidth());
@@ -251,6 +293,11 @@ public class AnalogStick extends VirtualControllerElement {
                 break;
             }
         }
+    }
+
+    private static int stickWithAlpha(int rgb, float alpha) {
+        int a = Math.max(0, Math.min(255, Math.round(alpha * 255f)));
+        return (a << 24) | (rgb & 0x00FFFFFF);
     }
 
     private void updatePosition(long eventTime) {

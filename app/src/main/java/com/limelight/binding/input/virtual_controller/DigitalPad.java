@@ -10,6 +10,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.RectF;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
@@ -33,6 +34,7 @@ public class DigitalPad extends VirtualControllerElement {
 
     private static final int DPAD_MARGIN = 5;
     private final RectF rect = new RectF();
+    private final Path dpadPath = new Path();
 
     private final Paint paint = new Paint();
 
@@ -52,93 +54,59 @@ public class DigitalPad extends VirtualControllerElement {
         paint.setTextSize(getPercent(getCorrectWidth(), 20));
         paint.setTextAlign(Paint.Align.CENTER);
         paint.setStrokeWidth(getDefaultStrokeWidth());
-        //虚拟手柄皮肤 yuzu
+        //虚拟手柄皮肤 (Vector style)
         if(!PreferenceConfiguration.readPreferences(getContext()).enableOnScreenStyleOfficial) {
-            int oscOpacity=PreferenceConfiguration.readPreferences(getContext()).oscOpacity;
+            int oscOpacity = PreferenceConfiguration.readPreferences(getContext()).oscOpacity;
+            float opacityFactor = Math.max(0.05f, Math.min(1.0f, oscOpacity / 100f));
 
-            paint.setColor(isPressed() ? pressedColor:getDefaultColor());
-            rect.left = rect.top = paint.getStrokeWidth();
-            rect.right = getWidth() - rect.left;
-            rect.bottom = getHeight() - rect.top;
+            paint.setAntiAlias(true);
+            float w = getWidth();
+            float h = getHeight();
+            float cx = w * 0.5f;
+            float cy = h * 0.5f;
+            float minDim = Math.min(w, h);
+            float strokeW = Math.max(2f, minDim * 0.018f);
+            float outerR = Math.max(8f, (minDim - strokeW) * 0.5f - 4f);
+
+            // Outer translucent disc & crisp ring
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(dpadWithAlpha(0xFFFFFFFF, 0.16f * opacityFactor));
+            canvas.drawCircle(cx, cy, outerR, paint);
+
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(strokeW);
+            paint.setColor(dpadWithAlpha(0xFFFFFFFF, 0.45f * opacityFactor));
+            canvas.drawCircle(cx, cy, outerR, paint);
+
+            // Subtle center pivot ring
+            paint.setColor(dpadWithAlpha(0xFFFFFFFF, 0.25f * opacityFactor));
+            paint.setStrokeWidth(Math.max(1.5f, strokeW * 0.75f));
+            canvas.drawCircle(cx, cy, outerR * 0.18f, paint);
+
+            // 4 crisp directional petals (handles cardinals & diagonals smoothly)
+            boolean leftOn = (direction & DIGITAL_PAD_DIRECTION_LEFT) != 0;
+            boolean upOn = (direction & DIGITAL_PAD_DIRECTION_UP) != 0;
+            boolean rightOn = (direction & DIGITAL_PAD_DIRECTION_RIGHT) != 0;
+            boolean downOn = (direction & DIGITAL_PAD_DIRECTION_DOWN) != 0;
+
+            drawDpadPetal(canvas, cx, cy, outerR, -90f, upOn, opacityFactor, strokeW);
+            drawDpadPetal(canvas, cx, cy, outerR, 0f, rightOn, opacityFactor, strokeW);
+            drawDpadPetal(canvas, cx, cy, outerR, 90f, downOn, opacityFactor, strokeW);
+            drawDpadPetal(canvas, cx, cy, outerR, 180f, leftOn, opacityFactor, strokeW);
 
             boolean bIsMoving = virtualController.getControllerMode() == VirtualController.ControllerMode.MoveButtons;
             boolean bIsResizing = virtualController.getControllerMode() == VirtualController.ControllerMode.ResizeButtons;
             boolean bIsEnable = virtualController.getControllerMode() == VirtualController.ControllerMode.DisableEnableButtons;
 
             if (bIsMoving || bIsResizing || bIsEnable) {
+                paint.setColor(isPressed() ? pressedColor : getDefaultColor());
+                paint.setStrokeWidth(getDefaultStrokeWidth());
+                rect.left = rect.top = paint.getStrokeWidth();
+                rect.right = getWidth() - rect.left;
+                rect.bottom = getHeight() - rect.top;
                 paint.setStyle(Paint.Style.STROKE);
-                canvas.drawRect(rect,paint);
+                canvas.drawRect(rect, paint);
             }
-
-            if (direction == DIGITAL_PAD_DIRECTION_NO_DIRECTION) {
-                Drawable d = getResources().getDrawable(R.drawable.facebutton_dpad);
-                d.setBounds(5, 5, getWidth() - 5, getHeight() - 5);
-                d.setAlpha((int) (oscOpacity*2.55));
-                d.draw(canvas);
-            }
-
-            if (direction == DIGITAL_PAD_DIRECTION_UP) {
-                Drawable d = getResources().getDrawable(R.drawable.facebutton_dpad_up);
-                d.setBounds(5, 5, getWidth() - 5, getHeight() - 5);
-                d.setAlpha((int) (oscOpacity*2.55));
-                d.draw(canvas);
-            }
-
-            if (direction == DIGITAL_PAD_DIRECTION_DOWN) {
-                Drawable d = getResources().getDrawable(R.drawable.facebutton_dpad_up);
-                Drawable newD=rotateDrawable(d,180);
-                newD.setBounds(5, 5, getWidth() - 5, getHeight() - 5);
-                newD.setAlpha((int) (oscOpacity*2.55));
-                newD.draw(canvas);
-            }
-
-            if (direction == DIGITAL_PAD_DIRECTION_LEFT) {
-                Drawable d = getResources().getDrawable(R.drawable.facebutton_dpad_up);
-                Drawable newD=rotateDrawable(d,270);
-                newD.setBounds(5, 5, getWidth() - 5, getHeight() - 5);
-                newD.setAlpha((int) (oscOpacity*2.55));
-                newD.draw(canvas);
-            }
-
-            if (direction == DIGITAL_PAD_DIRECTION_RIGHT) {
-                Drawable d = getResources().getDrawable(R.drawable.facebutton_dpad_up);
-                Drawable newD=rotateDrawable(d,90);
-                newD.setBounds(5, 5, getWidth() - 5, getHeight() - 5);
-                newD.setAlpha((int) (oscOpacity*2.55));
-                newD.draw(canvas);
-            }
-            //right up
-            if((direction & DIGITAL_PAD_DIRECTION_RIGHT) > 0 && (direction & DIGITAL_PAD_DIRECTION_UP) > 0){
-                Drawable d = getResources().getDrawable(R.drawable.facebutton_dpad_up_right);
-                Drawable newD=rotateDrawable(d,90);
-                newD.setBounds(5, 5, getWidth() - 5, getHeight() - 5);
-                newD.setAlpha((int) (oscOpacity*2.55));
-                newD.draw(canvas);
-            }
-
-            if((direction & DIGITAL_PAD_DIRECTION_LEFT) > 0 && (direction & DIGITAL_PAD_DIRECTION_UP) > 0){
-                Drawable d = getResources().getDrawable(R.drawable.facebutton_dpad_up_right);
-                d.setBounds(5, 5, getWidth() - 5, getHeight() - 5);
-                d.setAlpha((int) (oscOpacity*2.55));
-                d.draw(canvas);
-            }
-
-            if((direction & DIGITAL_PAD_DIRECTION_RIGHT) > 0 && (direction & DIGITAL_PAD_DIRECTION_DOWN) > 0){
-                Drawable d = getResources().getDrawable(R.drawable.facebutton_dpad_up_right);
-                Drawable newD=rotateDrawable(d,180);
-                newD.setBounds(5, 5, getWidth() - 5, getHeight() - 5);
-                newD.setAlpha((int) (oscOpacity*2.55));
-                newD.draw(canvas);
-            }
-
-            if((direction & DIGITAL_PAD_DIRECTION_LEFT) > 0 && (direction & DIGITAL_PAD_DIRECTION_DOWN) > 0){
-                Drawable d = getResources().getDrawable(R.drawable.facebutton_dpad_up_right);
-                Drawable newD=rotateDrawable(d,270);
-                newD.setBounds(5, 5, getWidth() - 5, getHeight() - 5);
-                newD.setAlpha((int) (oscOpacity*2.55));
-                newD.draw(canvas);
-            }
-
             return;
         }
         //官方皮肤
@@ -245,6 +213,53 @@ public class DigitalPad extends VirtualControllerElement {
                 paint.getStrokeWidth()+DPAD_MARGIN, getPercent(getHeight(), 66),
                 paint
         );
+    }
+
+    private void drawDpadPetal(Canvas canvas, float cx, float cy, float outerR, float angleDeg,
+                               boolean active, float opacityFactor, float strokeW) {
+        canvas.save();
+        canvas.rotate(angleDeg, cx, cy);
+
+        // Sleek tapered rounded D-pad arm pointing along +X
+        float startX = cx + outerR * 0.25f;
+        float tipX = cx + outerR * 0.86f;
+        float shoulderX = cx + outerR * 0.72f;
+        float halfH = outerR * 0.21f;
+
+        dpadPath.reset();
+        dpadPath.moveTo(startX, -halfH * 0.78f);
+        dpadPath.lineTo(shoulderX, -halfH);
+        dpadPath.quadTo(tipX, -halfH * 0.35f, tipX, 0f);
+        dpadPath.quadTo(tipX, halfH * 0.35f, shoulderX, halfH);
+        dpadPath.lineTo(startX, halfH * 0.78f);
+        dpadPath.close();
+
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(dpadWithAlpha(0xFFFFFFFF, (active ? 0.62f : 0.16f) * opacityFactor));
+        canvas.drawPath(dpadPath, paint);
+
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(Math.max(1.5f, strokeW * 0.9f));
+        paint.setColor(dpadWithAlpha(0xFFFFFFFF, (active ? 0.95f : 0.45f) * opacityFactor));
+        canvas.drawPath(dpadPath, paint);
+
+        // Crisp inner directional chevron tick
+        float chevX = cx + outerR * 0.68f;
+        float chevBackX = cx + outerR * 0.56f;
+        float chevH = outerR * 0.10f;
+        paint.setStrokeCap(Paint.Cap.ROUND);
+        paint.setStrokeJoin(Paint.Join.ROUND);
+        paint.setStrokeWidth(Math.max(2f, strokeW));
+        paint.setColor(dpadWithAlpha(0xFFFFFFFF, (active ? 1.0f : 0.72f) * opacityFactor));
+        canvas.drawLine(chevBackX, -chevH, chevX, 0f, paint);
+        canvas.drawLine(chevX, 0f, chevBackX, chevH, paint);
+
+        canvas.restore();
+    }
+
+    private static int dpadWithAlpha(int rgb, float alpha) {
+        int a = Math.max(0, Math.min(255, Math.round(alpha * 255f)));
+        return (a << 24) | (rgb & 0x00FFFFFF);
     }
 
     public Drawable rotateDrawable(Drawable vectorDrawable, float angle) {

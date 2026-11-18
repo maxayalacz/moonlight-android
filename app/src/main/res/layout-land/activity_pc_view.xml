@@ -40,9 +40,22 @@
             android:cropToPadding="false"
             android:scaleType="centerInside"
             android:padding="12dp"
-            android:nextFocusForward="@id/manuallyAddPc"
+            android:nextFocusForward="@id/focusModeButton"
             android:background="@drawable/bg_oneui_glass_icon_button"
             android:src="@drawable/ic_help" />
+
+        <ImageButton
+            android:id="@+id/focusModeButton"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:layout_marginTop="4dp"
+            android:cropToPadding="false"
+            android:scaleType="centerInside"
+            android:padding="12dp"
+            android:nextFocusForward="@id/manuallyAddPc"
+            android:background="@drawable/bg_oneui_glass_icon_button"
+            android:contentDescription="@string/title_focus_mode"
+            android:src="@drawable/ic_focus_mode" />
 
         <ImageButton
             android:id="@+id/manuallyAddPc"
@@ -96,6 +109,35 @@
                 android:text="@string/searching_pc"/>
         </RelativeLayout>
 
+    </RelativeLayout>
+
+    <RelativeLayout
+        android:id="@+id/focusModeContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_alignParentBottom="true"
+        android:layout_alignParentTop="true"
+        android:layout_toRightOf="@+id/pcToolbarContainer"
+        android:layout_toEndOf="@+id/pcToolbarContainer"
+        android:visibility="gone">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/focusPagerRecycler"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:paddingTop="8dp"
+            android:paddingBottom="40dp" />
+
+        <LinearLayout
+            android:id="@+id/focusPageIndicator"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentBottom="true"
+            android:layout_centerHorizontal="true"
+            android:layout_marginBottom="14dp"
+            android:gravity="center"
+            android:orientation="horizontal" />
     </RelativeLayout>
 
     <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton

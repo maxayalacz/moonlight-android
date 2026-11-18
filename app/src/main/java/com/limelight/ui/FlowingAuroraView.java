@@ -5,10 +5,13 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.ColorFilter;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.PixelFormat;
+import android.graphics.PorterDuff;
+import android.graphics.PorterDuffXfermode;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
@@ -28,9 +31,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Continuous real-time motion-graphics backdrop featuring organic merging/separating
- * gradient metaballs and a live 2D plexus particle network, with configurable presets,
- * metaball sharpness, plexus dot density, and a shared pre-blurred buffer for
- * real-time frosted glass cards.
+ * gradient metaballs, a live 2D plexus particle network, and jujostream multi-ribbon
+ * additive sine waves, tinted by the user's selected AppThemePalette.
  */
 public class FlowingAuroraView extends View implements SharedPreferences.OnSharedPreferenceChangeListener {
     private static final String PREF_BACKDROP_STYLE = "list_backdrop_style";
@@ -40,6 +42,7 @@ public class FlowingAuroraView extends View implements SharedPreferences.OnShare
     private static final int FIELD_H = 128;
     private static final int MAX_NODES = 80;
     private static final int BLOB_COUNT = 5;
+    private static final int RIBBON_COUNT = 4;
 
     public enum CornerMode {
         ALL,
@@ -51,7 +54,8 @@ public class FlowingAuroraView extends View implements SharedPreferences.OnShare
     public enum BackdropStyle {
         BALANCED,
         BOLD_PLEXUS,
-        PLEXUS_HERO
+        PLEXUS_HERO,
+        WAVES
     }
 
     public enum MetaballSharpness {
@@ -79,8 +83,24 @@ public class FlowingAuroraView extends View implements SharedPreferences.OnShare
         float sizeDp;
     }
 
+    private static class RibbonComponent {
+        float cycle;
+        float amp;
+        float speed;
+        float phase;
+        float phaseOffset;
+    }
+
+    private static class Ribbon {
+        float thickness;
+        float fillAlpha;
+        float strokeAlpha;
+        final RibbonComponent[] components = new RibbonComponent[4];
+    }
+
     private final Blob[] blobs = new Blob[BLOB_COUNT];
     private final Node[] nodes = new Node[MAX_NODES];
+    private final Ribbon[] ribbons = new Ribbon[RIBBON_COUNT];
 
     private final Bitmap rawField = Bitmap.createBitmap(FIELD_W, FIELD_H, Bitmap.Config.ARGB_8888);
     private final Bitmap blurredField = Bitmap.createBitmap(FIELD_W, FIELD_H, Bitmap.Config.ARGB_8888);
@@ -92,11 +112,17 @@ public class FlowingAuroraView extends View implements SharedPreferences.OnShare
     private final Paint linePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint nodePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint nodeGlowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint waveFillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint waveStrokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Path wavePath = new Path();
     private final RectF fullDst = new RectF();
 
     private BackdropStyle style = BackdropStyle.BALANCED;
     private MetaballSharpness sharpness = MetaballSharpness.SOFT;
     private PlexusDensity plexusDensity = PlexusDensity.NORMAL;
+    private AppThemePalette palette = AppThemePalette.MIDNIGHT;
+    private boolean forceWaves = false;
+    private float waveElapsedSec = 0f;
     private ValueAnimator ticker;
     private long lastTickMs = 0L;
     private boolean fieldDirty = true;
@@ -122,14 +148,12 @@ public class FlowingAuroraView extends View implements SharedPreferences.OnShare
         nodePaint.setStyle(Paint.Style.FILL);
         nodeGlowPaint.setStyle(Paint.Style.FILL);
 
-        // 5 organic gradient metaballs (cyan, electric blue, violet, teal, indigo)
-        int[][] colors = {
-                {0, 212, 255},   // electric cyan
-                {59, 130, 246},  // electric blue
-                {139, 92, 246},  // vivid violet
-                {6, 182, 212},   // teal cyan
-                {99, 102, 241}   // indigo
-        };
+        PorterDuffXfermode addMode = new PorterDuffXfermode(PorterDuff.Mode.ADD);
+        waveFillPaint.setStyle(Paint.Style.FILL);
+        waveFillPaint.setXfermode(addMode);
+        waveStrokePaint.setStyle(Paint.Style.STROKE);
+        waveStrokePaint.setXfermode(addMode);
+
         float[][] initBlobs = {
                 {0.25f, 0.25f, 0.042f, 0.028f, 0.17f},
                 {0.75f, 0.35f, -0.036f, 0.034f, 0.16f},
@@ -144,9 +168,6 @@ public class FlowingAuroraView extends View implements SharedPreferences.OnShare
             b.vx = initBlobs[i][2];
             b.vy = initBlobs[i][3];
             b.radius = initBlobs[i][4];
-            b.r = colors[i][0];
-            b.g = colors[i][1];
-            b.b = colors[i][2];
             blobs[i] = b;
         }
 
@@ -164,16 +185,70 @@ public class FlowingAuroraView extends View implements SharedPreferences.OnShare
             nodes[i] = n;
         }
 
+        // Organic additive wave ribbons (matching jujostream _WaveOverlay / _WavePainter)
+        for (int i = 0; i < RIBBON_COUNT; i++) {
+            Ribbon r = new Ribbon();
+            r.thickness = rng.nextFloat() * 0.025f + 0.005f;
+            float decay = 1.0f - (i % 3) * 0.15f;
+            r.fillAlpha = 0.06f * decay;
+            r.strokeAlpha = 0.25f * decay;
+            for (int c = 0; c < r.components.length; c++) {
+                RibbonComponent rc = new RibbonComponent();
+                rc.cycle = (rng.nextFloat() * 1.5f + 0.2f) * (c * 0.6f + 1.0f);
+                rc.amp = (rng.nextFloat() * 0.25f + 0.05f) / (c * 0.4f + 1.0f);
+                rc.speed = rng.nextFloat() * 0.3f + 0.06f;
+                rc.phase = rng.nextFloat() * (float) (Math.PI * 2.0);
+                rc.phaseOffset = rng.nextFloat() * 0.6f + 0.1f;
+                r.components[c] = rc;
+            }
+            ribbons[i] = r;
+        }
+
         loadStyleFromPrefs(context);
+    }
+
+    private void applyPaletteToBlobs() {
+        int[] blobColors = {
+                palette.highlight,
+                palette.accentLight,
+                palette.accent,
+                palette.secondary,
+                palette.warm
+        };
+        for (int i = 0; i < BLOB_COUNT; i++) {
+            int c = blobColors[i];
+            blobs[i].r = Color.red(c);
+            blobs[i].g = Color.green(c);
+            blobs[i].b = Color.blue(c);
+        }
+    }
+
+    public void setForceWaves(boolean forceWaves) {
+        if (this.forceWaves != forceWaves) {
+            this.forceWaves = forceWaves;
+            invalidate();
+            notifyFrostedListeners();
+        }
+    }
+
+    public void refreshFromPrefs() {
+        loadStyleFromPrefs(getContext());
+        invalidate();
+        notifyFrostedListeners();
     }
 
     private void loadStyleFromPrefs(Context context) {
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+        palette = AppThemePalette.getCurrent(context);
+        applyPaletteToBlobs();
+
         String val = prefs.getString(PREF_BACKDROP_STYLE, "balanced");
         if ("bold_plexus".equals(val)) {
             style = BackdropStyle.BOLD_PLEXUS;
         } else if ("plexus_hero".equals(val)) {
             style = BackdropStyle.PLEXUS_HERO;
+        } else if ("waves".equals(val)) {
+            style = BackdropStyle.WAVES;
         } else {
             style = BackdropStyle.BALANCED;
         }
@@ -203,7 +278,8 @@ public class FlowingAuroraView extends View implements SharedPreferences.OnShare
     public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, @Nullable String key) {
         if (PREF_BACKDROP_STYLE.equals(key)
                 || PREF_METABALL_SHARPNESS.equals(key)
-                || PREF_PLEXUS_DENSITY.equals(key)) {
+                || PREF_PLEXUS_DENSITY.equals(key)
+                || AppThemePalette.PREF_COLOR_SCHEME.equals(key)) {
             loadStyleFromPrefs(getContext());
             invalidate();
             notifyFrostedListeners();
@@ -214,6 +290,8 @@ public class FlowingAuroraView extends View implements SharedPreferences.OnShare
         if (dt <= 0f) {
             return;
         }
+        waveElapsedSec += dt;
+
         // Step metaballs with soft boundary bounce
         for (Blob b : blobs) {
             b.x += b.vx * dt;
@@ -234,25 +312,27 @@ public class FlowingAuroraView extends View implements SharedPreferences.OnShare
             }
         }
 
-        // Step plexus nodes continuously
-        int activeNodes = getActiveNodeCount();
-        for (int i = 0; i < activeNodes; i++) {
-            Node n = nodes[i];
-            n.x += n.vx * dt;
-            n.y += n.vy * dt;
-            if (n.x < 0f) {
-                n.x = 0f;
-                n.vx = Math.abs(n.vx);
-            } else if (n.x > 1f) {
-                n.x = 1f;
-                n.vx = -Math.abs(n.vx);
-            }
-            if (n.y < 0f) {
-                n.y = 0f;
-                n.vy = Math.abs(n.vy);
-            } else if (n.y > 1f) {
-                n.y = 1f;
-                n.vy = -Math.abs(n.vy);
+        // Step plexus nodes continuously when plexus is visible
+        if (!forceWaves && style != BackdropStyle.WAVES) {
+            int activeNodes = getActiveNodeCount();
+            for (int i = 0; i < activeNodes; i++) {
+                Node n = nodes[i];
+                n.x += n.vx * dt;
+                n.y += n.vy * dt;
+                if (n.x < 0f) {
+                    n.x = 0f;
+                    n.vx = Math.abs(n.vx);
+                } else if (n.x > 1f) {
+                    n.x = 1f;
+                    n.vx = -Math.abs(n.vx);
+                }
+                if (n.y < 0f) {
+                    n.y = 0f;
+                    n.vy = Math.abs(n.vy);
+                } else if (n.y > 1f) {
+                    n.y = 1f;
+                    n.vy = -Math.abs(n.vy);
+                }
             }
         }
         fieldDirty = true;
@@ -283,7 +363,10 @@ public class FlowingAuroraView extends View implements SharedPreferences.OnShare
     private void renderMetaballField() {
         float blobStrength;
         float blobSoftness;
-        if (style == BackdropStyle.PLEXUS_HERO) {
+        if (forceWaves || style == BackdropStyle.WAVES) {
+            blobStrength = 0.42f;
+            blobSoftness = 1.20f;
+        } else if (style == BackdropStyle.PLEXUS_HERO) {
             blobStrength = 0.42f;
             blobSoftness = 0.85f;
         } else if (style == BackdropStyle.BOLD_PLEXUS) {
@@ -298,12 +381,12 @@ public class FlowingAuroraView extends View implements SharedPreferences.OnShare
         float threshLow;
         float threshSpan;
         float lowSlope;
-        if (sharpness == MetaballSharpness.SHARP) {
+        if (sharpness == MetaballSharpness.SHARP && !forceWaves && style != BackdropStyle.WAVES) {
             eps = 0.0006f;
             threshLow = 0.78f;
             threshSpan = 0.24f;
             lowSlope = 0.04f;
-        } else if (sharpness == MetaballSharpness.MEDIUM) {
+        } else if (sharpness == MetaballSharpness.MEDIUM && !forceWaves && style != BackdropStyle.WAVES) {
             eps = 0.0012f;
             threshLow = 0.56f;
             threshSpan = 0.48f;
@@ -316,7 +399,9 @@ public class FlowingAuroraView extends View implements SharedPreferences.OnShare
         }
 
         final float aspect = (float) getHeight() / Math.max(1f, (float) getWidth());
-        final int baseR = 5, baseG = 8, baseB = 18;
+        final int baseR = Color.red(palette.background);
+        final int baseG = Color.green(palette.background);
+        final int baseB = Color.blue(palette.background);
 
         for (int py = 0; py < FIELD_H; py++) {
             float ny = (py + 0.5f) / FIELD_H;
@@ -429,11 +514,75 @@ public class FlowingAuroraView extends View implements SharedPreferences.OnShare
         }
 
         fullDst.set(0f, 0f, w, h);
-        // Draw crisp or diffused metaball field depending on user sharpness setting
-        canvas.drawBitmap(sharpness == MetaballSharpness.SHARP ? rawField : blurredField, null, fullDst, bitmapPaint);
+        boolean useSharp = sharpness == MetaballSharpness.SHARP && !forceWaves && style != BackdropStyle.WAVES;
+        canvas.drawBitmap(useSharp ? rawField : blurredField, null, fullDst, bitmapPaint);
 
-        // Draw real-time 2D plexus network on top
-        drawPlexusNetwork(canvas, w, h);
+        if (forceWaves || style == BackdropStyle.WAVES) {
+            drawWaveRibbons(canvas, w, h);
+        } else {
+            // Draw real-time 2D plexus network on top
+            drawPlexusNetwork(canvas, w, h);
+        }
+    }
+
+    private void drawWaveRibbons(Canvas canvas, int w, int h) {
+        final float density = getResources().getDisplayMetrics().density;
+        final float baseY = 0.5f;
+        final float step = Math.max(4f, w / 120.0f);
+        final float time = waveElapsedSec;
+        final int waveBaseColor = palette.accentLight;
+        final int waveAltColor = palette.highlight;
+
+        waveStrokePaint.setStrokeWidth(2.0f * density);
+
+        for (int rIdx = 0; rIdx < RIBBON_COUNT; rIdx++) {
+            Ribbon ribbon = ribbons[rIdx];
+            int color = (rIdx % 2 == 0) ? waveBaseColor : waveAltColor;
+            waveFillPaint.setColor(AppThemePalette.withAlpha(color, ribbon.fillAlpha));
+            waveStrokePaint.setColor(AppThemePalette.withAlpha(color, ribbon.strokeAlpha));
+
+            wavePath.reset();
+            boolean first = true;
+            for (float x = 0f; x <= w + step; x += step) {
+                float nx = x / w;
+                float nodeDist = Math.abs(nx - 0.5f) * 2.0f;
+                float convergence = (float) Math.pow(nodeDist, 1.5) * 0.85f + 0.15f;
+
+                float y = h * baseY;
+                for (RibbonComponent comp : ribbon.components) {
+                    y += (float) Math.sin(nx * Math.PI * 2.0 * comp.cycle - time * comp.speed + comp.phase)
+                            * (h * comp.amp * convergence);
+                }
+
+                if (first) {
+                    wavePath.moveTo(x, y);
+                    first = false;
+                } else {
+                    wavePath.lineTo(x, y);
+                }
+            }
+
+            for (float x = w + step; x >= -step; x -= step) {
+                float nx = x / w;
+                float nodeDist = Math.abs(nx - 0.5f) * 2.0f;
+                float convergence = (float) Math.pow(nodeDist, 1.5) * 0.85f + 0.15f;
+
+                float dynamicThickness = ribbon.thickness
+                        + (float) Math.sin(nx * Math.PI * 2.0 - time * 0.9f) * (ribbon.thickness * 0.2f);
+                float y = h * baseY + (h * dynamicThickness);
+
+                for (RibbonComponent comp : ribbon.components) {
+                    y += (float) Math.sin(nx * Math.PI * 2.0 * comp.cycle - time * comp.speed
+                            + comp.phase + comp.phaseOffset)
+                            * (h * comp.amp * convergence);
+                }
+                wavePath.lineTo(x, y);
+            }
+
+            wavePath.close();
+            canvas.drawPath(wavePath, waveFillPaint);
+            canvas.drawPath(wavePath, waveStrokePaint);
+        }
     }
 
     private void drawPlexusNetwork(Canvas canvas, int w, int h) {
@@ -461,6 +610,10 @@ public class FlowingAuroraView extends View implements SharedPreferences.OnShare
         }
         linePaint.setStrokeWidth(lineWidthPx);
 
+        int lineRgb = palette.highlight & 0x00FFFFFF;
+        int glowRgb = palette.accent & 0x00FFFFFF;
+        int coreRgb = blendToLight(palette.accentLight) & 0x00FFFFFF;
+
         for (int i = 0; i < activeNodes; i++) {
             float x1 = nodes[i].x * w;
             float y1 = nodes[i].y * h;
@@ -473,7 +626,7 @@ public class FlowingAuroraView extends View implements SharedPreferences.OnShare
                 if (distSq < maxDistSq) {
                     float t = 1f - (float) Math.sqrt(distSq) / maxDist;
                     int alpha = Math.max(4, Math.round(maxLineAlpha * t * t));
-                    linePaint.setColor((alpha << 24) | 0x5CE1FF);
+                    linePaint.setColor((alpha << 24) | lineRgb);
                     canvas.drawLine(x1, y1, x2, y2, linePaint);
                 }
             }
@@ -483,11 +636,18 @@ public class FlowingAuroraView extends View implements SharedPreferences.OnShare
             float x = nodes[i].x * w;
             float y = nodes[i].y * h;
             float r = nodes[i].sizeDp * density;
-            nodeGlowPaint.setColor(((nodeAlpha / 4) << 24) | 0x38BDF8);
+            nodeGlowPaint.setColor(((nodeAlpha / 4) << 24) | glowRgb);
             canvas.drawCircle(x, y, r * 2.4f, nodeGlowPaint);
-            nodePaint.setColor((nodeAlpha << 24) | 0xE0F7FF);
+            nodePaint.setColor((nodeAlpha << 24) | coreRgb);
             canvas.drawCircle(x, y, r, nodePaint);
         }
+    }
+
+    private static int blendToLight(int color) {
+        int r = (Color.red(color) * 2 + 255 * 3) / 5;
+        int g = (Color.green(color) * 2 + 255 * 3) / 5;
+        int b = (Color.blue(color) * 2 + 255 * 3) / 5;
+        return 0xFF000000 | (r << 16) | (g << 8) | b;
     }
 
     public void registerFrostedDrawable(Drawable drawable) {
@@ -627,8 +787,14 @@ public class FlowingAuroraView extends View implements SharedPreferences.OnShare
             }
             if (active != isHighlighted) {
                 isHighlighted = active;
-                tintPaint.setColor(active ? 0x3DFFFFFF : frostTintColor);
-                strokePaint.setColor(active ? 0xB3FFFFFF : 0x52FFFFFF);
+                FlowingAuroraView aurora = auroraRef.get();
+                if (active && aurora != null) {
+                    tintPaint.setColor(AppThemePalette.withAlpha(aurora.palette.accent, 0.22f));
+                    strokePaint.setColor(AppThemePalette.withAlpha(aurora.palette.accentLight, 0.90f));
+                } else {
+                    tintPaint.setColor(active ? 0x3DFFFFFF : frostTintColor);
+                    strokePaint.setColor(active ? 0xB3FFFFFF : 0x52FFFFFF);
+                }
                 invalidateSelf();
                 return true;
             }

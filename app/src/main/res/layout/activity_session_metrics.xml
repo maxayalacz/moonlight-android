@@ -1,0 +1,370 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/metricsRootBackdrop"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:paddingHorizontal="12dp"
+    android:paddingVertical="10dp">
+
+    <LinearLayout
+        android:id="@+id/metricsCardContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:clipToOutline="true"
+        android:elevation="12dp"
+        android:orientation="vertical">
+
+        <ScrollView
+            android:id="@+id/metricsScrollView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:clipToPadding="false"
+            android:fadeScrollbars="true"
+            android:paddingHorizontal="16dp"
+            android:paddingTop="14dp"
+            android:paddingBottom="16dp"
+            android:scrollbars="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <!-- Header Row -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="top"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:letterSpacing="-0.02"
+                            android:text="@string/session_metrics_title"
+                            android:textColor="#FFFFFFFF"
+                            android:textSize="17sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/metricsAppName"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:ellipsize="end"
+                            android:maxLines="1"
+                            android:textColor="#E6FFFFFF"
+                            android:textSize="13sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/metricsShareButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="6dp"
+                        android:background="?android:attr/selectableItemBackgroundBorderless"
+                        android:clickable="true"
+                        android:contentDescription="@string/session_metrics_share"
+                        android:focusable="true"
+                        android:gravity="center_vertical"
+                        android:minHeight="32dp"
+                        android:orientation="horizontal"
+                        android:paddingHorizontal="6dp"
+                        android:paddingVertical="4dp">
+
+                        <ImageView
+                            android:layout_width="18dp"
+                            android:layout_height="18dp"
+                            android:alpha="0.80"
+                            android:contentDescription="@string/session_metrics_share"
+                            android:src="@drawable/ic_share" />
+
+                        <TextView
+                            android:id="@+id/metricsShareKeyHint"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="4dp"
+                            android:alpha="0.65"
+                            android:text="Y"
+                            android:textColor="#FFFFFFFF"
+                            android:textSize="10sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/metricsCloseButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="?android:attr/selectableItemBackgroundBorderless"
+                        android:clickable="true"
+                        android:contentDescription="@android:string/cancel"
+                        android:focusable="true"
+                        android:gravity="center_vertical"
+                        android:minHeight="32dp"
+                        android:orientation="horizontal"
+                        android:paddingHorizontal="4dp"
+                        android:paddingVertical="4dp">
+
+                        <TextView
+                            android:id="@+id/metricsCountdownText"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginEnd="5dp"
+                            android:textColor="#66FFFFFF"
+                            android:textSize="11sp"
+                            android:textStyle="bold" />
+
+                        <ImageView
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:alpha="0.72"
+                            android:contentDescription="@android:string/cancel"
+                            android:src="@drawable/ic_close" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <!-- Config Strip -->
+                <TextView
+                    android:id="@+id/metricsConfigText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:lineSpacingExtra="2dp"
+                    android:textColor="#99FFFFFF"
+                    android:textSize="11sp" />
+
+                <!-- Divider -->
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginTop="9dp"
+                    android:layout_marginBottom="10dp"
+                    android:background="#12FFFFFF" />
+
+                <!-- Summary Cards Row -->
+                <HorizontalScrollView
+                    android:id="@+id/metricsSummaryScroll"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:clipToPadding="false"
+                    android:overScrollMode="ifContentScrolls"
+                    android:scrollbars="none">
+
+                    <LinearLayout
+                        android:id="@+id/metricsSummaryRow"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal" />
+                </HorizontalScrollView>
+
+                <!-- 2x2 Charts Grid -->
+                <LinearLayout
+                    android:id="@+id/metricsChartsGrid"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:orientation="vertical">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:baselineAligned="false"
+                        android:orientation="horizontal">
+
+                        <!-- FPS Panel -->
+                        <LinearLayout
+                            android:id="@+id/metricsFpsPanel"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginEnd="4.5dp"
+                            android:layout_weight="1"
+                            android:orientation="vertical"
+                            android:paddingHorizontal="10dp"
+                            android:paddingTop="9dp"
+                            android:paddingBottom="8dp">
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal">
+
+                                <TextView
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:text="FPS"
+                                    android:textColor="#FFFFFFFF"
+                                    android:textSize="11sp"
+                                    android:textStyle="bold" />
+
+                                <TextView
+                                    android:id="@+id/metricsFpsBadge"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:paddingHorizontal="6dp"
+                                    android:paddingVertical="2dp"
+                                    android:textSize="10sp"
+                                    android:textStyle="bold" />
+                            </LinearLayout>
+
+                            <com.limelight.ui.MetricChartView
+                                android:id="@+id/metricsFpsChart"
+                                android:layout_width="match_parent"
+                                android:layout_height="84dp"
+                                android:layout_marginTop="7dp" />
+                        </LinearLayout>
+
+                        <!-- Decode Panel -->
+                        <LinearLayout
+                            android:id="@+id/metricsDecodePanel"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="4.5dp"
+                            android:layout_weight="1"
+                            android:orientation="vertical"
+                            android:paddingHorizontal="10dp"
+                            android:paddingTop="9dp"
+                            android:paddingBottom="8dp">
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal">
+
+                                <TextView
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:text="Decode"
+                                    android:textColor="#FFFFFFFF"
+                                    android:textSize="11sp"
+                                    android:textStyle="bold" />
+
+                                <TextView
+                                    android:id="@+id/metricsDecodeBadge"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:paddingHorizontal="6dp"
+                                    android:paddingVertical="2dp"
+                                    android:textSize="10sp"
+                                    android:textStyle="bold" />
+                            </LinearLayout>
+
+                            <com.limelight.ui.MetricChartView
+                                android:id="@+id/metricsDecodeChart"
+                                android:layout_width="match_parent"
+                                android:layout_height="84dp"
+                                android:layout_marginTop="7dp" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="9dp"
+                        android:baselineAligned="false"
+                        android:orientation="horizontal">
+
+                        <!-- Bitrate Panel -->
+                        <LinearLayout
+                            android:id="@+id/metricsBitratePanel"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginEnd="4.5dp"
+                            android:layout_weight="1"
+                            android:orientation="vertical"
+                            android:paddingHorizontal="10dp"
+                            android:paddingTop="9dp"
+                            android:paddingBottom="8dp">
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal">
+
+                                <TextView
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:text="@string/session_metrics_bitrate"
+                                    android:textColor="#FFFFFFFF"
+                                    android:textSize="11sp"
+                                    android:textStyle="bold" />
+
+                                <TextView
+                                    android:id="@+id/metricsBitrateBadge"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:paddingHorizontal="6dp"
+                                    android:paddingVertical="2dp"
+                                    android:textSize="10sp"
+                                    android:textStyle="bold" />
+                            </LinearLayout>
+
+                            <com.limelight.ui.MetricChartView
+                                android:id="@+id/metricsBitrateChart"
+                                android:layout_width="match_parent"
+                                android:layout_height="84dp"
+                                android:layout_marginTop="7dp" />
+                        </LinearLayout>
+
+                        <!-- Drop % Panel -->
+                        <LinearLayout
+                            android:id="@+id/metricsDropPanel"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="4.5dp"
+                            android:layout_weight="1"
+                            android:orientation="vertical"
+                            android:paddingHorizontal="10dp"
+                            android:paddingTop="9dp"
+                            android:paddingBottom="8dp">
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal">
+
+                                <TextView
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:text="@string/session_metrics_drop_pct"
+                                    android:textColor="#FFFFFFFF"
+                                    android:textSize="11sp"
+                                    android:textStyle="bold" />
+
+                                <TextView
+                                    android:id="@+id/metricsDropBadge"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:paddingHorizontal="6dp"
+                                    android:paddingVertical="2dp"
+                                    android:textSize="10sp"
+                                    android:textStyle="bold" />
+                            </LinearLayout>
+
+                            <com.limelight.ui.MetricChartView
+                                android:id="@+id/metricsDropChart"
+                                android:layout_width="match_parent"
+                                android:layout_height="84dp"
+                                android:layout_marginTop="7dp" />
+                        </LinearLayout>
+                    </LinearLayout>
+                </LinearLayout>
+            </LinearLayout>
+        </ScrollView>
+    </LinearLayout>
+</FrameLayout>

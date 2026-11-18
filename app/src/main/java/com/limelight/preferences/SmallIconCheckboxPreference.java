@@ -6,9 +6,9 @@ import android.util.AttributeSet;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.preference.CheckBoxPreference;
+import androidx.preference.SwitchPreferenceCompat;
 
-public class SmallIconCheckboxPreference extends CheckBoxPreference {
+public class SmallIconCheckboxPreference extends SwitchPreferenceCompat {
     public SmallIconCheckboxPreference(@NonNull Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
     }

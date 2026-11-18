@@ -24,6 +24,9 @@ import com.limelight.preferences.StreamSettings;
 import com.limelight.profiles.ProfilesManager;
 import com.limelight.ui.AdapterFragment;
 import com.limelight.ui.AdapterFragmentCallbacks;
+import com.limelight.ui.AppThemePalette;
+import com.limelight.ui.FlowingAuroraView;
+import com.limelight.ui.FocusPcAdapter;
 import com.limelight.utils.Dialog;
 import com.limelight.utils.HelpLauncher;
 import com.limelight.utils.ServerHelper;
@@ -37,7 +40,9 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.content.SharedPreferences;
 import android.content.res.Configuration;
+import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.opengl.GLSurfaceView;
 import android.os.Build;
@@ -47,6 +52,7 @@ import android.provider.Settings;
 import android.text.InputFilter;
 import android.text.InputType;
 import android.view.ContextMenu;
+import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -62,16 +68,34 @@ import android.widget.RelativeLayout;
 import android.widget.Toast;
 import android.widget.AdapterView.AdapterContextMenuInfo;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.preference.PreferenceManager;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.PagerSnapHelper;
+import androidx.recyclerview.widget.RecyclerView;
 
 import org.xmlpull.v1.XmlPullParserException;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
 
 public class PcView extends AppCompatActivity implements AdapterFragmentCallbacks {
+    private static final String PREF_FOCUS_MODE = "checkbox_focus_mode";
+
     private RelativeLayout noPcFoundLayout;
+    private View pcFragmentContainerView;
+    private View focusModeContainer;
+    private RecyclerView focusPagerRecycler;
+    private LinearLayout focusPageIndicator;
+    private ImageButton focusModeButton;
+    private FocusPcAdapter focusPcAdapter;
+    private PagerSnapHelper focusSnapHelper;
+    private int currentFocusPage = 0;
+
     private PcGridAdapter pcGridAdapter;
     private ShortcutHelper shortcutHelper;
     private ComputerManagerService.ComputerManagerBinder managerBinder;
@@ -159,6 +183,7 @@ public class PcView extends AppCompatActivity implements AdapterFragmentCallback
         ImageButton settingsButton = findViewById(R.id.settingsButton);
         ImageButton addComputerButton = findViewById(R.id.manuallyAddPc);
         ImageButton helpButton = findViewById(R.id.helpButton);
+        focusModeButton = findViewById(R.id.focusModeButton);
         ExtendedFloatingActionButton profilesButton = findViewById(R.id.profilesButton);
 
         settingsButton.setOnClickListener(new OnClickListener() {
@@ -180,6 +205,17 @@ public class PcView extends AppCompatActivity implements AdapterFragmentCallback
                 HelpLauncher.launchSetupGuide(PcView.this);
             }
         });
+        if (focusModeButton != null) {
+            focusModeButton.setOnClickListener(new OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(PcView.this);
+                    boolean next = !prefs.getBoolean(PREF_FOCUS_MODE, false);
+                    prefs.edit().putBoolean(PREF_FOCUS_MODE, next).apply();
+                    updateFocusModeUi();
+                }
+            });
+        }
         profilesButton.setOnClickListener(new OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -192,6 +228,55 @@ public class PcView extends AppCompatActivity implements AdapterFragmentCallback
         // it on Fire TV.
         if (getPackageManager().hasSystemFeature("amazon.hardware.fire_tv")) {
             helpButton.setVisibility(View.GONE);
+        }
+
+        pcFragmentContainerView = findViewById(R.id.pcFragmentContainer);
+        focusModeContainer = findViewById(R.id.focusModeContainer);
+        focusPagerRecycler = findViewById(R.id.focusPagerRecycler);
+        focusPageIndicator = findViewById(R.id.focusPageIndicator);
+
+        if (focusPagerRecycler != null) {
+            final LinearLayoutManager focusLm = new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false);
+            focusPagerRecycler.setLayoutManager(focusLm);
+            if (findViewById(R.id.oneuiHeaderContainer) != null) {
+                int topPad = getResources().getDimensionPixelSize(R.dimen.oneui_reachability_top_margin)
+                        + (int) UiHelper.dpToPx(this, 78f);
+                focusPagerRecycler.setPadding(
+                        focusPagerRecycler.getPaddingLeft(),
+                        topPad,
+                        focusPagerRecycler.getPaddingRight(),
+                        focusPagerRecycler.getPaddingBottom());
+            }
+            UiHelper.applyStatusBarPadding(focusPagerRecycler);
+            focusSnapHelper = new PagerSnapHelper();
+            focusSnapHelper.attachToRecyclerView(focusPagerRecycler);
+            focusPcAdapter = new FocusPcAdapter(new FocusPcAdapter.Callbacks() {
+                @Override
+                public void onPcClicked(int position) {
+                    handlePcPrimaryAction(position);
+                }
+
+                @Override
+                public void onPcOptionsClicked(int position) {
+                    openPcContextMenu(position);
+                }
+            });
+            focusPagerRecycler.setAdapter(focusPcAdapter);
+            focusPagerRecycler.addOnScrollListener(new RecyclerView.OnScrollListener() {
+                @Override
+                public void onScrollStateChanged(@NonNull RecyclerView recyclerView, int newState) {
+                    if (newState == RecyclerView.SCROLL_STATE_IDLE) {
+                        updateCurrentFocusPageFromSnap(focusLm);
+                    }
+                }
+
+                @Override
+                public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
+                    if (dx != 0) {
+                        updateCurrentFocusPageFromSnap(focusLm);
+                    }
+                }
+            });
         }
 
         getFragmentManager().beginTransaction()
@@ -207,6 +292,7 @@ public class PcView extends AppCompatActivity implements AdapterFragmentCallback
             noPcFoundLayout.setVisibility(View.INVISIBLE);
         }
         pcGridAdapter.notifyDataSetChanged();
+        syncFocusAdapterAndUi();
     }
 
     @Override
@@ -373,14 +459,165 @@ public class PcView extends AppCompatActivity implements AdapterFragmentCallback
     @Override
     protected void onResume() {
         super.onResume();
+        UiHelper.refreshBackdrop(this);
 
         // Display a decoder crash notification if we've returned after a crash
         UiHelper.showDecoderCrashDialog(this);
 
         refreshProfileButton();
+        syncFocusAdapterAndUi();
 
         inForeground = true;
         startComputerUpdates();
+    }
+
+    private void syncFocusAdapterAndUi() {
+        if (focusPcAdapter != null && pcGridAdapter != null) {
+            List<ComputerObject> list = new ArrayList<>(pcGridAdapter.getCount());
+            for (int i = 0; i < pcGridAdapter.getCount(); i++) {
+                Object item = pcGridAdapter.getItem(i);
+                if (item instanceof ComputerObject) {
+                    list.add((ComputerObject) item);
+                }
+            }
+            focusPcAdapter.submitComputers(list);
+            if (currentFocusPage >= list.size()) {
+                currentFocusPage = Math.max(0, list.size() - 1);
+            }
+            focusPcAdapter.setActivePage(currentFocusPage);
+        }
+        updateFocusModeUi();
+    }
+
+    private void updateFocusModeUi() {
+        boolean focusMode = PreferenceManager.getDefaultSharedPreferences(this)
+                .getBoolean(PREF_FOCUS_MODE, false);
+        AppThemePalette palette = AppThemePalette.getCurrent(this);
+
+        View rootView = findViewById(android.R.id.content);
+        if (rootView != null) {
+            View aurora = rootView.findViewWithTag("oneui_flowing_aurora");
+            if (aurora instanceof FlowingAuroraView) {
+                ((FlowingAuroraView) aurora).setForceWaves(focusMode);
+            }
+        }
+
+        if (focusModeButton != null) {
+            focusModeButton.setColorFilter(focusMode ? palette.accentLight : 0xFFFFFFFF);
+            focusModeButton.setAlpha(focusMode ? 1.0f : 0.85f);
+        }
+
+        boolean hasComputers = pcGridAdapter != null && pcGridAdapter.getCount() > 0;
+        if (focusMode && hasComputers) {
+            if (focusModeContainer != null) {
+                focusModeContainer.setVisibility(View.VISIBLE);
+            }
+            if (pcFragmentContainerView != null) {
+                pcFragmentContainerView.setVisibility(View.GONE);
+            }
+            updateFocusPageIndicator();
+        } else {
+            if (focusModeContainer != null) {
+                focusModeContainer.setVisibility(View.GONE);
+            }
+            if (pcFragmentContainerView != null) {
+                pcFragmentContainerView.setVisibility(View.VISIBLE);
+            }
+        }
+    }
+
+    private void updateCurrentFocusPageFromSnap(LinearLayoutManager lm) {
+        if (focusSnapHelper == null || lm == null || focusPcAdapter == null) {
+            return;
+        }
+        View snapped = focusSnapHelper.findSnapView(lm);
+        if (snapped == null) {
+            return;
+        }
+        int pos = lm.getPosition(snapped);
+        if (pos != RecyclerView.NO_POSITION && pos != currentFocusPage) {
+            currentFocusPage = pos;
+            focusPcAdapter.setActivePage(pos);
+            updateFocusPageIndicator();
+        }
+    }
+
+    private void updateFocusPageIndicator() {
+        if (focusPageIndicator == null || focusPcAdapter == null) {
+            return;
+        }
+        int count = focusPcAdapter.getItemCount();
+        focusPageIndicator.removeAllViews();
+        if (count <= 1) {
+            focusPageIndicator.setVisibility(View.GONE);
+            return;
+        }
+        focusPageIndicator.setVisibility(View.VISIBLE);
+        AppThemePalette palette = AppThemePalette.getCurrent(this);
+        int dotH = Math.round(UiHelper.dpToPx(this, 8f));
+        int dotWInactive = Math.round(UiHelper.dpToPx(this, 8f));
+        int dotWActive = Math.round(UiHelper.dpToPx(this, 24f));
+        int margin = Math.round(UiHelper.dpToPx(this, 4f));
+
+        for (int i = 0; i < count; i++) {
+            final int targetIndex = i;
+            boolean active = (i == currentFocusPage);
+            View dot = new View(this);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    active ? dotWActive : dotWInactive, dotH);
+            lp.setMargins(margin, 0, margin, 0);
+            dot.setLayoutParams(lp);
+            GradientDrawable bg = new GradientDrawable();
+            bg.setCornerRadius(dotH * 0.5f);
+            bg.setColor(active ? palette.accentLight : 0x3DFFFFFF);
+            dot.setBackground(bg);
+            dot.setOnClickListener(v -> {
+                if (focusPagerRecycler != null) {
+                    focusPagerRecycler.smoothScrollToPosition(targetIndex);
+                }
+            });
+            focusPageIndicator.addView(dot);
+        }
+    }
+
+    private void handlePcPrimaryAction(int pos) {
+        if (pcGridAdapter == null || pos < 0 || pos >= pcGridAdapter.getCount()) {
+            return;
+        }
+        ComputerObject computer = (ComputerObject) pcGridAdapter.getItem(pos);
+        if (computer == null) {
+            return;
+        }
+        if (computer.details.state == ComputerDetails.State.UNKNOWN ||
+                computer.details.state == ComputerDetails.State.OFFLINE) {
+            openPcContextMenu(pos);
+        } else if (computer.details.pairState != PairState.PAIRED) {
+            doPair(computer.details, null, null);
+        } else {
+            doAppList(computer.details, false, false);
+        }
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (event.getAction() == KeyEvent.ACTION_DOWN
+                && focusModeContainer != null
+                && focusModeContainer.getVisibility() == View.VISIBLE
+                && focusPcAdapter != null
+                && focusPcAdapter.getItemCount() > 0) {
+            int code = event.getKeyCode();
+            if ((code == KeyEvent.KEYCODE_BUTTON_X || code == KeyEvent.KEYCODE_MENU)
+                    && currentFocusPage < focusPcAdapter.getItemCount()) {
+                openPcContextMenu(currentFocusPage);
+                return true;
+            }
+            if ((code == KeyEvent.KEYCODE_BUTTON_Y)
+                    && focusModeButton != null) {
+                focusModeButton.performClick();
+                return true;
+            }
+        }
+        return super.dispatchKeyEvent(event);
     }
 
     @Override
@@ -927,6 +1164,7 @@ public class PcView extends AppCompatActivity implements AdapterFragmentCallback
                 break;
             }
         }
+        syncFocusAdapterAndUi();
     }
 
     private void updateComputer(ComputerDetails details) {
@@ -956,6 +1194,7 @@ public class PcView extends AppCompatActivity implements AdapterFragmentCallback
 
         // Notify the view that the data has changed
         pcGridAdapter.notifyDataSetChanged();
+        syncFocusAdapterAndUi();
     }
 
     @Override
@@ -970,17 +1209,7 @@ public class PcView extends AppCompatActivity implements AdapterFragmentCallback
             @Override
             public void onItemClick(AdapterView<?> arg0, View arg1, int pos,
                                     long id) {
-                ComputerObject computer = (ComputerObject) pcGridAdapter.getItem(pos);
-                if (computer.details.state == ComputerDetails.State.UNKNOWN ||
-                    computer.details.state == ComputerDetails.State.OFFLINE) {
-                    // Open the context menu if a PC is offline or refreshing
-                    openPcContextMenu(pos);
-                } else if (computer.details.pairState != PairState.PAIRED) {
-                    // Pair an unpaired machine by default
-                    doPair(computer.details, null, null);
-                } else {
-                    doAppList(computer.details, false, false);
-                }
+                handlePcPrimaryAction(pos);
             }
         });
         if (findViewById(R.id.oneuiHeaderContainer) != null) {

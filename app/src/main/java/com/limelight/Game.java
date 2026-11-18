@@ -42,6 +42,7 @@ import com.limelight.preferences.PreferenceConfiguration;
 import com.limelight.profiles.ProfilesManager;
 import com.limelight.ui.ExternalControllerView;
 import com.limelight.ui.GameGestures;
+import com.limelight.ui.SessionMetricsStore;
 import com.limelight.ui.StreamContainer;
 import com.limelight.utils.Dialog;
 import com.limelight.utils.ExternalDisplayControlActivity;
@@ -232,6 +233,7 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
 
     private MediaCodecDecoderRenderer decoderRenderer;
     private boolean reportedCrash;
+    private boolean launchedSessionMetrics = false;
 
     private WifiManager.WifiLock highPerfWifiLock;
     private WifiManager.WifiLock lowLatencyWifiLock;
@@ -778,6 +780,16 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
         if (prefConfig.framePacingWarpFactor > 0) {
             chosenFrameRate *= prefConfig.framePacingWarpFactor;
         }
+
+        SessionMetricsStore.startSession(
+                appName,
+                displayWidth,
+                displayHeight,
+                Math.round(chosenFrameRate),
+                Math.round((isMetered ? prefConfig.meteredBitrate : prefConfig.bitrate) / 1000f),
+                willStreamHdr,
+                PreferenceConfiguration.getSelectedFramePacingName(this));
+        decoderRenderer.setSessionMetricsListener(SessionMetricsStore::recordSample);
 
         StreamConfiguration config = new StreamConfiguration.Builder()
                 .setResolution(
@@ -1961,6 +1973,7 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
 
                     // Quit
                     case KeyEvent.KEYCODE_Q:
+                        maybeLaunchSessionMetrics();
                         finish();
                         break;
 
@@ -3641,6 +3654,7 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
                                 message, true);
                     }
                     else {
+                        maybeLaunchSessionMetrics();
                         finish();
                     }
                 }
@@ -3995,6 +4009,7 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
             showGameMenu(null);
             return;
         }
+        maybeLaunchSessionMetrics();
         super.onBackPressed();
     }
 
@@ -4233,10 +4248,21 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
         prefConfig.enableTouchSensitivity = !prefConfig.enableTouchSensitivity;
     }
 
+    private void maybeLaunchSessionMetrics() {
+        if (launchedSessionMetrics || reportedCrash || isFinishing()) {
+            return;
+        }
+        if (prefConfig != null && prefConfig.enablePostSessionMetrics && SessionMetricsStore.hasEnoughData()) {
+            launchedSessionMetrics = true;
+            startActivity(new Intent(this, SessionMetricsActivity.class));
+        }
+    }
+
     public void disconnect() {
         if (prefConfig.smartClipboardSync) {
             getClipboard(-1);
         }
+        maybeLaunchSessionMetrics();
         finish();
     }
 
@@ -4254,6 +4280,7 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
         builder.setPositiveButton(getString(R.string.yes), (dialog, which) -> {
             quitOnStop = true;
             dialog.dismiss();
+            maybeLaunchSessionMetrics();
             finish();
         });
 

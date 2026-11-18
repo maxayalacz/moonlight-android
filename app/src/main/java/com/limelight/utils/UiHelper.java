@@ -890,6 +890,20 @@ public class UiHelper {
         }
     }
 
+    public static void refreshBackdrop(Activity activity) {
+        if (activity == null) {
+            return;
+        }
+        View rootView = activity.findViewById(android.R.id.content);
+        if (rootView == null) {
+            return;
+        }
+        View aurora = rootView.findViewWithTag("oneui_flowing_aurora");
+        if (aurora instanceof com.limelight.ui.FlowingAuroraView) {
+            ((com.limelight.ui.FlowingAuroraView) aurora).refreshFromPrefs();
+        }
+    }
+
     public static void notifyNewRootView(final Activity activity)
     {
         View rootView = activity.findViewById(android.R.id.content);

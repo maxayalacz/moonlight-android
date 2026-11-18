@@ -250,26 +250,55 @@ public class AnalogStickFree extends VirtualControllerElement {
             canvas.drawText(strStickSide, nWidth / 2, nHeight / 2, paint);
         }
 
+        paint.setAntiAlias(true);
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeWidth(getDefaultStrokeWidth());
 
         if (bIsFingerOnScreen) {
-            // set transparent background
             canvas.drawColor(Color.TRANSPARENT);
-            //canvas.drawCircle(touchX, touchY, 50, paint);
+            PreferenceConfiguration cfg = PreferenceConfiguration.readPreferences(getContext());
+            float opacityFactor = Math.max(0.08f, Math.min(1.0f, cfg.oscOpacity / 100f));
 
-            // draw outer circle
-//            if (!isPressed() || click_state == CLICK_STATE.SINGLE) {
-//                //paint.setColor(getDefaultColor());
-//            } else {
-//                //paint.setColor(pressedColor);
-//            }
-//            //canvas.drawCircle(getWidth() / 2, getHeight() / 2, radius_complete, paint);
-//
-//            //paint.setColor(getDefaultColor());
-//            // draw dead zone
-//            //canvas.drawCircle(getWidth() / 2, getHeight() / 2, radius_dead_zone, paint);
-            // draw stick depending on state
+            if (!cfg.enableOnScreenStyleOfficial) {
+                switch (stick_state) {
+                    case NO_MOVEMENT: {
+                        paint.setStyle(Paint.Style.FILL);
+                        paint.setColor(freeStickWithAlpha(0xFFFFFFFF, 0.55f * opacityFactor));
+                        canvas.drawCircle(getWidth() * 0.5f, getHeight() * 0.5f, radius_analog_stick * 1.25f, paint);
+                        break;
+                    }
+                    case MOVED_IN_DEAD_ZONE:
+                    case MOVED_ACTIVE: {
+                        paint.setStyle(Paint.Style.FILL);
+                        paint.setColor(bgCircleColor);
+                        canvas.drawCircle(touchStartX, touchStartY, radius_complete, paint);
+
+                        paint.setStyle(Paint.Style.STROKE);
+                        paint.setStrokeWidth(Math.max(2f, getDefaultStrokeWidth()));
+                        paint.setColor(freeStickWithAlpha(0xFFFFFFFF, 0.45f * opacityFactor));
+                        canvas.drawCircle(touchStartX, touchStartY, radius_complete, paint);
+
+                        paint.setStrokeWidth(Math.max(1.5f, getDefaultStrokeWidth() * 0.7f));
+                        paint.setColor(freeStickWithAlpha(0xFFFFFFFF, 0.18f * opacityFactor));
+                        canvas.drawCircle(touchStartX, touchStartY, radius_dead_zone, paint);
+
+                        float knobR = Math.max(radius_analog_stick * 1.25f, radius_complete * 0.34f);
+                        int knobRgb = (isPressed() && click_state == CLICK_STATE.DOUBLE)
+                                ? com.limelight.ui.AppThemePalette.getCurrent(getContext()).accentLight
+                                : 0xFFFFFFFF;
+                        paint.setStyle(Paint.Style.FILL);
+                        paint.setColor(freeStickWithAlpha(knobRgb, 0.72f * opacityFactor));
+                        canvas.drawCircle(position_stick_x, position_stick_y, knobR, paint);
+
+                        paint.setStyle(Paint.Style.STROKE);
+                        paint.setColor(freeStickWithAlpha(knobRgb, 0.88f * opacityFactor));
+                        canvas.drawCircle(position_stick_x, position_stick_y, knobR, paint);
+                        break;
+                    }
+                }
+                return;
+            }
+
             switch (stick_state) {
                 case NO_MOVEMENT: {
                     paint.setColor(Color.MAGENTA);
@@ -279,32 +308,23 @@ public class AnalogStickFree extends VirtualControllerElement {
 
                 case MOVED_IN_DEAD_ZONE:
                 case MOVED_ACTIVE: {
-
                     paint.setColor(bgCircleColor);
-
                     paint.setStyle(Paint.Style.FILL_AND_STROKE);
-
                     canvas.drawCircle(touchStartX, touchStartY, radius_complete, paint);
 
                     paint.setStyle(Paint.Style.STROKE);
-
                     paint.setColor(strokeCircleColor);
-
-                    // draw start touch point circle
                     canvas.drawCircle(touchStartX, touchStartY, radius_dead_zone, paint);
-                    //paint.setColor(Color.RED);
-                    // line from start point to current touch point
-//                    canvas.drawLine(touchStartX, touchStartY, position_stick_x, position_stick_y, paint);
-
-                    //paint.setColor(pressedColor);
                     canvas.drawCircle(position_stick_x, position_stick_y, radius_analog_stick, paint);
-//                    float distance = (float) Math.sqrt(Math.pow(touchStartY - position_stick_y, 2) + Math.pow(touchStartX - position_stick_x, 2));
-
-//                    canvas.drawCircle(touchStartX, touchStartY, touchMaxDistance, paint);
                     break;
                 }
             }
         }
+    }
+
+    private static int freeStickWithAlpha(int rgb, float alpha) {
+        int a = Math.max(0, Math.min(255, Math.round(alpha * 255f)));
+        return (a << 24) | (rgb & 0x00FFFFFF);
     }
 
     private int bgCircleColor=0x2BF5F5F9;

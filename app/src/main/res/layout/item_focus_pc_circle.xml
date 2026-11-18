@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:focusable="true"
+    android:clickable="true"
+    android:descendantFocusability="afterDescendants">
+
+    <LinearLayout
+        android:id="@+id/focusItemContent"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:paddingLeft="24dp"
+        android:paddingRight="24dp">
+
+        <FrameLayout
+            android:id="@+id/focusCircleFrame"
+            android:layout_width="228dp"
+            android:layout_height="228dp">
+
+            <com.limelight.ui.FocusCirclePortalView
+                android:id="@+id/focusCirclePortal"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+
+            <ImageButton
+                android:id="@+id/focusMoreButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_gravity="top|end"
+                android:layout_margin="12dp"
+                android:background="@drawable/bg_oneui_glass_icon_button"
+                android:contentDescription="@string/pcview_menu_details"
+                android:padding="13dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_more_vert" />
+        </FrameLayout>
+
+        <TextView
+            android:id="@+id/focusPcName"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:ellipsize="end"
+            android:gravity="center"
+            android:letterSpacing="0.02"
+            android:maxWidth="320dp"
+            android:singleLine="true"
+            android:textColor="#EBFFFFFF"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/focusPcAddress"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:ellipsize="end"
+            android:gravity="center"
+            android:maxWidth="320dp"
+            android:singleLine="true"
+            android:textColor="#8CFFFFFF"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/focusPcStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="3dp"
+            android:ellipsize="end"
+            android:gravity="center"
+            android:maxWidth="320dp"
+            android:singleLine="true"
+            android:textColor="#A6FFFFFF"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/focusPcHint"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:ellipsize="end"
+            android:gravity="center"
+            android:maxWidth="340dp"
+            android:singleLine="true"
+            android:textColor="#78FFFFFF"
+            android:textSize="11sp" />
+
+    </LinearLayout>
+
+</FrameLayout>

@@ -146,20 +146,17 @@ public class DigitalButton extends VirtualControllerElement {
         // set transparent background
         canvas.drawColor(Color.TRANSPARENT);
 
-        paint.setTextSize(getPercent(getWidth(), 25));
-
-        paint.setTextAlign(Paint.Align.CENTER);
-
-        paint.setStrokeWidth(getDefaultStrokeWidth());
-
-        paint.setColor(isPressed() ? pressedColor:getDefaultColor());
-
-        rect.left = rect.top = paint.getStrokeWidth();
-        rect.right = getWidth() - rect.left;
-        rect.bottom = getHeight() - rect.top;
+        paint.setAntiAlias(true);
 
         //皮肤选择 官方皮肤
         if(PreferenceConfiguration.readPreferences(getContext()).enableOnScreenStyleOfficial){
+            paint.setTextSize(getPercent(getWidth(), 25));
+            paint.setTextAlign(Paint.Align.CENTER);
+            paint.setStrokeWidth(getDefaultStrokeWidth());
+            paint.setColor(isPressed() ? pressedColor:getDefaultColor());
+            rect.left = rect.top = paint.getStrokeWidth();
+            rect.right = getWidth() - rect.left;
+            rect.bottom = getHeight() - rect.top;
             paint.setStyle(Paint.Style.STROKE);
             //方形
             if(PreferenceConfiguration.readPreferences(getContext()).enableKeyboardSquare){
@@ -172,28 +169,151 @@ public class DigitalButton extends VirtualControllerElement {
             canvas.drawText(text, getPercent(getWidth(), 50), getPercent(getHeight(), 63), paint);
             return;
         }
-        int oscOpacity=PreferenceConfiguration.readPreferences(getContext()).oscOpacity;
-        //虚拟手柄皮肤
-        if (icon != -1) {
-            Drawable d = getResources().getDrawable(isPressed()?iconPress:icon);
-            d.setBounds(5, 5, getWidth() - 5, getHeight() - 5);
-            d.setAlpha((int) (oscOpacity*2.55));
-            d.draw(canvas);
-        }else{
+
+        int oscOpacity = PreferenceConfiguration.readPreferences(getContext()).oscOpacity;
+        float opacityFactor = Math.max(0.05f, Math.min(1.0f, oscOpacity / 100f));
+        float w = getWidth();
+        float h = getHeight();
+        float minDim = Math.min(w, h);
+        float strokeW = Math.max(2f, minDim * 0.042f);
+        if (elementId == EID_LT || elementId == EID_RT || elementId == EID_LB || elementId == EID_RB
+                || elementId == EID_BACK || elementId == EID_START || elementId == EID_GDB) {
+            strokeW = Math.max(2f, minDim * 0.055f);
+        }
+
+        int baseRgb = resolveVectorButtonColor();
+        boolean pressed = isPressed();
+        float fillAlpha = (pressed ? 0.56f : 0.22f) * opacityFactor;
+        float borderAlpha = (pressed ? 0.92f : 0.54f) * opacityFactor;
+        float fgAlpha = (pressed ? 1.0f : 0.90f) * opacityFactor;
+
+        rect.set(strokeW * 0.5f + 2f, strokeW * 0.5f + 2f, w - strokeW * 0.5f - 2f, h - strokeW * 0.5f - 2f);
+
+        boolean isCircle = (elementId == EID_A || elementId == EID_B
+                || elementId == EID_X || elementId == EID_Y
+                || elementId == EID_LSB || elementId == EID_RSB);
+
+        if (isCircle) {
+            float cx = w * 0.5f;
+            float cy = h * 0.5f;
+            float r = Math.max(4f, (minDim - strokeW) * 0.5f - 2f);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(withAlpha(baseRgb, fillAlpha));
+            canvas.drawCircle(cx, cy, r, paint);
+
             paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(getDefaultStrokeWidth()/2);
-            canvas.drawText(text, getPercent(getWidth(), 50), getPercent(getHeight(), 63), paint);
+            paint.setStrokeWidth(strokeW);
+            paint.setColor(withAlpha(baseRgb, borderAlpha));
+            canvas.drawCircle(cx, cy, r, paint);
+        } else {
+            float cornerR = (elementId == EID_TOUCHPAD) ? minDim * 0.18f : minDim * 0.40f;
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(withAlpha(baseRgb, fillAlpha));
+            canvas.drawRoundRect(rect, cornerR, cornerR, paint);
+
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(strokeW);
+            paint.setColor(withAlpha(baseRgb, borderAlpha));
+            canvas.drawRoundRect(rect, cornerR, cornerR, paint);
+        }
+
+        // Vector glyph / label
+        int fgColor = withAlpha(baseRgb, fgAlpha);
+        float cx = w * 0.5f;
+        float cy = h * 0.5f;
+        if (elementId == EID_BACK) {
+            drawBackVectorGlyph(canvas, cx, cy, minDim, fgColor);
+        } else if (elementId == EID_START) {
+            drawStartVectorGlyph(canvas, cx, cy, minDim, fgColor);
+        } else if (elementId == EID_GDB) {
+            drawGuideVectorGlyph(canvas, cx, cy, minDim, fgColor);
+        } else if (elementId == EID_TOUCHPAD) {
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(withAlpha(baseRgb, fgAlpha * 0.45f));
+            canvas.drawCircle(cx, cy, minDim * 0.06f, paint);
+        } else if (text != null && !text.isEmpty()) {
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(fgColor);
+            paint.setFakeBoldText(true);
+            paint.setTextAlign(Paint.Align.CENTER);
+            float textScale = text.length() <= 1 ? 0.42f : 0.36f;
+            paint.setTextSize(minDim * textScale);
+            Paint.FontMetrics fm = paint.getFontMetrics();
+            float textY = cy - (fm.ascent + fm.descent) * 0.5f;
+            canvas.drawText(text, cx, textY, paint);
+            paint.setFakeBoldText(false);
         }
 
         boolean bIsMoving = virtualController.getControllerMode() == VirtualController.ControllerMode.MoveButtons;
         boolean bIsResizing = virtualController.getControllerMode() == VirtualController.ControllerMode.ResizeButtons;
         boolean bIsEnable = virtualController.getControllerMode() == VirtualController.ControllerMode.DisableEnableButtons;
 
-        if (bIsMoving || bIsResizing || bIsEnable ||icon==-1) {
+        if (bIsMoving || bIsResizing || bIsEnable) {
             paint.setStyle(Paint.Style.STROKE);
-            canvas.drawRect(rect,paint);
+            paint.setStrokeWidth(getDefaultStrokeWidth());
+            paint.setColor(isPressed() ? pressedColor : getDefaultColor());
+            rect.left = rect.top = paint.getStrokeWidth();
+            rect.right = getWidth() - rect.left;
+            rect.bottom = getHeight() - rect.top;
+            canvas.drawRect(rect, paint);
         }
+    }
 
+    private int resolveVectorButtonColor() {
+        if ("A".equalsIgnoreCase(text)) {
+            return 0xFF30D158;
+        } else if ("B".equalsIgnoreCase(text)) {
+            return 0xFFFF5252;
+        } else if ("X".equalsIgnoreCase(text)) {
+            return 0xFF40C4FF;
+        } else if ("Y".equalsIgnoreCase(text)) {
+            return 0xFFFFD740;
+        }
+        return 0xFFFFFFFF;
+    }
+
+    private static int withAlpha(int rgb, float alpha) {
+        int a = Math.max(0, Math.min(255, Math.round(alpha * 255f)));
+        return (a << 24) | (rgb & 0x00FFFFFF);
+    }
+
+    private void drawBackVectorGlyph(Canvas canvas, float cx, float cy, float minDim, int color) {
+        float box = minDim * 0.28f;
+        float offset = minDim * 0.08f;
+        float r = minDim * 0.05f;
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(Math.max(2f, minDim * 0.06f));
+        paint.setColor(color);
+        rect.set(cx - box * 0.5f - offset, cy - box * 0.5f - offset,
+                cx + box * 0.5f - offset, cy + box * 0.5f - offset);
+        canvas.drawRoundRect(rect, r, r, paint);
+        rect.set(cx - box * 0.5f + offset, cy - box * 0.5f + offset,
+                cx + box * 0.5f + offset, cy + box * 0.5f + offset);
+        canvas.drawRoundRect(rect, r, r, paint);
+    }
+
+    private void drawStartVectorGlyph(Canvas canvas, float cx, float cy, float minDim, int color) {
+        float halfW = minDim * 0.22f;
+        float dy = minDim * 0.14f;
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeCap(Paint.Cap.ROUND);
+        paint.setStrokeWidth(Math.max(2f, minDim * 0.07f));
+        paint.setColor(color);
+        canvas.drawLine(cx - halfW, cy - dy, cx + halfW, cy - dy, paint);
+        canvas.drawLine(cx - halfW, cy, cx + halfW, cy, paint);
+        canvas.drawLine(cx - halfW, cy + dy, cx + halfW, cy + dy, paint);
+    }
+
+    private void drawGuideVectorGlyph(Canvas canvas, float cx, float cy, float minDim, int color) {
+        float rOuter = minDim * 0.26f;
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeCap(Paint.Cap.ROUND);
+        paint.setStrokeWidth(Math.max(2f, minDim * 0.065f));
+        paint.setColor(color);
+        canvas.drawCircle(cx, cy, rOuter, paint);
+        float arm = rOuter * 0.55f;
+        canvas.drawLine(cx - arm, cy - arm, cx + arm, cy + arm, paint);
+        canvas.drawLine(cx + arm, cy - arm, cx - arm, cy + arm, paint);
     }
 
     private void onClickCallback() {

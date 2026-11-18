@@ -761,4 +761,44 @@
     <string name="plexus_density_normal">Normal</string>
     <string name="plexus_density_high">High (+50% Dots)</string>
     <string name="plexus_density_ultra">Ultra (2x Dots)</string>
+
+    <string name="backdrop_style_waves">Wave Ribbons (Jujo Ambience)</string>
+
+    <string name="title_color_scheme">Color Scheme</string>
+    <string name="summary_color_scheme">Choose the ambient palette used across backdrops, focus rings, and switches</string>
+    <string name="color_scheme_midnight">Midnight Blue</string>
+    <string name="color_scheme_jujo">JUJO Purple</string>
+    <string name="color_scheme_de_boosy">De Boosy</string>
+    <string name="color_scheme_shiory_pan">Shiory Pan</string>
+    <string name="color_scheme_lazy_ankui">Lazy Ankui</string>
+    <string name="color_scheme_oled">OLED Black</string>
+    <string name="color_scheme_cyberpunk">Cyberpunk Neon</string>
+    <string name="color_scheme_forest">Forest</string>
+    <string name="color_scheme_sunset">Sunset</string>
+    <string name="color_scheme_ember">Ember</string>
+    <string name="color_scheme_slate">Slate</string>
+
+    <string name="title_focus_mode">Focus Mode Home Screen</string>
+    <string name="summary_focus_mode">Display a full-screen circular server carousel with wave ribbons on the main screen</string>
+    <string name="focus_mode_toggle_desc">Toggle Focus Mode</string>
+    <string name="focus_mode_tap_hint">Tap to connect or pair  •  Hold or ⋮ for options</string>
+    <string name="focus_mode_status_online">Online</string>
+    <string name="focus_mode_status_unpaired">Not paired</string>
+    <string name="focus_mode_status_offline">Offline</string>
+    <string name="focus_mode_status_searching">Searching…</string>
+    <string name="focus_mode_status_ingame">In-game</string>
+
+    <string name="title_post_session_metrics">Post-Session Metrics</string>
+    <string name="summary_post_session_metrics">Show a telemetry summary dialog with FPS, decode latency, bitrate, and drop charts after ending a stream</string>
+    <string name="session_metrics_title">Session Metrics</string>
+    <string name="session_metrics_duration">Duration</string>
+    <string name="session_metrics_avg_fps">Avg FPS</string>
+    <string name="session_metrics_avg_decode">Avg Decode</string>
+    <string name="session_metrics_peak_decode">Peak Decode</string>
+    <string name="session_metrics_bitrate">Bitrate</string>
+    <string name="session_metrics_peak_drop">Peak Drop</string>
+    <string name="session_metrics_decoder">Decoder</string>
+    <string name="session_metrics_drop_pct">Drop %</string>
+    <string name="session_metrics_stable">Stable</string>
+    <string name="session_metrics_share">Share Summary</string>
 </resources>
