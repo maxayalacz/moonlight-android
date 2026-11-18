@@ -119,23 +119,23 @@ public class FocusPcAdapter extends RecyclerView.Adapter<FocusPcAdapter.ViewHold
         boolean isPaired = details.pairState == PairingManager.PairState.PAIRED;
 
         if (details.state == ComputerDetails.State.UNKNOWN) {
-            holder.statusText.setText(R.string.pcview_menu_header_unknown);
+            holder.statusText.setText(R.string.focus_mode_status_searching);
             holder.statusText.setTextColor(0xA6FFFFFF);
             holder.hintText.setText(R.string.focus_mode_tap_options);
         } else if (!isOnline) {
-            holder.statusText.setText(R.string.focus_mode_offline);
+            holder.statusText.setText(R.string.focus_mode_status_offline);
             holder.statusText.setTextColor(0xCCFF6E6E);
             holder.hintText.setText(R.string.focus_mode_tap_options);
         } else if (!isPaired) {
-            holder.statusText.setText(R.string.focus_mode_unpaired);
+            holder.statusText.setText(R.string.focus_mode_status_unpaired);
             holder.statusText.setTextColor(0xE6FFD54F);
             holder.hintText.setText(R.string.focus_mode_tap_pair);
         } else if (details.runningGameId != 0) {
-            holder.statusText.setText(R.string.focus_mode_in_game);
+            holder.statusText.setText(R.string.focus_mode_status_ingame);
             holder.statusText.setTextColor(AppThemePalette.withAlpha(palette.highlight, 0.92f));
             holder.hintText.setText(R.string.focus_mode_tap_open);
         } else {
-            holder.statusText.setText(R.string.focus_mode_ready);
+            holder.statusText.setText(R.string.focus_mode_status_online);
             holder.statusText.setTextColor(AppThemePalette.withAlpha(palette.highlight, 0.92f));
             holder.hintText.setText(R.string.focus_mode_tap_open);
         }

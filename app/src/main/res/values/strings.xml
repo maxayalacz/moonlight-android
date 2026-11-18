@@ -782,6 +782,9 @@
     <string name="summary_focus_mode">Display a full-screen circular server carousel with wave ribbons on the main screen</string>
     <string name="focus_mode_toggle_desc">Toggle Focus Mode</string>
     <string name="focus_mode_tap_hint">Tap to connect or pair  •  Hold or ⋮ for options</string>
+    <string name="focus_mode_tap_open">Tap to open apps  •  Hold or ⋮ for options</string>
+    <string name="focus_mode_tap_pair">Tap to pair PC  •  Hold or ⋮ for options</string>
+    <string name="focus_mode_tap_options">Tap or hold ⋮ for options</string>
     <string name="focus_mode_status_online">Online</string>
     <string name="focus_mode_status_unpaired">Not paired</string>
     <string name="focus_mode_status_offline">Offline</string>
