@@ -56,8 +56,19 @@ public class DigitalPad extends VirtualControllerElement {
         paint.setStrokeWidth(getDefaultStrokeWidth());
         //虚拟手柄皮肤 (Vector style)
         if(!PreferenceConfiguration.readPreferences(getContext()).enableOnScreenStyleOfficial) {
+            boolean bIsMoving = virtualController.getControllerMode() == VirtualController.ControllerMode.MoveButtons;
+            boolean bIsResizing = virtualController.getControllerMode() == VirtualController.ControllerMode.ResizeButtons;
+            boolean bIsEnable = virtualController.getControllerMode() == VirtualController.ControllerMode.DisableEnableButtons;
+            boolean isEditMode = bIsMoving || bIsResizing || bIsEnable;
+
             int oscOpacity = getEffectiveOscOpacity();
-            float opacityFactor = Math.max(0.05f, Math.min(1.0f, oscOpacity / 100f));
+            float opacityFactor = Math.max(0.0f, Math.min(1.0f, oscOpacity / 100f));
+            if (isEditMode && opacityFactor < 0.35f) {
+                opacityFactor = 0.35f;
+            }
+            if (opacityFactor <= 0.005f && !isEditMode) {
+                return;
+            }
 
             paint.setAntiAlias(true);
             float w = getWidth();
@@ -66,39 +77,10 @@ public class DigitalPad extends VirtualControllerElement {
             float cy = h * 0.5f;
             float minDim = Math.min(w, h);
             float strokeW = Math.max(2f, minDim * 0.018f);
-            float outerR = Math.max(8f, (minDim - strokeW) * 0.5f - 4f);
 
-            // Outer translucent disc & crisp ring
-            paint.setStyle(Paint.Style.FILL);
-            paint.setColor(dpadWithAlpha(0xFFFFFFFF, 0.16f * opacityFactor));
-            canvas.drawCircle(cx, cy, outerR, paint);
+            drawConnectedCrossDpad(canvas, cx, cy, minDim, opacityFactor, strokeW);
 
-            paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(strokeW);
-            paint.setColor(dpadWithAlpha(0xFFFFFFFF, 0.45f * opacityFactor));
-            canvas.drawCircle(cx, cy, outerR, paint);
-
-            // Subtle center pivot ring
-            paint.setColor(dpadWithAlpha(0xFFFFFFFF, 0.25f * opacityFactor));
-            paint.setStrokeWidth(Math.max(1.5f, strokeW * 0.75f));
-            canvas.drawCircle(cx, cy, outerR * 0.18f, paint);
-
-            // 4 crisp directional petals (handles cardinals & diagonals smoothly)
-            boolean leftOn = (direction & DIGITAL_PAD_DIRECTION_LEFT) != 0;
-            boolean upOn = (direction & DIGITAL_PAD_DIRECTION_UP) != 0;
-            boolean rightOn = (direction & DIGITAL_PAD_DIRECTION_RIGHT) != 0;
-            boolean downOn = (direction & DIGITAL_PAD_DIRECTION_DOWN) != 0;
-
-            drawDpadPetal(canvas, cx, cy, outerR, -90f, upOn, opacityFactor, strokeW);
-            drawDpadPetal(canvas, cx, cy, outerR, 0f, rightOn, opacityFactor, strokeW);
-            drawDpadPetal(canvas, cx, cy, outerR, 90f, downOn, opacityFactor, strokeW);
-            drawDpadPetal(canvas, cx, cy, outerR, 180f, leftOn, opacityFactor, strokeW);
-
-            boolean bIsMoving = virtualController.getControllerMode() == VirtualController.ControllerMode.MoveButtons;
-            boolean bIsResizing = virtualController.getControllerMode() == VirtualController.ControllerMode.ResizeButtons;
-            boolean bIsEnable = virtualController.getControllerMode() == VirtualController.ControllerMode.DisableEnableButtons;
-
-            if (bIsMoving || bIsResizing || bIsEnable) {
+            if (isEditMode) {
                 paint.setColor(isPressed() ? pressedColor : getDefaultColor());
                 paint.setStrokeWidth(getDefaultStrokeWidth());
                 rect.left = rect.top = paint.getStrokeWidth();
@@ -215,44 +197,102 @@ public class DigitalPad extends VirtualControllerElement {
         );
     }
 
-    private void drawDpadPetal(Canvas canvas, float cx, float cy, float outerR, float angleDeg,
-                               boolean active, float opacityFactor, float strokeW) {
-        canvas.save();
-        canvas.rotate(angleDeg, cx, cy);
+    private void drawConnectedCrossDpad(Canvas canvas, float cx, float cy, float minDim,
+                                        float opacityFactor, float strokeW) {
+        float halfSpan = Math.max(12f, minDim * 0.44f);
+        float armW = halfSpan * 0.34f;
+        float tipR = armW * 0.34f;
+        float filletR = armW * 0.24f;
 
-        // Sleek tapered rounded D-pad arm pointing along +X
-        float startX = cx + outerR * 0.25f;
-        float tipX = cx + outerR * 0.86f;
-        float shoulderX = cx + outerR * 0.72f;
-        float halfH = outerR * 0.21f;
-
+        // Single connected classic '+' cross path centered cleanly at (cx, cy)
         dpadPath.reset();
-        dpadPath.moveTo(startX, -halfH * 0.78f);
-        dpadPath.lineTo(shoulderX, -halfH);
-        dpadPath.quadTo(tipX, -halfH * 0.35f, tipX, 0f);
-        dpadPath.quadTo(tipX, halfH * 0.35f, shoulderX, halfH);
-        dpadPath.lineTo(startX, halfH * 0.78f);
+        dpadPath.moveTo(cx - armW, cy - halfSpan + tipR);
+        dpadPath.quadTo(cx - armW, cy - halfSpan, cx - armW + tipR, cy - halfSpan);
+        dpadPath.lineTo(cx + armW - tipR, cy - halfSpan);
+        dpadPath.quadTo(cx + armW, cy - halfSpan, cx + armW, cy - halfSpan + tipR);
+
+        dpadPath.lineTo(cx + armW, cy - armW - filletR);
+        dpadPath.quadTo(cx + armW, cy - armW, cx + armW + filletR, cy - armW);
+
+        dpadPath.lineTo(cx + halfSpan - tipR, cy - armW);
+        dpadPath.quadTo(cx + halfSpan, cy - armW, cx + halfSpan, cy - armW + tipR);
+        dpadPath.lineTo(cx + halfSpan, cy + armW - tipR);
+        dpadPath.quadTo(cx + halfSpan, cy + armW, cx + halfSpan - tipR, cy + armW);
+
+        dpadPath.lineTo(cx + armW + filletR, cy + armW);
+        dpadPath.quadTo(cx + armW, cy + armW, cx + armW, cy + armW + filletR);
+
+        dpadPath.lineTo(cx + armW, cy + halfSpan - tipR);
+        dpadPath.quadTo(cx + armW, cy + halfSpan, cx + armW - tipR, cy + halfSpan);
+        dpadPath.lineTo(cx - armW + tipR, cy + halfSpan);
+        dpadPath.quadTo(cx - armW, cy + halfSpan, cx - armW, cy + halfSpan - tipR);
+
+        dpadPath.lineTo(cx - armW, cy + armW + filletR);
+        dpadPath.quadTo(cx - armW, cy + armW, cx - armW - filletR, cy + armW);
+
+        dpadPath.lineTo(cx - halfSpan + tipR, cy + armW);
+        dpadPath.quadTo(cx - halfSpan, cy + armW, cx - halfSpan, cy + armW - tipR);
+        dpadPath.lineTo(cx - halfSpan, cy - armW + tipR);
+        dpadPath.quadTo(cx - halfSpan, cy - armW, cx - halfSpan + tipR, cy - armW);
+
+        dpadPath.lineTo(cx - armW - filletR, cy - armW);
+        dpadPath.quadTo(cx - armW, cy - armW, cx - armW, cy - armW - filletR);
         dpadPath.close();
 
         paint.setStyle(Paint.Style.FILL);
-        paint.setColor(dpadWithAlpha(0xFFFFFFFF, (active ? 0.62f : 0.16f) * opacityFactor));
+        paint.setColor(dpadWithAlpha(0xFFFFFFFF, 0.17f * opacityFactor));
         canvas.drawPath(dpadPath, paint);
 
         paint.setStyle(Paint.Style.STROKE);
-        paint.setStrokeWidth(Math.max(1.5f, strokeW * 0.9f));
-        paint.setColor(dpadWithAlpha(0xFFFFFFFF, (active ? 0.95f : 0.45f) * opacityFactor));
+        paint.setStrokeWidth(strokeW);
+        paint.setStrokeJoin(Paint.Join.ROUND);
+        paint.setColor(dpadWithAlpha(0xFFFFFFFF, 0.52f * opacityFactor));
         canvas.drawPath(dpadPath, paint);
 
-        // Crisp inner directional chevron tick
-        float chevX = cx + outerR * 0.68f;
-        float chevBackX = cx + outerR * 0.56f;
-        float chevH = outerR * 0.10f;
+        boolean leftOn = (direction & DIGITAL_PAD_DIRECTION_LEFT) != 0;
+        boolean upOn = (direction & DIGITAL_PAD_DIRECTION_UP) != 0;
+        boolean rightOn = (direction & DIGITAL_PAD_DIRECTION_RIGHT) != 0;
+        boolean downOn = (direction & DIGITAL_PAD_DIRECTION_DOWN) != 0;
+
+        float armInset = Math.max(3f, strokeW * 1.4f);
+        float chevDist = halfSpan * 0.67f;
+        float chevSize = armW * 0.36f;
+
+        drawArmHighlightAndChevron(canvas, cx, cy, armW, halfSpan, armInset, chevDist, chevSize, -90f, upOn, opacityFactor, strokeW);
+        drawArmHighlightAndChevron(canvas, cx, cy, armW, halfSpan, armInset, chevDist, chevSize, 0f, rightOn, opacityFactor, strokeW);
+        drawArmHighlightAndChevron(canvas, cx, cy, armW, halfSpan, armInset, chevDist, chevSize, 90f, downOn, opacityFactor, strokeW);
+        drawArmHighlightAndChevron(canvas, cx, cy, armW, halfSpan, armInset, chevDist, chevSize, 180f, leftOn, opacityFactor, strokeW);
+    }
+
+    private void drawArmHighlightAndChevron(Canvas canvas, float cx, float cy,
+                                            float armW, float halfSpan, float armInset,
+                                            float chevDist, float chevSize, float angleDeg,
+                                            boolean active, float opacityFactor, float strokeW) {
+        canvas.save();
+        canvas.rotate(angleDeg, cx, cy);
+
+        if (active) {
+            rect.set(
+                    cx + armW * 0.45f,
+                    cy - armW + armInset,
+                    cx + halfSpan - armInset,
+                    cy + armW - armInset);
+            float r = armW * 0.28f;
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(dpadWithAlpha(0xFFFFFFFF, 0.48f * opacityFactor));
+            canvas.drawRoundRect(rect, r, r, paint);
+        }
+
+        // Crisp directional chevron pointing along +X (centered at y = cy)
+        float tipX = cx + chevDist + chevSize * 0.45f;
+        float backX = cx + chevDist - chevSize * 0.55f;
+        paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeCap(Paint.Cap.ROUND);
         paint.setStrokeJoin(Paint.Join.ROUND);
-        paint.setStrokeWidth(Math.max(2f, strokeW));
-        paint.setColor(dpadWithAlpha(0xFFFFFFFF, (active ? 1.0f : 0.72f) * opacityFactor));
-        canvas.drawLine(chevBackX, -chevH, chevX, 0f, paint);
-        canvas.drawLine(chevX, 0f, chevBackX, chevH, paint);
+        paint.setStrokeWidth(Math.max(2f, strokeW * 1.15f));
+        paint.setColor(dpadWithAlpha(0xFFFFFFFF, (active ? 1.0f : 0.78f) * opacityFactor));
+        canvas.drawLine(backX, cy - chevSize, tipX, cy, paint);
+        canvas.drawLine(tipX, cy, backX, cy + chevSize, paint);
 
         canvas.restore();
     }

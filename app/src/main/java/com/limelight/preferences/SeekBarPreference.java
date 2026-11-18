@@ -221,37 +221,63 @@ public class SeekBarPreference extends Preference
         seekBar.setPadding(padH, padV, padH, padV);
     }
 
+    private void updateValueText(int actualValue) {
+        if (valueText == null) {
+            return;
+        }
+        String t;
+        if (divisor != 1) {
+            float floatValue = actualValue / (float) divisor;
+            t = String.format((Locale) null, "%.1f", floatValue);
+        } else {
+            t = String.valueOf(actualValue);
+        }
+        valueText.setText(suffix == null ? t : t.concat(suffix.length() > 1 ? " " + suffix : suffix));
+    }
+
     protected void updateSeekbar() {
+        if (seekBar == null) {
+            return;
+        }
         seekBar.setMax(seekbarMax);
         if (keyStepSize != 0) {
             seekBar.setKeyProgressIncrement(keyStepSize);
         }
-        seekBar.setProgress(currentValue - minValue);
+        int targetProgress = Math.max(0, Math.min(seekbarMax, currentValue - minValue));
+        // Force ClipDrawable level refresh even when targetProgress matches current seekBar progress
+        if (seekBar.getProgress() == targetProgress && seekbarMax > 0) {
+            seekBar.setProgress(targetProgress > 0 ? targetProgress - 1 : 1);
+        }
+        seekBar.setProgress(targetProgress);
+        updateValueText(targetProgress + minValue);
     }
 
     @Override
-    protected void onSetInitialValue(boolean restore, Object defaultValue)
-    {
-        super.onSetInitialValue(restore, defaultValue);
-        if (restore) {
-            currentValue = shouldPersist() ? getPersistedInt(this.defaultValue) : 0;
-        }
-        else {
-            currentValue = (Integer) defaultValue;
-        }
+    protected Object onGetDefaultValue(android.content.res.TypedArray a, int index) {
+        return a.getInt(index, defaultValue);
+    }
+
+    @Override
+    protected void onSetInitialValue(Object defaultValue) {
+        int def = (defaultValue instanceof Integer) ? (Integer) defaultValue : this.defaultValue;
+        currentValue = shouldPersist() ? getPersistedInt(def) : def;
     }
 
     public void setProgress(int progress) {
         this.currentValue = progress;
         if (seekBar != null) {
-            seekBar.setProgress(progress - minValue);
+            updateSeekbar();
         }
     }
+
     public int getProgress() {
-        return currentValue + minValue;
+        return currentValue;
     }
 
     public void showDialog() {
+        if (shouldPersist()) {
+            currentValue = getPersistedInt(defaultValue);
+        }
         AlertDialog dialog = getDialog();
         applyNeonSliderStyle();
         updateSeekbar();

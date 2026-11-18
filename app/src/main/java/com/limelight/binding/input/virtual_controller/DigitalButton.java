@@ -170,78 +170,84 @@ public class DigitalButton extends VirtualControllerElement {
             return;
         }
 
+        boolean isEditMode = virtualController.getControllerMode() != VirtualController.ControllerMode.Active;
         int oscOpacity = getEffectiveOscOpacity();
-        float opacityFactor = Math.max(0.05f, Math.min(1.0f, oscOpacity / 100f));
+        float opacityFactor = Math.max(0.0f, Math.min(1.0f, oscOpacity / 100f));
+        if (isEditMode && opacityFactor < 0.35f) {
+            opacityFactor = 0.35f;
+        }
         float w = getWidth();
         float h = getHeight();
-        float minDim = Math.min(w, h);
-        float strokeW = Math.max(2f, minDim * 0.042f);
-        if (elementId == EID_LT || elementId == EID_RT || elementId == EID_LB || elementId == EID_RB
-                || elementId == EID_BACK || elementId == EID_START || elementId == EID_GDB) {
-            strokeW = Math.max(2f, minDim * 0.055f);
-        }
+        if (opacityFactor > 0.005f) {
+            float minDim = Math.min(w, h);
+            float strokeW = Math.max(2f, minDim * 0.042f);
+            if (elementId == EID_LT || elementId == EID_RT || elementId == EID_LB || elementId == EID_RB
+                    || elementId == EID_BACK || elementId == EID_START || elementId == EID_GDB) {
+                strokeW = Math.max(2f, minDim * 0.055f);
+            }
 
-        int baseRgb = resolveVectorButtonColor();
-        boolean pressed = isPressed();
-        float fillAlpha = (pressed ? 0.56f : 0.22f) * opacityFactor;
-        float borderAlpha = (pressed ? 0.92f : 0.54f) * opacityFactor;
-        float fgAlpha = (pressed ? 1.0f : 0.90f) * opacityFactor;
+            int baseRgb = resolveVectorButtonColor();
+            boolean pressed = isPressed();
+            float fillAlpha = (pressed ? 0.56f : 0.22f) * opacityFactor;
+            float borderAlpha = (pressed ? 0.92f : 0.54f) * opacityFactor;
+            float fgAlpha = (pressed ? 1.0f : 0.90f) * opacityFactor;
 
-        rect.set(strokeW * 0.5f + 2f, strokeW * 0.5f + 2f, w - strokeW * 0.5f - 2f, h - strokeW * 0.5f - 2f);
+            rect.set(strokeW * 0.5f + 2f, strokeW * 0.5f + 2f, w - strokeW * 0.5f - 2f, h - strokeW * 0.5f - 2f);
 
-        boolean isCircle = (elementId == EID_A || elementId == EID_B
-                || elementId == EID_X || elementId == EID_Y
-                || elementId == EID_LSB || elementId == EID_RSB);
+            boolean isCircle = (elementId == EID_A || elementId == EID_B
+                    || elementId == EID_X || elementId == EID_Y
+                    || elementId == EID_LSB || elementId == EID_RSB);
 
-        if (isCircle) {
+            if (isCircle) {
+                float cx = w * 0.5f;
+                float cy = h * 0.5f;
+                float r = Math.max(4f, (minDim - strokeW) * 0.5f - 2f);
+                paint.setStyle(Paint.Style.FILL);
+                paint.setColor(withAlpha(baseRgb, fillAlpha));
+                canvas.drawCircle(cx, cy, r, paint);
+
+                paint.setStyle(Paint.Style.STROKE);
+                paint.setStrokeWidth(strokeW);
+                paint.setColor(withAlpha(baseRgb, borderAlpha));
+                canvas.drawCircle(cx, cy, r, paint);
+            } else {
+                float cornerR = (elementId == EID_TOUCHPAD) ? minDim * 0.18f : minDim * 0.40f;
+                paint.setStyle(Paint.Style.FILL);
+                paint.setColor(withAlpha(baseRgb, fillAlpha));
+                canvas.drawRoundRect(rect, cornerR, cornerR, paint);
+
+                paint.setStyle(Paint.Style.STROKE);
+                paint.setStrokeWidth(strokeW);
+                paint.setColor(withAlpha(baseRgb, borderAlpha));
+                canvas.drawRoundRect(rect, cornerR, cornerR, paint);
+            }
+
+            // Vector glyph / label
+            int fgColor = withAlpha(baseRgb, fgAlpha);
             float cx = w * 0.5f;
             float cy = h * 0.5f;
-            float r = Math.max(4f, (minDim - strokeW) * 0.5f - 2f);
-            paint.setStyle(Paint.Style.FILL);
-            paint.setColor(withAlpha(baseRgb, fillAlpha));
-            canvas.drawCircle(cx, cy, r, paint);
-
-            paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(strokeW);
-            paint.setColor(withAlpha(baseRgb, borderAlpha));
-            canvas.drawCircle(cx, cy, r, paint);
-        } else {
-            float cornerR = (elementId == EID_TOUCHPAD) ? minDim * 0.18f : minDim * 0.40f;
-            paint.setStyle(Paint.Style.FILL);
-            paint.setColor(withAlpha(baseRgb, fillAlpha));
-            canvas.drawRoundRect(rect, cornerR, cornerR, paint);
-
-            paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(strokeW);
-            paint.setColor(withAlpha(baseRgb, borderAlpha));
-            canvas.drawRoundRect(rect, cornerR, cornerR, paint);
-        }
-
-        // Vector glyph / label
-        int fgColor = withAlpha(baseRgb, fgAlpha);
-        float cx = w * 0.5f;
-        float cy = h * 0.5f;
-        if (elementId == EID_BACK) {
-            drawBackVectorGlyph(canvas, cx, cy, minDim, fgColor);
-        } else if (elementId == EID_START) {
-            drawStartVectorGlyph(canvas, cx, cy, minDim, fgColor);
-        } else if (elementId == EID_GDB) {
-            drawGuideVectorGlyph(canvas, cx, cy, minDim, fgColor);
-        } else if (elementId == EID_TOUCHPAD) {
-            paint.setStyle(Paint.Style.FILL);
-            paint.setColor(withAlpha(baseRgb, fgAlpha * 0.45f));
-            canvas.drawCircle(cx, cy, minDim * 0.06f, paint);
-        } else if (text != null && !text.isEmpty()) {
-            paint.setStyle(Paint.Style.FILL);
-            paint.setColor(fgColor);
-            paint.setFakeBoldText(true);
-            paint.setTextAlign(Paint.Align.CENTER);
-            float textScale = text.length() <= 1 ? 0.42f : 0.36f;
-            paint.setTextSize(minDim * textScale);
-            Paint.FontMetrics fm = paint.getFontMetrics();
-            float textY = cy - (fm.ascent + fm.descent) * 0.5f;
-            canvas.drawText(text, cx, textY, paint);
-            paint.setFakeBoldText(false);
+            if (elementId == EID_BACK) {
+                drawBackVectorGlyph(canvas, cx, cy, minDim, fgColor);
+            } else if (elementId == EID_START) {
+                drawStartVectorGlyph(canvas, cx, cy, minDim, fgColor);
+            } else if (elementId == EID_GDB) {
+                drawGuideVectorGlyph(canvas, cx, cy, minDim, fgColor);
+            } else if (elementId == EID_TOUCHPAD) {
+                paint.setStyle(Paint.Style.FILL);
+                paint.setColor(withAlpha(baseRgb, fgAlpha * 0.45f));
+                canvas.drawCircle(cx, cy, minDim * 0.06f, paint);
+            } else if (text != null && !text.isEmpty()) {
+                paint.setStyle(Paint.Style.FILL);
+                paint.setColor(fgColor);
+                paint.setFakeBoldText(true);
+                paint.setTextAlign(Paint.Align.CENTER);
+                float textScale = text.length() <= 1 ? 0.42f : 0.36f;
+                paint.setTextSize(minDim * textScale);
+                Paint.FontMetrics fm = paint.getFontMetrics();
+                float textY = cy - (fm.ascent + fm.descent) * 0.5f;
+                canvas.drawText(text, cx, textY, paint);
+                paint.setFakeBoldText(false);
+            }
         }
 
         boolean bIsMoving = virtualController.getControllerMode() == VirtualController.ControllerMode.MoveButtons;

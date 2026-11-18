@@ -533,7 +533,7 @@
     <PreferenceCategory
         android:key="category_ui_settings"
         android:title="@string/category_ui_settings"
-        app:initialExpandedChildrenCount="8"
+        app:initialExpandedChildrenCount="9"
         app:iconSpaceReserved="false">
         <ListPreference
             android:defaultValue="midnight"
@@ -572,6 +572,14 @@
             android:key="list_plexus_density"
             android:summary="@string/summary_plexus_density"
             android:title="@string/title_plexus_density"
+            app:iconSpaceReserved="false" />
+        <ListPreference
+            android:defaultValue="fullscreen"
+            android:entries="@array/connecting_animation_style_names"
+            android:entryValues="@array/connecting_animation_style_values"
+            android:key="list_connecting_animation_style"
+            android:summary="@string/summary_connecting_animation_style"
+            android:title="@string/title_connecting_animation_style"
             app:iconSpaceReserved="false" />
         <SwitchPreferenceCompat
             android:defaultValue="false"

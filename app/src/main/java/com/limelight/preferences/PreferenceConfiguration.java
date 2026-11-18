@@ -72,6 +72,8 @@ public class PreferenceConfiguration {
     private static final String ENABLE_PERF_OVERLAY_STRING = "checkbox_enable_perf_overlay";
     private static final String ENABLE_PERF_LOGGING = "checkbox_enable_perf_logging";
     public static final String ENABLE_POST_SESSION_METRICS_PREF_STRING = "checkbox_post_session_metrics";
+    public static final String CONNECTING_ANIMATION_STYLE_PREF_STRING = "list_connecting_animation_style";
+    public static final String DEFAULT_CONNECTING_ANIMATION_STYLE = "fullscreen";
     private static final String BIND_ALL_USB_STRING = "checkbox_usb_bind_all";
     private static final String MOUSE_EMULATION_STRING = "checkbox_mouse_emulation";
     private static final String REMEMBER_MOUSE_MODE_PREF_STRING = "checkbox_remember_mouse_mode";
@@ -277,6 +279,7 @@ public class PreferenceConfiguration {
     public boolean enablePerfOverlay;
     public boolean enablePerfLogging;
     public boolean enablePostSessionMetrics;
+    public String connectingAnimationStyle;
     //简化版性能信息
     public boolean enablePerfOverlayLite;
 
@@ -929,6 +932,7 @@ private static int getFramePacingValue(Context context) {
         config.enablePerfOverlay = prefs.getBoolean(ENABLE_PERF_OVERLAY_STRING, DEFAULT_ENABLE_PERF_OVERLAY);
         config.enablePerfLogging = prefs.getBoolean(ENABLE_PERF_LOGGING, DEFAULT_ENABLE_PERF_LOGGING);
         config.enablePostSessionMetrics = prefs.getBoolean(ENABLE_POST_SESSION_METRICS_PREF_STRING, DEFAULT_ENABLE_POST_SESSION_METRICS);
+        config.connectingAnimationStyle = prefs.getString(CONNECTING_ANIMATION_STYLE_PREF_STRING, DEFAULT_CONNECTING_ANIMATION_STYLE);
         config.enablePerfOverlayLite = prefs.getBoolean("checkbox_enable_perf_overlay_lite",DEFAULT_ENABLE_PERF_OVERLAY);
         config.enablePerfOverlayBottom = prefs.getBoolean("checkbox_enable_perf_overlay_bottom",DEFAULT_PERF_OVERLAY_BOTTOM);
         config.bindAllUsb = prefs.getBoolean(BIND_ALL_USB_STRING, DEFAULT_BIND_ALL_USB);

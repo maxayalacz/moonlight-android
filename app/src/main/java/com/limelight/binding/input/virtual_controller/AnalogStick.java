@@ -224,8 +224,15 @@ public class AnalogStick extends VirtualControllerElement {
         paint.setAntiAlias(true);
 
         if (!com.limelight.preferences.PreferenceConfiguration.readPreferences(getContext()).enableOnScreenStyleOfficial) {
+            boolean isEditMode = virtualController.getControllerMode() != VirtualController.ControllerMode.Active;
             int oscOpacity = getEffectiveOscOpacity();
-            float opacityFactor = Math.max(0.05f, Math.min(1.0f, oscOpacity / 100f));
+            float opacityFactor = Math.max(0.0f, Math.min(1.0f, oscOpacity / 100f));
+            if (isEditMode && opacityFactor < 0.35f) {
+                opacityFactor = 0.35f;
+            }
+            if (opacityFactor <= 0.005f && !isEditMode) {
+                return;
+            }
             float cx = getWidth() * 0.5f;
             float cy = getHeight() * 0.5f;
             float strokeW = Math.max(2f, getDefaultStrokeWidth());

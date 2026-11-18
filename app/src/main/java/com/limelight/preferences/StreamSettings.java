@@ -455,13 +455,13 @@ public class StreamSettings extends AppCompatActivity {
                                     ? R.drawable.bg_oneui_glass_card_top
                                     : R.drawable.bg_oneui_squircle_card);
                         }
-                        com.limelight.ui.AppThemePalette palette = com.limelight.ui.AppThemePalette.getCurrent(itemView.getContext());
                         View title = holder.findViewById(android.R.id.title);
                         if (title instanceof android.widget.TextView) {
                             android.widget.TextView tv = (android.widget.TextView) title;
-                            tv.setTextColor(palette.getNeonAccent());
-                            tv.setShadowLayer(6f, 0f, 0f, com.limelight.ui.AppThemePalette.withAlpha(palette.getNeonAccent(), 0.45f));
+                            tv.setTextColor(0xFFFFFFFF);
+                            tv.setShadowLayer(0f, 0f, 0f, 0);
                         }
+                        itemView.setAlpha(1.0f);
                     } else {
                         boolean isLastInCard = nextPref == null || nextPref instanceof PreferenceCategory;
                         com.limelight.ui.FlowingAuroraView.CornerMode mode = isLastInCard
@@ -479,32 +479,32 @@ public class StreamSettings extends AppCompatActivity {
                         }
                         View summary = holder.findViewById(android.R.id.summary);
                         if (summary instanceof android.widget.TextView) {
-                            ((android.widget.TextView) summary).setTextColor(
-                                    com.limelight.ui.AppThemePalette.withAlpha(palette.getNeonTextAccent(), 0.92f));
+                            ((android.widget.TextView) summary).setTextColor(0xB8FFFFFF);
                         }
+                        itemView.setAlpha(pref.isEnabled() ? 1.0f : 0.45f);
                         applySwitchPalette(itemView, palette);
                     }
                 }
 
-                private android.graphics.drawable.Drawable buildPillTrackDrawable(Context ctx, int neonAccent) {
-                    int w = Math.round(UiHelper.dpToPx(ctx, 48f));
-                    int h = Math.round(UiHelper.dpToPx(ctx, 26f));
+                private android.graphics.drawable.Drawable buildPillTrackDrawable(Context ctx) {
+                    int w = Math.round(UiHelper.dpToPx(ctx, 52f));
+                    int h = Math.round(UiHelper.dpToPx(ctx, 30f));
                     float radius = h * 0.5f;
-                    int strokeW = Math.max(1, Math.round(UiHelper.dpToPx(ctx, 1.4f)));
+                    int strokeW = Math.max(2, Math.round(UiHelper.dpToPx(ctx, 1.8f)));
 
                     android.graphics.drawable.GradientDrawable checked = new android.graphics.drawable.GradientDrawable();
                     checked.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
                     checked.setSize(w, h);
                     checked.setCornerRadius(radius);
-                    checked.setColor(com.limelight.ui.AppThemePalette.withAlpha(neonAccent, 0.34f));
-                    checked.setStroke(strokeW, com.limelight.ui.AppThemePalette.withAlpha(neonAccent, 0.90f));
+                    checked.setColor(0x380B101B);
+                    checked.setStroke(strokeW, 0xFFFFFFFF);
 
                     android.graphics.drawable.GradientDrawable unchecked = new android.graphics.drawable.GradientDrawable();
                     unchecked.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
                     unchecked.setSize(w, h);
                     unchecked.setCornerRadius(radius);
-                    unchecked.setColor(0x24FFFFFF);
-                    unchecked.setStroke(strokeW, 0x4DFFFFFF);
+                    unchecked.setColor(0x2E0B101B);
+                    unchecked.setStroke(strokeW, 0xE0FFFFFF);
 
                     android.graphics.drawable.StateListDrawable stateList = new android.graphics.drawable.StateListDrawable();
                     stateList.addState(new int[]{android.R.attr.state_checked}, checked);
@@ -512,25 +512,31 @@ public class StreamSettings extends AppCompatActivity {
                     return stateList;
                 }
 
+                private android.graphics.drawable.Drawable buildInsetThumbBall(Context ctx, int ballColor) {
+                    int frameSize = Math.round(UiHelper.dpToPx(ctx, 30f));
+                    int pad = Math.round(UiHelper.dpToPx(ctx, 5.5f));
+                    int ballSize = Math.max(8, frameSize - pad * 2);
+
+                    android.graphics.drawable.GradientDrawable frame = new android.graphics.drawable.GradientDrawable();
+                    frame.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
+                    frame.setSize(frameSize, frameSize);
+                    frame.setColor(android.graphics.Color.TRANSPARENT);
+
+                    android.graphics.drawable.GradientDrawable ball = new android.graphics.drawable.GradientDrawable();
+                    ball.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+                    ball.setSize(ballSize, ballSize);
+                    ball.setColor(ballColor);
+
+                    android.graphics.drawable.LayerDrawable layer = new android.graphics.drawable.LayerDrawable(
+                            new android.graphics.drawable.Drawable[]{frame, ball});
+                    layer.setLayerInset(1, pad, pad, pad, pad);
+                    return layer;
+                }
+
                 private android.graphics.drawable.Drawable buildPillThumbDrawable(Context ctx, int neonAccent) {
-                    int size = Math.round(UiHelper.dpToPx(ctx, 20f));
-                    int strokeW = Math.max(1, Math.round(UiHelper.dpToPx(ctx, 1f)));
-
-                    android.graphics.drawable.GradientDrawable checked = new android.graphics.drawable.GradientDrawable();
-                    checked.setShape(android.graphics.drawable.GradientDrawable.OVAL);
-                    checked.setSize(size, size);
-                    checked.setColor(neonAccent);
-                    checked.setStroke(strokeW, 0x80FFFFFF);
-
-                    android.graphics.drawable.GradientDrawable unchecked = new android.graphics.drawable.GradientDrawable();
-                    unchecked.setShape(android.graphics.drawable.GradientDrawable.OVAL);
-                    unchecked.setSize(size, size);
-                    unchecked.setColor(0xD9FFFFFF);
-                    unchecked.setStroke(strokeW, 0x33000000);
-
                     android.graphics.drawable.StateListDrawable stateList = new android.graphics.drawable.StateListDrawable();
-                    stateList.addState(new int[]{android.R.attr.state_checked}, checked);
-                    stateList.addState(new int[]{}, unchecked);
+                    stateList.addState(new int[]{android.R.attr.state_checked}, buildInsetThumbBall(ctx, neonAccent));
+                    stateList.addState(new int[]{}, buildInsetThumbBall(ctx, 0xFFD0D5DD));
                     return stateList;
                 }
 
@@ -540,8 +546,11 @@ public class StreamSettings extends AppCompatActivity {
                         SwitchCompat sw = (SwitchCompat) root;
                         sw.setThumbTintList(null);
                         sw.setTrackTintList(null);
-                        sw.setTrackDrawable(buildPillTrackDrawable(sw.getContext(), neonAccent));
+                        sw.setTrackDrawable(buildPillTrackDrawable(sw.getContext()));
                         sw.setThumbDrawable(buildPillThumbDrawable(sw.getContext(), neonAccent));
+                        sw.setSwitchMinWidth(Math.round(UiHelper.dpToPx(sw.getContext(), 52f)));
+                        sw.setThumbTextPadding(0);
+                        sw.setSplitTrack(false);
                         sw.setShowText(false);
                     } else if (root instanceof android.widget.Switch) {
                         android.widget.Switch sw = (android.widget.Switch) root;
@@ -549,8 +558,13 @@ public class StreamSettings extends AppCompatActivity {
                             sw.setThumbTintList(null);
                             sw.setTrackTintList(null);
                         }
-                        sw.setTrackDrawable(buildPillTrackDrawable(sw.getContext(), neonAccent));
+                        sw.setTrackDrawable(buildPillTrackDrawable(sw.getContext()));
                         sw.setThumbDrawable(buildPillThumbDrawable(sw.getContext(), neonAccent));
+                        sw.setSwitchMinWidth(Math.round(UiHelper.dpToPx(sw.getContext(), 52f)));
+                        sw.setThumbTextPadding(0);
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                            sw.setSplitTrack(false);
+                        }
                         sw.setShowText(false);
                     } else if (root instanceof ViewGroup) {
                         ViewGroup vg = (ViewGroup) root;
@@ -997,7 +1011,7 @@ public class StreamSettings extends AppCompatActivity {
                     return true;
                 });
             }
-            for (String key : new String[]{"list_backdrop_style", "list_metaball_sharpness", "list_plexus_density"}) {
+            for (String key : new String[]{"list_backdrop_style", "list_metaball_sharpness", "list_plexus_density", "list_connecting_animation_style"}) {
                 Preference uiListPref = findPreference(key);
                 if (uiListPref instanceof ListPreference) {
                     uiListPref.setSummaryProvider(ListPreference.SimpleSummaryProvider.getInstance());

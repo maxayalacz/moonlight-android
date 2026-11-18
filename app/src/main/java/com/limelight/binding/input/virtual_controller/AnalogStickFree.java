@@ -238,8 +238,9 @@ public class AnalogStickFree extends VirtualControllerElement {
         boolean bIsMoving = virtualController.getControllerMode() == VirtualController.ControllerMode.MoveButtons;
         boolean bIsResizing = virtualController.getControllerMode() == VirtualController.ControllerMode.ResizeButtons;
         boolean bIsEnable = virtualController.getControllerMode() == VirtualController.ControllerMode.DisableEnableButtons;
+        boolean isEditMode = bIsMoving || bIsResizing || bIsEnable;
 
-        if (bIsMoving || bIsResizing || bIsEnable) {
+        if (isEditMode) {
             canvas.drawColor(getDefaultColor());
             paint.setColor(Color.WHITE);
             int nWidth = getWidth();
@@ -251,32 +252,37 @@ public class AnalogStickFree extends VirtualControllerElement {
         }
 
         paint.setAntiAlias(true);
+        paint.setPathEffect(null);
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeWidth(getDefaultStrokeWidth());
 
         PreferenceConfiguration cfg = PreferenceConfiguration.readPreferences(getContext());
         int oscOpacity = getEffectiveOscOpacity();
-        float opacityFactor = Math.max(0.05f, Math.min(1.0f, oscOpacity / 100f));
+        float opacityFactor = Math.max(0.0f, Math.min(1.0f, oscOpacity / 100f));
+        if (isEditMode && opacityFactor < 0.35f) {
+            opacityFactor = 0.35f;
+        }
         float freeBgFactor = Math.max(0.0f, Math.min(1.0f, cfg.enableNewAnalogStickOpacity / 100f));
 
         if (!bIsFingerOnScreen) {
-            if (!cfg.enableOnScreenStyleOfficial && !bIsMoving && !bIsResizing && !bIsEnable) {
+            if (!cfg.enableOnScreenStyleOfficial && !isEditMode && opacityFactor > 0.005f) {
                 float cx = getWidth() * 0.5f;
                 float cy = getHeight() * 0.5f;
-                if (freeBgFactor > 0.01f) {
-                    paint.setStyle(Paint.Style.FILL);
-                    paint.setColor(freeStickWithAlpha(0xFFF5F5F9, freeBgFactor * 0.45f));
-                    canvas.drawCircle(cx, cy, radius_complete, paint);
-                }
-                paint.setStyle(Paint.Style.STROKE);
-                paint.setStrokeWidth(Math.max(2f, getDefaultStrokeWidth()));
-                paint.setColor(freeStickWithAlpha(0xFFFFFFFF, 0.32f * opacityFactor));
-                canvas.drawCircle(cx, cy, radius_complete, paint);
+                float strokeW = Math.max(2f, getDefaultStrokeWidth());
 
-                float idleKnobR = Math.max(radius_analog_stick * 1.1f, radius_complete * 0.26f);
-                paint.setStyle(Paint.Style.FILL);
+                // Faint dotted/dashed boundary ring + small center dot when idle
+                float dashLen = Math.max(6f, radius_complete * 0.14f);
+                paint.setStyle(Paint.Style.STROKE);
+                paint.setStrokeWidth(Math.max(1.5f, strokeW * 0.85f));
+                paint.setPathEffect(new android.graphics.DashPathEffect(new float[]{dashLen, dashLen * 0.85f}, 0f));
                 paint.setColor(freeStickWithAlpha(0xFFFFFFFF, 0.36f * opacityFactor));
-                canvas.drawCircle(cx, cy, idleKnobR, paint);
+                canvas.drawCircle(cx, cy, radius_complete, paint);
+                paint.setPathEffect(null);
+
+                float dotR = Math.max(4f, radius_complete * 0.085f);
+                paint.setStyle(Paint.Style.FILL);
+                paint.setColor(freeStickWithAlpha(0xFFFFFFFF, 0.45f * opacityFactor));
+                canvas.drawCircle(cx, cy, dotR, paint);
             }
             return;
         }
@@ -285,6 +291,9 @@ public class AnalogStickFree extends VirtualControllerElement {
             canvas.drawColor(Color.TRANSPARENT);
 
             if (!cfg.enableOnScreenStyleOfficial) {
+                if (opacityFactor <= 0.005f && freeBgFactor <= 0.005f && !isEditMode) {
+                    return;
+                }
                 switch (stick_state) {
                     case NO_MOVEMENT: {
                         paint.setStyle(Paint.Style.FILL);
@@ -294,32 +303,34 @@ public class AnalogStickFree extends VirtualControllerElement {
                     }
                     case MOVED_IN_DEAD_ZONE:
                     case MOVED_ACTIVE: {
-                        if (freeBgFactor > 0.01f) {
+                        if (freeBgFactor > 0.005f) {
                             paint.setStyle(Paint.Style.FILL);
-                            paint.setColor(freeStickWithAlpha(0xFFF5F5F9, freeBgFactor * 0.72f));
+                            paint.setColor(freeStickWithAlpha(0xFFF5F5F9, freeBgFactor * 0.85f));
                             canvas.drawCircle(touchStartX, touchStartY, radius_complete, paint);
                         }
 
-                        paint.setStyle(Paint.Style.STROKE);
-                        paint.setStrokeWidth(Math.max(2f, getDefaultStrokeWidth()));
-                        paint.setColor(freeStickWithAlpha(0xFFFFFFFF, 0.48f * opacityFactor));
-                        canvas.drawCircle(touchStartX, touchStartY, radius_complete, paint);
+                        if (opacityFactor > 0.005f) {
+                            paint.setStyle(Paint.Style.STROKE);
+                            paint.setStrokeWidth(Math.max(2f, getDefaultStrokeWidth()));
+                            paint.setColor(freeStickWithAlpha(0xFFFFFFFF, 0.52f * opacityFactor));
+                            canvas.drawCircle(touchStartX, touchStartY, radius_complete, paint);
 
-                        paint.setStrokeWidth(Math.max(1.5f, getDefaultStrokeWidth() * 0.7f));
-                        paint.setColor(freeStickWithAlpha(0xFFFFFFFF, 0.18f * opacityFactor));
-                        canvas.drawCircle(touchStartX, touchStartY, radius_dead_zone, paint);
+                            paint.setStrokeWidth(Math.max(1.5f, getDefaultStrokeWidth() * 0.7f));
+                            paint.setColor(freeStickWithAlpha(0xFFFFFFFF, 0.22f * opacityFactor));
+                            canvas.drawCircle(touchStartX, touchStartY, radius_dead_zone, paint);
 
-                        float knobR = Math.max(radius_analog_stick * 1.25f, radius_complete * 0.34f);
-                        int knobRgb = (isPressed() && click_state == CLICK_STATE.DOUBLE)
-                                ? com.limelight.ui.AppThemePalette.getCurrent(getContext()).accentLight
-                                : 0xFFFFFFFF;
-                        paint.setStyle(Paint.Style.FILL);
-                        paint.setColor(freeStickWithAlpha(knobRgb, 0.72f * opacityFactor));
-                        canvas.drawCircle(position_stick_x, position_stick_y, knobR, paint);
+                            float knobR = Math.max(radius_analog_stick * 1.25f, radius_complete * 0.34f);
+                            int knobRgb = (isPressed() && click_state == CLICK_STATE.DOUBLE)
+                                    ? com.limelight.ui.AppThemePalette.getCurrent(getContext()).accentLight
+                                    : 0xFFFFFFFF;
+                            paint.setStyle(Paint.Style.FILL);
+                            paint.setColor(freeStickWithAlpha(knobRgb, 0.78f * opacityFactor));
+                            canvas.drawCircle(position_stick_x, position_stick_y, knobR, paint);
 
-                        paint.setStyle(Paint.Style.STROKE);
-                        paint.setColor(freeStickWithAlpha(knobRgb, 0.88f * opacityFactor));
-                        canvas.drawCircle(position_stick_x, position_stick_y, knobR, paint);
+                            paint.setStyle(Paint.Style.STROKE);
+                            paint.setColor(freeStickWithAlpha(knobRgb, 0.92f * opacityFactor));
+                            canvas.drawCircle(position_stick_x, position_stick_y, knobR, paint);
+                        }
                         break;
                     }
                 }
@@ -398,38 +409,49 @@ public class AnalogStickFree extends VirtualControllerElement {
     public boolean onElementTouchEvent(MotionEvent event) {
         // save last click state
         CLICK_STATE lastClickState = click_state;
+        int action = event.getActionMasked();
+        int actionIndex = event.getActionIndex();
+
+        // Set touchStartX/Y BEFORE computing relative_x/y so ACTION_DOWN spawns cleanly at the finger
+        if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_POINTER_DOWN) {
+            if (!bIsFingerOnScreen) {
+                touchID = event.getPointerId(actionIndex);
+                touchStartX = event.getX(actionIndex);
+                touchStartY = event.getY(actionIndex);
+                bIsFingerOnScreen = true;
+            }
+        }
+
+        float curX = event.getX();
+        float curY = event.getY();
+        if (bIsFingerOnScreen) {
+            int idx = event.findPointerIndex(touchID);
+            if (idx >= 0) {
+                curX = event.getX(idx);
+                curY = event.getY(idx);
+            }
+        }
 
         // get absolute way for each axis
-        relative_x = -(touchStartX - event.getX());
-        relative_y = -(touchStartY - event.getY());
+        relative_x = -(touchStartX - curX);
+        relative_y = -(touchStartY - curY);
 
         // get radius and angel of movement from center
         movement_radius = getMovementRadius(relative_x, relative_y);
         movement_angle = getAngle(relative_x, relative_y);
-
-        // pass touch event to parent if out of outer circle
-//        if (movement_radius > radius_complete && !isPressed())
-//            return false;
 
         // chop radius if out of outer circle or near the edge
         if (movement_radius > (radius_complete - radius_analog_stick)) {
             movement_radius = radius_complete - radius_analog_stick;
         }
         // handle event depending on action
-        switch (event.getActionMasked()) {
+        switch (action) {
             // down event (touch event)
             case MotionEvent.ACTION_DOWN:
             case MotionEvent.ACTION_POINTER_DOWN: {
-                if (!bIsFingerOnScreen) {
-                    touchID = event.getPointerId(event.getActionIndex());
-                    touchStartX = event.getX();
-                    touchStartY = event.getY();
-                    bIsFingerOnScreen = true;
-                }
-
-                if (touchID == event.getPointerId(event.getActionIndex())) {
-                    touchX = event.getX();
-                    touchY = event.getY();
+                if (touchID == event.getPointerId(actionIndex)) {
+                    touchX = curX;
+                    touchY = curY;
 
                     // set to dead zoned, will be corrected in update position if necessary
                     stick_state = STICK_STATE.MOVED_IN_DEAD_ZONE;
@@ -454,8 +476,8 @@ public class AnalogStickFree extends VirtualControllerElement {
             case MotionEvent.ACTION_MOVE: {
                 for (int i = 0; i < event.getPointerCount(); i++) {
                     if (touchID == event.getPointerId(i)) {
-                        touchX = event.getX();
-                        touchY = event.getY();
+                        touchX = event.getX(i);
+                        touchY = event.getY(i);
 
                         updatePosition(event.getEventTime());
                     }
@@ -463,9 +485,10 @@ public class AnalogStickFree extends VirtualControllerElement {
                 break;
             }
             // up event (revoke touch)
+            case MotionEvent.ACTION_CANCEL:
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_POINTER_UP: {
-                if (touchID == event.getPointerId(event.getActionIndex())) {
+                if (action == MotionEvent.ACTION_CANCEL || touchID == event.getPointerId(actionIndex)) {
                     setPressed(false);
                     bIsFingerOnScreen = false;
                 }

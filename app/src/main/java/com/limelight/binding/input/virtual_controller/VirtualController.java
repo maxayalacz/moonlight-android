@@ -179,6 +179,10 @@ public class VirtualController {
 
     public void addElement(VirtualControllerElement element, int x, int y, int width, int height) {
         elements.add(element);
+        if (frame_layout != null) {
+            frame_layout.setClipChildren(false);
+            frame_layout.setClipToPadding(false);
+        }
         FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(width, height);
         layoutParams.setMargins(x, y, 0, 0);
 
@@ -246,7 +250,7 @@ public class VirtualController {
         handler.removeCallbacks(delayedRetransmitRunnable);
 
         sendControllerInputContextInternal();
-        if (frame_layout != null && PreferenceConfiguration.readPreferences(context).enableKeyboardVibrate) {
+        if (frame_layout != null && PreferenceConfiguration.readPreferences(context).vibrateOsc) {
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
                 VibrationEffect effect;
                 if (vibrationDuration == 0) {

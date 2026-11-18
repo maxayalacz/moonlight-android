@@ -347,6 +347,48 @@ public class UiHelper {
         }
         clearOpaquePanelBackgrounds(decorView);
         attachDialogBackdropBlur(dialog, decorView);
+        applyDialogButtonPalette(dialog);
+    }
+
+    private static void applyDialogButtonPalette(final android.app.Dialog dialog) {
+        if (dialog == null) {
+            return;
+        }
+        Context ctx = dialog.getContext();
+        com.limelight.ui.AppThemePalette palette = com.limelight.ui.AppThemePalette.getCurrent(ctx);
+        int neonAccent = palette.getNeonAccent();
+        int secondaryAccent = com.limelight.ui.AppThemePalette.withAlpha(neonAccent, 0.88f);
+
+        int[] buttonIds = {
+                DialogInterface.BUTTON_POSITIVE,
+                DialogInterface.BUTTON_NEGATIVE,
+                DialogInterface.BUTTON_NEUTRAL
+        };
+        if (dialog instanceof androidx.appcompat.app.AlertDialog) {
+            androidx.appcompat.app.AlertDialog ad = (androidx.appcompat.app.AlertDialog) dialog;
+            for (int which : buttonIds) {
+                android.widget.Button btn = ad.getButton(which);
+                if (btn != null) {
+                    btn.setTextColor(which == DialogInterface.BUTTON_POSITIVE ? neonAccent : secondaryAccent);
+                    btn.setAllCaps(false);
+                    if (which == DialogInterface.BUTTON_POSITIVE) {
+                        btn.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+                    }
+                }
+            }
+        } else if (dialog instanceof AlertDialog) {
+            AlertDialog ad = (AlertDialog) dialog;
+            for (int which : buttonIds) {
+                android.widget.Button btn = ad.getButton(which);
+                if (btn != null) {
+                    btn.setTextColor(which == DialogInterface.BUTTON_POSITIVE ? neonAccent : secondaryAccent);
+                    btn.setAllCaps(false);
+                    if (which == DialogInterface.BUTTON_POSITIVE) {
+                        btn.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+                    }
+                }
+            }
+        }
     }
 
     private static Activity unwrapActivity(Context context) {

@@ -778,6 +778,12 @@
     <string name="color_scheme_ember">Ember</string>
     <string name="color_scheme_slate">Slate</string>
 
+    <string name="title_connecting_animation_style">Connecting Animation Style</string>
+    <string name="summary_connecting_animation_style">Choose the PlayStation Portal animation layout shown while connecting</string>
+    <string name="connecting_animation_fullscreen">Fullscreen Portal</string>
+    <string name="connecting_animation_card">Compact Portal Card</string>
+    <string name="conn_cancel_hint">Press Back to cancel</string>
+
     <string name="title_focus_mode">Focus Mode Home Screen</string>
     <string name="summary_focus_mode">Display a full-screen circular server carousel with wave ribbons on the main screen</string>
     <string name="focus_mode_toggle_desc">Toggle Focus Mode</string>
