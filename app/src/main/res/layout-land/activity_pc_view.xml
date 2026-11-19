@@ -6,6 +6,35 @@
     android:layout_height="match_parent"
     tools:context=".PcView" >
 
+    <RelativeLayout
+        android:id="@+id/focusModeContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_alignParentBottom="true"
+        android:layout_alignParentTop="true"
+        android:layout_alignParentStart="true"
+        android:layout_alignParentEnd="true"
+        android:visibility="gone">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/focusPagerRecycler"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:paddingTop="0dp"
+            android:paddingBottom="0dp" />
+
+        <LinearLayout
+            android:id="@+id/focusPageIndicator"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentBottom="true"
+            android:layout_centerHorizontal="true"
+            android:layout_marginBottom="14dp"
+            android:gravity="center"
+            android:orientation="horizontal" />
+    </RelativeLayout>
+
     <!-- One UI 9 Liquid Glass Side Navigation Drawer/Toolbar -->
     <LinearLayout
         android:id="@+id/pcToolbarContainer"
@@ -18,7 +47,7 @@
         android:layout_marginLeft="16dp"
         android:layout_marginStart="16dp"
         android:padding="8dp"
-        android:elevation="4dp"
+        android:elevation="8dp"
         android:background="@drawable/bg_oneui_liquid_glass">
 
         <ImageButton
@@ -109,35 +138,6 @@
                 android:text="@string/searching_pc"/>
         </RelativeLayout>
 
-    </RelativeLayout>
-
-    <RelativeLayout
-        android:id="@+id/focusModeContainer"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:layout_alignParentBottom="true"
-        android:layout_alignParentTop="true"
-        android:layout_toRightOf="@+id/pcToolbarContainer"
-        android:layout_toEndOf="@+id/pcToolbarContainer"
-        android:visibility="gone">
-
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/focusPagerRecycler"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:clipToPadding="false"
-            android:paddingTop="8dp"
-            android:paddingBottom="40dp" />
-
-        <LinearLayout
-            android:id="@+id/focusPageIndicator"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_alignParentBottom="true"
-            android:layout_centerHorizontal="true"
-            android:layout_marginBottom="14dp"
-            android:gravity="center"
-            android:orientation="horizontal" />
     </RelativeLayout>
 
     <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton

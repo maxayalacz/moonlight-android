@@ -66,6 +66,8 @@ public class VirtualController {
 
     private List<VirtualControllerElement> elements = new ArrayList<>();
 
+    private final OscLiveBlurHelper liveBlurHelper;
+
     private Vibrator vibrator;
 
     private final VibrationEffect defaultVibrationEffect;
@@ -75,6 +77,7 @@ public class VirtualController {
         this.frame_layout = layout;
         this.context = context;
         this.handler = new Handler(Looper.getMainLooper());
+        this.liveBlurHelper = new OscLiveBlurHelper(this, context);
 
         this.vibrator = (Vibrator) context.getSystemService(Context.VIBRATOR_SERVICE);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -121,11 +124,16 @@ public class VirtualController {
 
     }
 
+    public OscLiveBlurHelper getLiveBlurHelper() {
+        return liveBlurHelper;
+    }
+
     Handler getHandler() {
         return handler;
     }
 
     public void hide() {
+        liveBlurHelper.stop();
         for (VirtualControllerElement element : elements) {
             element.setVisibility(View.GONE);
         }
@@ -137,6 +145,7 @@ public class VirtualController {
         showEnabledElements();
 
         buttonConfigure.setVisibility(View.VISIBLE);
+        liveBlurHelper.start();
     }
 
     public int switchShowHide() {
@@ -162,6 +171,7 @@ public class VirtualController {
     }
 
     public void removeElements() {
+        liveBlurHelper.stop();
         for (VirtualControllerElement element : elements) {
             frame_layout.removeView(element);
         }

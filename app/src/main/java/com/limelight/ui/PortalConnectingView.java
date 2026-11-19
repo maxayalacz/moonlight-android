@@ -185,6 +185,47 @@ public class PortalConnectingView extends View {
         revealAnimator.start();
     }
 
+    /**
+     * Plays the reversed PlayStation Portal animation (slightly faster, ~780ms) when disconnecting:
+     * the circular window contracts from fullscreen with spinning Dr. Strange rim sparks and fades
+     * the live stream back into the dark solar-eclipse void before invoking {@code onComplete}.
+     */
+    public void startStreamDisconnect(@Nullable final Runnable onComplete) {
+        if (revealing) {
+            return;
+        }
+        revealing = true;
+        revealProgress = 1f;
+        startTicker();
+
+        if (revealAnimator != null) {
+            revealAnimator.cancel();
+        }
+        revealAnimator = ValueAnimator.ofFloat(1f, 0f);
+        revealAnimator.setDuration(780L);
+        revealAnimator.setInterpolator(new LinearInterpolator());
+        revealAnimator.addUpdateListener(anim -> {
+            revealProgress = (float) anim.getAnimatedValue();
+            invalidate();
+        });
+        revealAnimator.addListener(new AnimatorListenerAdapter() {
+            private boolean canceled = false;
+
+            @Override
+            public void onAnimationCancel(Animator animation) {
+                canceled = true;
+            }
+
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                if (!canceled && onComplete != null) {
+                    onComplete.run();
+                }
+            }
+        });
+        revealAnimator.start();
+    }
+
     private void startTicker() {
         if (ticker == null) {
             ticker = ValueAnimator.ofFloat(0f, 1f);

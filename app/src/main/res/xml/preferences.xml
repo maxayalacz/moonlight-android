@@ -544,7 +544,7 @@
             android:title="@string/title_color_scheme"
             app:iconSpaceReserved="false" />
         <SwitchPreferenceCompat
-            android:defaultValue="false"
+            android:defaultValue="true"
             android:key="checkbox_focus_mode"
             android:summary="@string/summary_focus_mode"
             android:title="@string/title_focus_mode"

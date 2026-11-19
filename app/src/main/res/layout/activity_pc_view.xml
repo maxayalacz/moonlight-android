@@ -65,8 +65,8 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:clipToPadding="false"
-            android:paddingTop="84dp"
-            android:paddingBottom="60dp" />
+            android:paddingTop="0dp"
+            android:paddingBottom="0dp" />
 
         <LinearLayout
             android:id="@+id/focusPageIndicator"

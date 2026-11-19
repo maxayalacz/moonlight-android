@@ -288,18 +288,97 @@ public class SpinnerDialog implements Runnable, OnCancelListener {
             // aperture is crystal-clear when revealed
             window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND
                     | WindowManager.LayoutParams.FLAG_BLUR_BEHIND);
-            window.addFlags(WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+            window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN
+                    | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+                    | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
                     | WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                WindowManager.LayoutParams lp = window.getAttributes();
+                lp.layoutInDisplayCutoutMode = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
+                        ? WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+                        : WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+                window.setAttributes(lp);
+            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 window.setStatusBarColor(Color.TRANSPARENT);
                 window.setNavigationBarColor(Color.TRANSPARENT);
             }
+            androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false);
             View decor = window.getDecorView();
             decor.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE
                     | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                    | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+                    | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                    | View.SYSTEM_UI_FLAG_FULLSCREEN
+                    | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                    | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
         }
         return d;
+    }
+
+    /**
+     * Displays the reversed, faster PlayStation Portal disconnecting animation over the full screen
+     * (including display cutouts) and invokes {@code onComplete} once the portal has closed.
+     */
+    public static void displayDisconnectPortal(final Activity activity, final Runnable onComplete) {
+        if (activity == null || activity.isFinishing()
+                || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1 && activity.isDestroyed())) {
+            if (onComplete != null) {
+                onComplete.run();
+            }
+            return;
+        }
+        activity.runOnUiThread(() -> {
+            if (activity.isFinishing()
+                    || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1 && activity.isDestroyed())) {
+                if (onComplete != null) {
+                    onComplete.run();
+                }
+                return;
+            }
+            PreferenceConfiguration config = PreferenceConfiguration.readPreferences(activity);
+            if ("card".equals(config.connectingAnimationStyle)) {
+                if (onComplete != null) {
+                    onComplete.run();
+                }
+                return;
+            }
+            SpinnerDialog disconnectDialog = new SpinnerDialog(activity, "", "", false);
+            final Dialog d = disconnectDialog.buildFullscreenDialog();
+            if (disconnectDialog.topHudContainer != null) {
+                disconnectDialog.topHudContainer.setVisibility(View.GONE);
+            }
+            if (disconnectDialog.bottomCancelView != null) {
+                disconnectDialog.bottomCancelView.setVisibility(View.GONE);
+            }
+            d.setCancelable(false);
+            d.setCanceledOnTouchOutside(false);
+            Window window = d.getWindow();
+            if (window != null) {
+                window.addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                        | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE);
+            }
+            try {
+                d.show();
+            } catch (Exception e) {
+                if (onComplete != null) {
+                    onComplete.run();
+                }
+                return;
+            }
+            if (disconnectDialog.portalView != null) {
+                disconnectDialog.portalView.startStreamDisconnect(() -> {
+                    dismissSafely(d);
+                    if (onComplete != null) {
+                        onComplete.run();
+                    }
+                });
+            } else {
+                dismissSafely(d);
+                if (onComplete != null) {
+                    onComplete.run();
+                }
+            }
+        });
     }
 
     private Dialog buildCardDialog() {

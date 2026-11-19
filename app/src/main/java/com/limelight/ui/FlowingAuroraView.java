@@ -533,6 +533,12 @@ public class FlowingAuroraView extends View implements SharedPreferences.OnShare
         final int waveBaseColor = palette.accentLight;
         final int waveAltColor = palette.highlight;
 
+        // Keep wave ribbons proportional and fluid in portrait (where h >> w)
+        // instead of squishing horizontal cycles and over-stretching vertical amplitude.
+        final boolean isPortrait = h > w;
+        final float waveScaleH = isPortrait ? Math.min(h * 0.72f, w * 1.12f) : h;
+        final float cycleScale = isPortrait ? 0.58f : 1.0f;
+
         waveStrokePaint.setStrokeWidth(2.0f * density);
 
         for (int rIdx = 0; rIdx < RIBBON_COUNT; rIdx++) {
@@ -550,8 +556,8 @@ public class FlowingAuroraView extends View implements SharedPreferences.OnShare
 
                 float y = h * baseY;
                 for (RibbonComponent comp : ribbon.components) {
-                    y += (float) Math.sin(nx * Math.PI * 2.0 * comp.cycle - time * comp.speed + comp.phase)
-                            * (h * comp.amp * convergence);
+                    y += (float) Math.sin(nx * Math.PI * 2.0 * (comp.cycle * cycleScale) - time * comp.speed + comp.phase)
+                            * (waveScaleH * comp.amp * convergence);
                 }
 
                 if (first) {
@@ -568,13 +574,13 @@ public class FlowingAuroraView extends View implements SharedPreferences.OnShare
                 float convergence = (float) Math.pow(nodeDist, 1.5) * 0.85f + 0.15f;
 
                 float dynamicThickness = ribbon.thickness
-                        + (float) Math.sin(nx * Math.PI * 2.0 - time * 0.9f) * (ribbon.thickness * 0.2f);
-                float y = h * baseY + (h * dynamicThickness);
+                        + (float) Math.sin(nx * Math.PI * 2.0 * cycleScale - time * 0.9f) * (ribbon.thickness * 0.2f);
+                float y = h * baseY + (waveScaleH * dynamicThickness);
 
                 for (RibbonComponent comp : ribbon.components) {
-                    y += (float) Math.sin(nx * Math.PI * 2.0 * comp.cycle - time * comp.speed
+                    y += (float) Math.sin(nx * Math.PI * 2.0 * (comp.cycle * cycleScale) - time * comp.speed
                             + comp.phase + comp.phaseOffset)
-                            * (h * comp.amp * convergence);
+                            * (waveScaleH * comp.amp * convergence);
                 }
                 wavePath.lineTo(x, y);
             }

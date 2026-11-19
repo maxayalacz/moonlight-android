@@ -115,7 +115,7 @@ public class StreamSettings extends AppCompatActivity {
                     }
                 }, true);
 
-//        UiHelper.notifyNewRootView(this);
+        UiHelper.notifyNewRootView(this);
     }
 
     @Override
@@ -490,7 +490,7 @@ public class StreamSettings extends AppCompatActivity {
                     }
                 }
 
-                private android.graphics.drawable.Drawable buildPillTrackDrawable(Context ctx) {
+                private android.graphics.drawable.Drawable buildPillTrackDrawable(Context ctx, int neonAccent) {
                     int w = Math.round(UiHelper.dpToPx(ctx, 52f));
                     int h = Math.round(UiHelper.dpToPx(ctx, 30f));
                     float radius = h * 0.5f;
@@ -500,8 +500,8 @@ public class StreamSettings extends AppCompatActivity {
                     checked.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
                     checked.setSize(w, h);
                     checked.setCornerRadius(radius);
-                    checked.setColor(0x380B101B);
-                    checked.setStroke(strokeW, 0xFFFFFFFF);
+                    checked.setColor(com.limelight.ui.AppThemePalette.withAlpha(neonAccent, 0.28f));
+                    checked.setStroke(strokeW, neonAccent);
 
                     android.graphics.drawable.GradientDrawable unchecked = new android.graphics.drawable.GradientDrawable();
                     unchecked.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
@@ -550,7 +550,7 @@ public class StreamSettings extends AppCompatActivity {
                         SwitchCompat sw = (SwitchCompat) root;
                         sw.setThumbTintList(null);
                         sw.setTrackTintList(null);
-                        sw.setTrackDrawable(buildPillTrackDrawable(sw.getContext()));
+                        sw.setTrackDrawable(buildPillTrackDrawable(sw.getContext(), neonAccent));
                         sw.setThumbDrawable(buildPillThumbDrawable(sw.getContext(), neonAccent));
                         sw.setSwitchMinWidth(Math.round(UiHelper.dpToPx(sw.getContext(), 52f)));
                         sw.setThumbTextPadding(0);
@@ -562,7 +562,7 @@ public class StreamSettings extends AppCompatActivity {
                             sw.setThumbTintList(null);
                             sw.setTrackTintList(null);
                         }
-                        sw.setTrackDrawable(buildPillTrackDrawable(sw.getContext()));
+                        sw.setTrackDrawable(buildPillTrackDrawable(sw.getContext(), neonAccent));
                         sw.setThumbDrawable(buildPillThumbDrawable(sw.getContext(), neonAccent));
                         sw.setSwitchMinWidth(Math.round(UiHelper.dpToPx(sw.getContext(), 52f)));
                         sw.setThumbTextPadding(0);

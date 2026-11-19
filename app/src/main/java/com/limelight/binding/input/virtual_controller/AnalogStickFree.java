@@ -270,13 +270,22 @@ public class AnalogStickFree extends VirtualControllerElement {
                 float cy = getHeight() * 0.5f;
                 float strokeW = Math.max(2f, getDefaultStrokeWidth());
 
-                // Subtle frosted glass idle zone + dashed boundary ring + center dot
+                // Subtle live blurred frosted glass idle zone + dashed boundary ring + center dot
+                android.graphics.Path idleClip = new android.graphics.Path();
+                idleClip.addCircle(cx, cy, radius_complete, android.graphics.Path.Direction.CW);
+                android.graphics.RectF idleBounds = new android.graphics.RectF(
+                        cx - radius_complete, cy - radius_complete, cx + radius_complete, cy + radius_complete);
+                OscLiveBlurHelper blurHelper = virtualController.getLiveBlurHelper();
+                if (blurHelper != null) {
+                    blurHelper.drawLiveBlurForBounds(canvas, this, idleClip, idleBounds, opacityFactor * 0.65f);
+                }
+
                 android.graphics.LinearGradient idleGlassShader = new android.graphics.LinearGradient(
                         cx - radius_complete, cy - radius_complete, cx + radius_complete, cy + radius_complete,
                         new int[]{
-                                freeStickWithAlpha(0xFF2A3652, 0.38f * opacityFactor),
-                                freeStickWithAlpha(0xFF141B2B, 0.30f * opacityFactor),
-                                freeStickWithAlpha(0xFF0C111D, 0.36f * opacityFactor)
+                                freeStickWithAlpha(0xFF222B40, 0.28f * opacityFactor),
+                                freeStickWithAlpha(0xFF101624, 0.22f * opacityFactor),
+                                freeStickWithAlpha(0xFF0A0E18, 0.28f * opacityFactor)
                         },
                         new float[]{0f, 0.52f, 1f},
                         android.graphics.Shader.TileMode.CLAMP);
@@ -318,13 +327,23 @@ public class AnalogStickFree extends VirtualControllerElement {
                     case MOVED_IN_DEAD_ZONE:
                     case MOVED_ACTIVE: {
                         if (freeBgFactor > 0.005f) {
+                            android.graphics.Path freeClip = new android.graphics.Path();
+                            freeClip.addCircle(touchStartX, touchStartY, radius_complete, android.graphics.Path.Direction.CW);
+                            android.graphics.RectF freeBounds = new android.graphics.RectF(
+                                    touchStartX - radius_complete, touchStartY - radius_complete,
+                                    touchStartX + radius_complete, touchStartY + radius_complete);
+                            OscLiveBlurHelper blurHelper = virtualController.getLiveBlurHelper();
+                            boolean drewLiveBlur = blurHelper != null
+                                    && blurHelper.drawLiveBlurForBounds(canvas, this, freeClip, freeBounds, freeBgFactor);
+
+                            float tintScale = drewLiveBlur ? 0.55f : 0.90f;
                             android.graphics.LinearGradient freeBaseGlass = new android.graphics.LinearGradient(
                                     touchStartX - radius_complete, touchStartY - radius_complete,
                                     touchStartX + radius_complete, touchStartY + radius_complete,
                                     new int[]{
-                                            freeStickWithAlpha(0xFF2A3652, freeBgFactor * 0.92f),
-                                            freeStickWithAlpha(0xFF141B2B, freeBgFactor * 0.85f),
-                                            freeStickWithAlpha(0xFF0C111D, freeBgFactor * 0.92f)
+                                            freeStickWithAlpha(0xFF222B40, freeBgFactor * tintScale),
+                                            freeStickWithAlpha(0xFF101624, freeBgFactor * tintScale * 0.92f),
+                                            freeStickWithAlpha(0xFF0A0E18, freeBgFactor * tintScale)
                                     },
                                     new float[]{0f, 0.52f, 1f},
                                     android.graphics.Shader.TileMode.CLAMP);

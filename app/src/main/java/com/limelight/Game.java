@@ -4262,12 +4262,24 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
         }
     }
 
+    private boolean disconnectingWithPortal = false;
+
+    private void finishWithDisconnectPortal() {
+        if (disconnectingWithPortal || isFinishing()) {
+            return;
+        }
+        disconnectingWithPortal = true;
+        SpinnerDialog.displayDisconnectPortal(this, () -> {
+            maybeLaunchSessionMetrics();
+            finish();
+        });
+    }
+
     public void disconnect() {
         if (prefConfig.smartClipboardSync) {
             getClipboard(-1);
         }
-        maybeLaunchSessionMetrics();
-        finish();
+        finishWithDisconnectPortal();
     }
 
     public void quit() {
@@ -4284,8 +4296,7 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
         builder.setPositiveButton(getString(R.string.yes), (dialog, which) -> {
             quitOnStop = true;
             dialog.dismiss();
-            maybeLaunchSessionMetrics();
-            finish();
+            finishWithDisconnectPortal();
         });
 
         builder.setNegativeButton(getString(R.string.no), (dialog, which) -> dialog.dismiss());

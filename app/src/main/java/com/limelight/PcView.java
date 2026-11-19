@@ -209,8 +209,9 @@ public class PcView extends AppCompatActivity implements AdapterFragmentCallback
             focusModeButton.setOnClickListener(new OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                    SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(PcView.this);
-                    boolean next = !prefs.getBoolean(PREF_FOCUS_MODE, false);
+                    SharedPreferences prefs = com.limelight.profiles.ProfilesManager.getInstance()
+                            .getOverlayingSharedPreferences(PcView.this);
+                    boolean next = !prefs.getBoolean(PREF_FOCUS_MODE, true);
                     prefs.edit().putBoolean(PREF_FOCUS_MODE, next).apply();
                     updateFocusModeUi();
                 }
@@ -490,8 +491,9 @@ public class PcView extends AppCompatActivity implements AdapterFragmentCallback
     }
 
     private void updateFocusModeUi() {
-        boolean focusMode = PreferenceManager.getDefaultSharedPreferences(this)
-                .getBoolean(PREF_FOCUS_MODE, false);
+        boolean focusMode = com.limelight.profiles.ProfilesManager.getInstance()
+                .getOverlayingSharedPreferences(this)
+                .getBoolean(PREF_FOCUS_MODE, true);
         AppThemePalette palette = AppThemePalette.getCurrent(this);
 
         View rootView = findViewById(android.R.id.content);

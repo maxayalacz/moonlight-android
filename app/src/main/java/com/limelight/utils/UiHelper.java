@@ -648,7 +648,7 @@ public class UiHelper {
         captureActivityFrame.run();
     }
 
-    private static android.view.SurfaceView findStreamSurfaceView(Activity activity) {
+    public static android.view.SurfaceView findStreamSurfaceView(Activity activity) {
         View container = activity.findViewById(R.id.streamContainer);
         if (!(container instanceof android.view.ViewGroup)) {
             return null;
@@ -709,7 +709,7 @@ public class UiHelper {
         backdrop.setImageBitmap(bitmap);
     }
 
-    private static void fastBoxBlur(android.graphics.Bitmap bitmap, int radius) {
+    public static void fastBoxBlur(android.graphics.Bitmap bitmap, int radius) {
         int w = bitmap.getWidth();
         int h = bitmap.getHeight();
         if (w <= 1 || h <= 1 || radius <= 0) {

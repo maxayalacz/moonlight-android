@@ -239,12 +239,18 @@ public class DigitalPad extends VirtualControllerElement {
         dpadPath.quadTo(cx - armW, cy - armW, cx - armW, cy - armW - filletR);
         dpadPath.close();
 
+        rect.set(cx - halfSpan, cy - halfSpan, cx + halfSpan, cy + halfSpan);
+        OscLiveBlurHelper blurHelper = virtualController.getLiveBlurHelper();
+        boolean drewLiveBlur = blurHelper != null
+                && blurHelper.drawLiveBlurForBounds(canvas, this, dpadPath, rect, opacityFactor);
+
+        float tintScale = drewLiveBlur ? 0.42f : 0.72f;
         android.graphics.LinearGradient glassBaseShader = new android.graphics.LinearGradient(
                 cx - halfSpan, cy - halfSpan, cx + halfSpan, cy + halfSpan,
                 new int[]{
-                        dpadWithAlpha(0xFF2A3652, 0.72f * opacityFactor),
-                        dpadWithAlpha(0xFF141B2B, 0.66f * opacityFactor),
-                        dpadWithAlpha(0xFF0C111D, 0.74f * opacityFactor)
+                        dpadWithAlpha(0xFF222B40, tintScale * opacityFactor),
+                        dpadWithAlpha(0xFF101624, tintScale * 0.92f * opacityFactor),
+                        dpadWithAlpha(0xFF0A0E18, tintScale * 1.04f * opacityFactor)
                 },
                 new float[]{0f, 0.52f, 1f},
                 android.graphics.Shader.TileMode.CLAMP);
@@ -252,8 +258,8 @@ public class DigitalPad extends VirtualControllerElement {
         android.graphics.LinearGradient glassSheenShader = new android.graphics.LinearGradient(
                 cx - halfSpan, cy - halfSpan, cx + halfSpan * 0.75f, cy + halfSpan * 0.75f,
                 new int[]{
-                        dpadWithAlpha(0xFFFFFFFF, 0.28f * opacityFactor),
-                        dpadWithAlpha(0xFFFFFFFF, 0.08f * opacityFactor),
+                        dpadWithAlpha(0xFFFFFFFF, 0.24f * opacityFactor),
+                        dpadWithAlpha(0xFFFFFFFF, 0.06f * opacityFactor),
                         dpadWithAlpha(0xFFFFFFFF, 0.02f * opacityFactor)
                 },
                 new float[]{0f, 0.45f, 1f},

@@ -237,20 +237,29 @@ public class AnalogStick extends VirtualControllerElement {
             float cy = getHeight() * 0.5f;
             float strokeW = Math.max(2f, getDefaultStrokeWidth());
 
-            // Dark frosted glass base disc + specular sheen + outer border ring
+            // Live blurred stream frosted glass base disc + specular sheen + outer border ring
+            android.graphics.Path baseClip = new android.graphics.Path();
+            baseClip.addCircle(cx, cy, radius_complete, android.graphics.Path.Direction.CW);
+            android.graphics.RectF baseBounds = new android.graphics.RectF(
+                    cx - radius_complete, cy - radius_complete, cx + radius_complete, cy + radius_complete);
+            OscLiveBlurHelper blurHelper = virtualController.getLiveBlurHelper();
+            boolean drewLiveBlur = blurHelper != null
+                    && blurHelper.drawLiveBlurForBounds(canvas, this, baseClip, baseBounds, opacityFactor);
+
+            float tintScale = drewLiveBlur ? 0.40f : 0.70f;
             android.graphics.LinearGradient baseGlassShader = new android.graphics.LinearGradient(
                     cx - radius_complete, cy - radius_complete, cx + radius_complete, cy + radius_complete,
                     new int[]{
-                            stickWithAlpha(0xFF2A3652, 0.70f * opacityFactor),
-                            stickWithAlpha(0xFF141B2B, 0.64f * opacityFactor),
-                            stickWithAlpha(0xFF0C111D, 0.72f * opacityFactor)
+                            stickWithAlpha(0xFF222B40, tintScale * opacityFactor),
+                            stickWithAlpha(0xFF101624, tintScale * 0.92f * opacityFactor),
+                            stickWithAlpha(0xFF0A0E18, tintScale * 1.04f * opacityFactor)
                     },
                     new float[]{0f, 0.52f, 1f},
                     android.graphics.Shader.TileMode.CLAMP);
             android.graphics.LinearGradient baseSheenShader = new android.graphics.LinearGradient(
                     cx - radius_complete, cy - radius_complete, cx + radius_complete * 0.7f, cy + radius_complete * 0.7f,
                     new int[]{
-                            stickWithAlpha(0xFFFFFFFF, 0.25f * opacityFactor),
+                            stickWithAlpha(0xFFFFFFFF, 0.22f * opacityFactor),
                             stickWithAlpha(0xFFFFFFFF, 0.06f * opacityFactor),
                             stickWithAlpha(0xFFFFFFFF, 0.01f * opacityFactor)
                     },

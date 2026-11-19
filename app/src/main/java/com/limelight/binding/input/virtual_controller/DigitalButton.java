@@ -196,32 +196,48 @@ public class DigitalButton extends VirtualControllerElement {
                     || elementId == EID_X || elementId == EID_Y
                     || elementId == EID_LSB || elementId == EID_RSB);
 
+            android.graphics.Path clipPath = new android.graphics.Path();
+            float cx = w * 0.5f;
+            float cy = h * 0.5f;
+            float r = Math.max(4f, (minDim - strokeW) * 0.5f - 2f);
+            float cornerR = (elementId == EID_TOUCHPAD) ? minDim * 0.18f : minDim * 0.40f;
+            android.graphics.RectF blurBounds = new android.graphics.RectF();
+            if (isCircle) {
+                clipPath.addCircle(cx, cy, r, android.graphics.Path.Direction.CW);
+                blurBounds.set(cx - r, cy - r, cx + r, cy + r);
+            } else {
+                clipPath.addRoundRect(rect, cornerR, cornerR, android.graphics.Path.Direction.CW);
+                blurBounds.set(rect);
+            }
+
+            OscLiveBlurHelper blurHelper = virtualController.getLiveBlurHelper();
+            boolean drewLiveBlur = blurHelper != null
+                    && blurHelper.drawLiveBlurForBounds(canvas, this, clipPath, blurBounds, opacityFactor);
+
+            float tintScale = drewLiveBlur ? 0.42f : 0.72f;
             android.graphics.LinearGradient glassBaseShader = new android.graphics.LinearGradient(
-                    rect.left, rect.top, rect.right, rect.bottom,
+                    blurBounds.left, blurBounds.top, blurBounds.right, blurBounds.bottom,
                     new int[]{
-                            withAlpha(0xFF2A3652, (pressed ? 0.82f : 0.72f) * opacityFactor),
-                            withAlpha(0xFF141B2B, (pressed ? 0.76f : 0.66f) * opacityFactor),
-                            withAlpha(0xFF0C111D, (pressed ? 0.84f : 0.74f) * opacityFactor)
+                            withAlpha(0xFF222B40, (pressed ? 0.56f : tintScale) * opacityFactor),
+                            withAlpha(0xFF101624, (pressed ? 0.52f : tintScale * 0.92f) * opacityFactor),
+                            withAlpha(0xFF0A0E18, (pressed ? 0.60f : tintScale * 1.04f) * opacityFactor)
                     },
                     new float[]{0f, 0.52f, 1f},
                     android.graphics.Shader.TileMode.CLAMP);
 
             android.graphics.LinearGradient glassSheenShader = new android.graphics.LinearGradient(
-                    rect.left, rect.top, rect.right * 0.85f, rect.bottom * 0.85f,
+                    blurBounds.left, blurBounds.top, blurBounds.right * 0.85f, blurBounds.bottom * 0.85f,
                     new int[]{
-                            withAlpha(0xFFFFFFFF, (pressed ? 0.42f : 0.28f) * opacityFactor),
-                            withAlpha(baseRgb, (pressed ? 0.45f : 0.14f) * opacityFactor),
-                            withAlpha(0xFFFFFFFF, 0.03f * opacityFactor)
+                            withAlpha(0xFFFFFFFF, (pressed ? 0.44f : 0.24f) * opacityFactor),
+                            withAlpha(0xFFFFFFFF, (pressed ? 0.22f : 0.06f) * opacityFactor),
+                            withAlpha(0xFFFFFFFF, 0.02f * opacityFactor)
                     },
                     new float[]{0f, 0.45f, 1f},
                     android.graphics.Shader.TileMode.CLAMP);
 
-            float borderAlpha = (pressed ? 0.95f : 0.62f) * opacityFactor;
+            float borderAlpha = (pressed ? 0.95f : 0.60f) * opacityFactor;
 
             if (isCircle) {
-                float cx = w * 0.5f;
-                float cy = h * 0.5f;
-                float r = Math.max(4f, (minDim - strokeW) * 0.5f - 2f);
                 paint.setStyle(Paint.Style.FILL);
                 paint.setShader(glassBaseShader);
                 canvas.drawCircle(cx, cy, r, paint);
@@ -239,7 +255,6 @@ public class DigitalButton extends VirtualControllerElement {
                 paint.setColor(withAlpha(baseRgb, borderAlpha));
                 canvas.drawCircle(cx, cy, r, paint);
             } else {
-                float cornerR = (elementId == EID_TOUCHPAD) ? minDim * 0.18f : minDim * 0.40f;
                 paint.setStyle(Paint.Style.FILL);
                 paint.setShader(glassBaseShader);
                 canvas.drawRoundRect(rect, cornerR, cornerR, paint);
@@ -260,8 +275,6 @@ public class DigitalButton extends VirtualControllerElement {
 
             // Vector glyph / label
             int fgColor = withAlpha(baseRgb, fgAlpha);
-            float cx = w * 0.5f;
-            float cy = h * 0.5f;
             if (elementId == EID_BACK) {
                 drawBackVectorGlyph(canvas, cx, cy, minDim, fgColor);
             } else if (elementId == EID_START) {
@@ -302,15 +315,6 @@ public class DigitalButton extends VirtualControllerElement {
     }
 
     private int resolveVectorButtonColor() {
-        if ("A".equalsIgnoreCase(text)) {
-            return 0xFF30D158;
-        } else if ("B".equalsIgnoreCase(text)) {
-            return 0xFFFF5252;
-        } else if ("X".equalsIgnoreCase(text)) {
-            return 0xFF40C4FF;
-        } else if ("Y".equalsIgnoreCase(text)) {
-            return 0xFFFFD740;
-        }
         return 0xFFFFFFFF;
     }
 
