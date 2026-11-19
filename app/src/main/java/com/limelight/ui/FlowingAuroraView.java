@@ -482,6 +482,7 @@ public class FlowingAuroraView extends View {
     public static class FrostedCardDrawable extends Drawable {
         private final WeakReference<View> hostViewRef;
         private final WeakReference<FlowingAuroraView> auroraRef;
+        private final WeakReference<PortalShaderView> portalRef;
         private final CornerMode cornerMode;
         private final float cornerRadiusPx;
         private final int frostTintColor;
@@ -498,8 +499,16 @@ public class FlowingAuroraView extends View {
         public FrostedCardDrawable(View hostView, @Nullable FlowingAuroraView auroraView,
                                    CornerMode cornerMode, float cornerRadiusPx,
                                    int frostTintColor, float strokeWidthPx) {
+            this(hostView, auroraView, null, cornerMode, cornerRadiusPx, frostTintColor, strokeWidthPx);
+        }
+
+        public FrostedCardDrawable(View hostView, @Nullable FlowingAuroraView auroraView,
+                                   @Nullable PortalShaderView portalView,
+                                   CornerMode cornerMode, float cornerRadiusPx,
+                                   int frostTintColor, float strokeWidthPx) {
             this.hostViewRef = new WeakReference<>(hostView);
             this.auroraRef = new WeakReference<>(auroraView);
+            this.portalRef = new WeakReference<>(portalView);
             this.cornerMode = cornerMode;
             this.cornerRadiusPx = cornerRadiusPx;
             this.frostTintColor = frostTintColor;
@@ -509,6 +518,9 @@ public class FlowingAuroraView extends View {
             this.strokePaint.setColor(0x42FFFFFF);
             if (auroraView != null) {
                 auroraView.registerFrostedDrawable(this);
+            }
+            if (portalView != null) {
+                portalView.registerFrostedDrawable(this);
             }
         }
 
@@ -577,8 +589,27 @@ public class FlowingAuroraView extends View {
             canvas.clipPath(clipPath);
 
             View host = hostViewRef.get();
+            PortalShaderView portal = portalRef.get();
             FlowingAuroraView aurora = auroraRef.get();
-            if (host != null && aurora != null && aurora.getWidth() > 0 && aurora.getHeight() > 0) {
+            if (host != null && portal != null && portal.getWidth() > 0 && portal.getHeight() > 0) {
+                Bitmap blurred = portal.getBlurredBitmap();
+                if (blurred != null && !blurred.isRecycled()) {
+                    host.getLocationInWindow(hostLoc);
+                    portal.getLocationInWindow(auroraLoc);
+                    int relX = hostLoc[0] - auroraLoc[0];
+                    int relY = hostLoc[1] - auroraLoc[1];
+                    float sx = blurred.getWidth() / (float) portal.getWidth();
+                    float sy = blurred.getHeight() / (float) portal.getHeight();
+                    srcRect.set(
+                            Math.max(0, Math.round(relX * sx)),
+                            Math.max(0, Math.round(relY * sy)),
+                            Math.min(blurred.getWidth(), Math.round((relX + bounds.width()) * sx)),
+                            Math.min(blurred.getHeight(), Math.round((relY + bounds.height()) * sy)));
+                    if (!srcRect.isEmpty()) {
+                        canvas.drawBitmap(blurred, srcRect, rectF, bitmapPaint);
+                    }
+                }
+            } else if (host != null && aurora != null && aurora.getWidth() > 0 && aurora.getHeight() > 0) {
                 host.getLocationInWindow(hostLoc);
                 aurora.getLocationInWindow(auroraLoc);
                 int relX = hostLoc[0] - auroraLoc[0];

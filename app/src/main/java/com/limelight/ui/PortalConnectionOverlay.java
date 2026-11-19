@@ -39,18 +39,36 @@ import com.limelight.utils.UiHelper;
  */
 public class PortalConnectionOverlay extends FrameLayout {
 
-    private static final long PHASE0_IRIS_CLOSE_MS = 450L;
-    private static final long PHASE2_READY_MS = 300L;
     private static final long PHASE3_HUD_FADE_MS = 250L;
-    private static final long PHASE3_PREVIEW_FADE_MS = 400L;
-    private static final long PHASE3_HOLD_MS = 900L;
-    private static final long PHASE4_EXPAND_MS = 550L;
     private static final long FIRST_FRAME_FALLBACK_MS = 700L;
-
-    private static final long DISCONNECT_STEP1_IRIS_CLOSE_MS = 450L;
-    private static final long DISCONNECT_STEP2_FADE_STARFIELD_MS = 350L;
-    private static final long DISCONNECT_STEP3_IRIS_OPEN_MS = 500L;
     private static final long CANCEL_REOPEN_MS = 400L;
+
+    // Configurable durations loaded from UI Settings -> Portal Animation
+    private long phase0IrisCloseMs = com.limelight.preferences.PreferenceConfiguration.DEFAULT_PORTAL_LAUNCH_CLOSE_MS;
+    private long phase2ReadyMs = com.limelight.preferences.PreferenceConfiguration.DEFAULT_PORTAL_READY_MS;
+    private long phase3PreviewFadeMs = com.limelight.preferences.PreferenceConfiguration.DEFAULT_PORTAL_PREVIEW_FADE_MS;
+    private long phase3HoldMs = com.limelight.preferences.PreferenceConfiguration.DEFAULT_PORTAL_PREVIEW_HOLD_MS;
+    private long phase4ExpandMs = com.limelight.preferences.PreferenceConfiguration.DEFAULT_PORTAL_EXPAND_MS;
+    private long disconnectStep1IrisCloseMs = 450L;
+    private long disconnectStep2FadeStarfieldMs = 350L;
+    private long disconnectStep3IrisOpenMs = 500L;
+
+    private void loadPreferences() {
+        com.limelight.preferences.PreferenceConfiguration cfg =
+                com.limelight.preferences.PreferenceConfiguration.readPreferences(getContext());
+        phase0IrisCloseMs = Math.max(150L, cfg.portalLaunchCloseMs);
+        phase2ReadyMs = Math.max(100L, cfg.portalReadyMs);
+        phase3PreviewFadeMs = Math.max(100L, cfg.portalPreviewFadeMs);
+        phase3HoldMs = Math.max(0L, cfg.portalPreviewHoldMs);
+        phase4ExpandMs = Math.max(200L, cfg.portalExpandMs);
+        long totalDisconnect = Math.max(300L, cfg.portalDisconnectMs);
+        disconnectStep1IrisCloseMs = Math.max(100L, Math.round(totalDisconnect * 0.35f));
+        disconnectStep2FadeStarfieldMs = Math.max(100L, Math.round(totalDisconnect * 0.27f));
+        disconnectStep3IrisOpenMs = Math.max(100L, totalDisconnect - disconnectStep1IrisCloseMs - disconnectStep2FadeStarfieldMs);
+        if (shaderView != null) {
+            shaderView.refreshFromPrefs();
+        }
+    }
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private PortalShaderView shaderView;
@@ -204,6 +222,7 @@ public class PortalConnectionOverlay extends FrameLayout {
             @Nullable Runnable onRevealComplete) {
         cancelAnimatorsAndCallbacks();
         shaderView.stopRendering();
+        loadPreferences();
 
         this.active = true;
         this.disconnecting = false;
@@ -240,12 +259,12 @@ public class PortalConnectionOverlay extends FrameLayout {
 
         shaderView.startRendering();
 
-        // Fade in HUD while closing the iris from 1.0 -> 0.0 over 450 ms
-        topHudContainer.animate().alpha(1f).setDuration(PHASE0_IRIS_CLOSE_MS).start();
-        cancelButton.animate().alpha(1f).setDuration(PHASE0_IRIS_CLOSE_MS).start();
+        // Fade in HUD while closing the iris from 1.0 -> 0.0
+        topHudContainer.animate().alpha(1f).setDuration(phase0IrisCloseMs).start();
+        cancelButton.animate().alpha(1f).setDuration(phase0IrisCloseMs).start();
 
         activeAnimator = ValueAnimator.ofFloat(1f, 0f);
-        activeAnimator.setDuration(PHASE0_IRIS_CLOSE_MS);
+        activeAnimator.setDuration(phase0IrisCloseMs);
         activeAnimator.setInterpolator(new LinearInterpolator());
         activeAnimator.addUpdateListener(anim -> shaderView.setExpandProgress((float) anim.getAnimatedValue()));
         activeAnimator.addListener(new AnimatorListenerAdapter() {
@@ -286,7 +305,7 @@ public class PortalConnectionOverlay extends FrameLayout {
     }
 
     /**
-     * Phase 2 — Connected / Ready Snap (300 ms).
+     * Phase 2 — Connected / Ready Snap.
      */
     public void onConnectionStarted() {
         mainHandler.post(() -> {
@@ -323,7 +342,7 @@ public class PortalConnectionOverlay extends FrameLayout {
 
         cancelActiveAnimator();
         activeAnimator = ValueAnimator.ofFloat(shaderView.getReadyMix(), 1f);
-        activeAnimator.setDuration(PHASE2_READY_MS);
+        activeAnimator.setDuration(phase2ReadyMs);
         activeAnimator.setInterpolator(new DecelerateInterpolator());
         activeAnimator.addUpdateListener(anim -> shaderView.setReadyMix((float) anim.getAnimatedValue()));
         activeAnimator.addListener(new AnimatorListenerAdapter() {
@@ -368,7 +387,7 @@ public class PortalConnectionOverlay extends FrameLayout {
     }
 
     /**
-     * Phase 3 — Live Stream Peephole (400 ms fade + 900 ms hold).
+     * Phase 3 — Live Stream Peephole.
      */
     private void startPhase3() {
         if (!active || disconnecting || canceling || phase3Started) {
@@ -389,7 +408,7 @@ public class PortalConnectionOverlay extends FrameLayout {
 
         cancelActiveAnimator();
         activeAnimator = ValueAnimator.ofFloat(shaderView.getPreviewMix(), 1f);
-        activeAnimator.setDuration(PHASE3_PREVIEW_FADE_MS);
+        activeAnimator.setDuration(phase3PreviewFadeMs);
         activeAnimator.setInterpolator(new DecelerateInterpolator());
         activeAnimator.addUpdateListener(anim -> shaderView.setPreviewMix((float) anim.getAnimatedValue()));
         activeAnimator.addListener(new AnimatorListenerAdapter() {
@@ -406,14 +425,18 @@ public class PortalConnectionOverlay extends FrameLayout {
                     return;
                 }
                 shaderView.setPreviewMix(1f);
-                mainHandler.postDelayed(phase3HoldRunnable, PHASE3_HOLD_MS);
+                if (phase3HoldMs <= 0L) {
+                    startPhase4();
+                } else {
+                    mainHandler.postDelayed(phase3HoldRunnable, phase3HoldMs);
+                }
             }
         });
         activeAnimator.start();
     }
 
     /**
-     * Phase 4 — Iris Wipe Open (550 ms linear; cubic easing handled inside shader).
+     * Phase 4 — Iris Wipe Open (linear; cubic easing handled inside shader).
      */
     private void startPhase4() {
         if (!active || disconnecting || canceling) {
@@ -421,7 +444,7 @@ public class PortalConnectionOverlay extends FrameLayout {
         }
         cancelActiveAnimator();
         activeAnimator = ValueAnimator.ofFloat(shaderView.getExpandProgress(), 1f);
-        activeAnimator.setDuration(PHASE4_EXPAND_MS);
+        activeAnimator.setDuration(phase4ExpandMs);
         activeAnimator.setInterpolator(new LinearInterpolator());
         activeAnimator.addUpdateListener(anim -> shaderView.setExpandProgress((float) anim.getAnimatedValue()));
         activeAnimator.addListener(new AnimatorListenerAdapter() {
@@ -451,6 +474,7 @@ public class PortalConnectionOverlay extends FrameLayout {
     /**
      * Smooth cancellation during Phases 0–3: fades u_previewMix -> 0 and expands u_expandProgress -> 1
      * back into the synced full-screen starfield before invoking onCancelAction.
+     * Keeps the overlay visible holding the starfield until Game finishes so no stream frame flashes.
      */
     public void cancelWithReopen() {
         mainHandler.post(() -> {
@@ -490,7 +514,7 @@ public class PortalConnectionOverlay extends FrameLayout {
                     if (innerCanceled) {
                         return;
                     }
-                    releaseAndHide();
+                    shaderView.setUniforms(0f, 0f, 1f);
                     if (cancel != null) {
                         cancel.run();
                     }
@@ -502,9 +526,11 @@ public class PortalConnectionOverlay extends FrameLayout {
 
     /**
      * Bidirectional Disconnect / Close Sequence (Live Stream -> App Menu):
-     *  - Step 1 (450 ms): Iris close over live stream (u_expandProgress 1 -> 0, preview & ready = 1)
-     *  - Step 2 (350 ms): Fade back to starfield (u_previewMix & u_readyMix 1 -> 0)
-     *  - Step 3 (500 ms): Iris open to full-screen synced starfield (u_expandProgress 0 -> 1)
+     *  - Step 1: Iris close over live stream (u_expandProgress 1 -> 0, preview & ready = 1)
+     *  - Step 2: Fade back to starfield (u_previewMix & u_readyMix 1 -> 0)
+     *  - Step 3: Iris open to full-screen synced starfield (u_expandProgress 0 -> 1)
+     * Keeps the overlay opaque holding the full-screen starfield through Game.finish() so the
+     * underlying video SurfaceView never flashes a frame during window teardown.
      */
     public void startDisconnecting(@Nullable final Runnable onComplete) {
         startDisconnecting(null, onComplete);
@@ -519,6 +545,7 @@ public class PortalConnectionOverlay extends FrameLayout {
             }
             cancelAnimatorsAndCallbacks();
             shaderView.stopRendering();
+            loadPreferences();
 
             this.active = true;
             this.disconnecting = true;
@@ -534,9 +561,9 @@ public class PortalConnectionOverlay extends FrameLayout {
 
             shaderView.startRendering();
 
-            // Step 1: Iris Close Over Stream (450 ms)
+            // Step 1: Iris Close Over Stream
             activeAnimator = ValueAnimator.ofFloat(1f, 0f);
-            activeAnimator.setDuration(DISCONNECT_STEP1_IRIS_CLOSE_MS);
+            activeAnimator.setDuration(disconnectStep1IrisCloseMs);
             activeAnimator.setInterpolator(new LinearInterpolator());
             activeAnimator.addUpdateListener(anim -> shaderView.setExpandProgress((float) anim.getAnimatedValue()));
             activeAnimator.addListener(new AnimatorListenerAdapter() {
@@ -564,9 +591,9 @@ public class PortalConnectionOverlay extends FrameLayout {
     }
 
     private void runDisconnectStep2(@Nullable final Runnable onComplete) {
-        // Step 2: Fade Back to Starfield (350 ms)
+        // Step 2: Fade Back to Starfield
         activeAnimator = ValueAnimator.ofFloat(1f, 0f);
-        activeAnimator.setDuration(DISCONNECT_STEP2_FADE_STARFIELD_MS);
+        activeAnimator.setDuration(disconnectStep2FadeStarfieldMs);
         activeAnimator.setInterpolator(new DecelerateInterpolator());
         activeAnimator.addUpdateListener(a -> {
             float v = (float) a.getAnimatedValue();
@@ -595,9 +622,9 @@ public class PortalConnectionOverlay extends FrameLayout {
     }
 
     private void runDisconnectStep3(@Nullable final Runnable onComplete) {
-        // Step 3: Iris Open to App Background (500 ms)
+        // Step 3: Iris Open to App Background
         activeAnimator = ValueAnimator.ofFloat(0f, 1f);
-        activeAnimator.setDuration(DISCONNECT_STEP3_IRIS_OPEN_MS);
+        activeAnimator.setDuration(disconnectStep3IrisOpenMs);
         activeAnimator.setInterpolator(new LinearInterpolator());
         activeAnimator.addUpdateListener(a -> shaderView.setExpandProgress((float) a.getAnimatedValue()));
         activeAnimator.addListener(new AnimatorListenerAdapter() {
@@ -613,8 +640,9 @@ public class PortalConnectionOverlay extends FrameLayout {
                 if (canceled || !disconnecting) {
                     return;
                 }
-                shaderView.setExpandProgress(1f);
-                releaseAndHide();
+                // Keep overlay visible at full-screen synced starfield until Game.onDestroy()
+                // so the video SurfaceView underneath never flashes a frame before AppView appears.
+                shaderView.setUniforms(0f, 0f, 1f);
                 if (onComplete != null) {
                     onComplete.run();
                 }

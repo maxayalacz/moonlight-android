@@ -103,9 +103,14 @@ public class UiHelper {
         com.limelight.ui.FlowingAuroraView aurora = (auroraCandidate instanceof com.limelight.ui.FlowingAuroraView)
                 ? (com.limelight.ui.FlowingAuroraView) auroraCandidate
                 : null;
+        View portalCandidate = content.findViewWithTag("oneui_portal_starfield_bg");
+        com.limelight.ui.PortalShaderView portal = (portalCandidate instanceof com.limelight.ui.PortalShaderView)
+                ? (com.limelight.ui.PortalShaderView) portalCandidate
+                : null;
         view.setBackground(new com.limelight.ui.FlowingAuroraView.FrostedCardDrawable(
                 view,
                 aurora,
+                portal,
                 cornerMode,
                 dpToPx(view.getContext(), cornerRadiusDp),
                 frostTintColor,
@@ -1007,7 +1012,9 @@ public class UiHelper {
         }
         View starfield = rootView.findViewWithTag("oneui_portal_starfield_bg");
         if (starfield instanceof com.limelight.ui.PortalShaderView) {
-            ((com.limelight.ui.PortalShaderView) starfield).startRendering();
+            com.limelight.ui.PortalShaderView psv = (com.limelight.ui.PortalShaderView) starfield;
+            psv.refreshFromPrefs();
+            psv.startRendering();
         }
     }
 
@@ -1087,7 +1094,7 @@ public class UiHelper {
             return;
         }
         fg.animate().cancel();
-        float startScale = returningFromDeeper ? 1.05f : 0.93f;
+        float startScale = returningFromDeeper ? 1.06f : 0.93f;
         fg.setAlpha(0f);
         fg.setScaleX(startScale);
         fg.setScaleY(startScale);
@@ -1095,7 +1102,8 @@ public class UiHelper {
                 .alpha(1f)
                 .scaleX(1f)
                 .scaleY(1f)
-                .setDuration(260L)
+                .setStartDelay(returningFromDeeper ? 40L : 0L)
+                .setDuration(returningFromDeeper ? 280L : 260L)
                 .setInterpolator(new android.view.animation.DecelerateInterpolator(2.0f))
                 .start();
     }

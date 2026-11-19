@@ -321,26 +321,40 @@ public class FocusCirclePortalView extends View {
         int saveCount = canvas.save();
         canvas.clipPath(circleClipPath);
 
-        FlowingAuroraView aurora = resolveAuroraView();
-        if (aurora != null && aurora.getWidth() > 0 && aurora.getHeight() > 0) {
-            Bitmap blurred = aurora.getBlurredFieldBitmap();
-            if (blurred != null && !blurred.isRecycled()) {
-                getLocationInWindow(hostLoc);
-                aurora.getLocationInWindow(auroraLoc);
-                float relX = (hostLoc[0] - auroraLoc[0]) + (cx - innerRadius);
-                float relY = (hostLoc[1] - auroraLoc[1]) + (cy - innerRadius);
-                float diameter = innerRadius * 2f;
-                float sx = blurred.getWidth() / (float) aurora.getWidth();
-                float sy = blurred.getHeight() / (float) aurora.getHeight();
-                auroraSrcRect.set(
-                        Math.max(0, Math.round(relX * sx)),
-                        Math.max(0, Math.round(relY * sy)),
-                        Math.min(blurred.getWidth(), Math.round((relX + diameter) * sx)),
-                        Math.min(blurred.getHeight(), Math.round((relY + diameter) * sy)));
-                if (!auroraSrcRect.isEmpty()) {
-                    circleDstRect.set(cx - innerRadius, cy - innerRadius, cx + innerRadius, cy + innerRadius);
-                    canvas.drawBitmap(blurred, auroraSrcRect, circleDstRect, frostedBitmapPaint);
-                }
+        View backdropView = null;
+        Bitmap blurred = null;
+        View rootView = getRootView();
+        if (rootView != null) {
+            View portalCandidate = rootView.findViewWithTag("oneui_portal_starfield_bg");
+            if (portalCandidate instanceof PortalShaderView) {
+                backdropView = portalCandidate;
+                blurred = ((PortalShaderView) portalCandidate).getBlurredBitmap();
+            }
+        }
+        if (backdropView == null || blurred == null) {
+            FlowingAuroraView aurora = resolveAuroraView();
+            if (aurora != null) {
+                backdropView = aurora;
+                blurred = aurora.getBlurredFieldBitmap();
+            }
+        }
+        if (backdropView != null && backdropView.getWidth() > 0 && backdropView.getHeight() > 0
+                && blurred != null && !blurred.isRecycled()) {
+            getLocationInWindow(hostLoc);
+            backdropView.getLocationInWindow(auroraLoc);
+            float relX = (hostLoc[0] - auroraLoc[0]) + (cx - innerRadius);
+            float relY = (hostLoc[1] - auroraLoc[1]) + (cy - innerRadius);
+            float diameter = innerRadius * 2f;
+            float sx = blurred.getWidth() / (float) backdropView.getWidth();
+            float sy = blurred.getHeight() / (float) backdropView.getHeight();
+            auroraSrcRect.set(
+                    Math.max(0, Math.round(relX * sx)),
+                    Math.max(0, Math.round(relY * sy)),
+                    Math.min(blurred.getWidth(), Math.round((relX + diameter) * sx)),
+                    Math.min(blurred.getHeight(), Math.round((relY + diameter) * sy)));
+            if (!auroraSrcRect.isEmpty()) {
+                circleDstRect.set(cx - innerRadius, cy - innerRadius, cx + innerRadius, cy + innerRadius);
+                canvas.drawBitmap(blurred, auroraSrcRect, circleDstRect, frostedBitmapPaint);
             }
         }
 
