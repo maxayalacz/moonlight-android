@@ -822,6 +822,12 @@
     <string name="summary_portal_sonar_speed">Speed of the expanding sonar rings while waiting for the host</string>
     <string name="title_blur_amount">Menu Live Blur Amount</string>
     <string name="summary_blur_amount">Strength of the live frosted glass blur across app menus and cards (0% = clear glass)</string>
+    <string name="title_bg_quality">Background Quality</string>
+    <string name="summary_bg_quality">Internal render resolution of the starfield shader (text, icons, and UI always stay full native resolution)</string>
+    <string name="bg_quality_540p">Low (540p — Best Performance)</string>
+    <string name="bg_quality_720p">Balanced (720p — Recommended)</string>
+    <string name="bg_quality_1080p">High (1080p)</string>
+    <string name="bg_quality_native">Native (Full Resolution)</string>
     <string name="title_osc_blur_amount">On-Screen Controls Live Blur</string>
     <string name="summary_osc_blur_amount">Strength of the live stream blur behind on-screen controller buttons (0% = clear glass)</string>
     <string name="title_osc_outline_thickness">Button Outline Thickness</string>

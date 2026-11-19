@@ -86,6 +86,7 @@ public class PreferenceConfiguration {
     public static final String PORTAL_PARTICLE_BRIGHTNESS_PREF_STRING = "seekbar_portal_particle_brightness";
     public static final String PORTAL_SONAR_SPEED_PREF_STRING = "seekbar_portal_sonar_speed";
     public static final String BLUR_AMOUNT_PREF_STRING = "seekbar_blur_amount";
+    public static final String BG_QUALITY_PREF_STRING = "list_bg_quality";
     public static final String OSC_BLUR_AMOUNT_PREF_STRING = "seekbar_osc_blur_amount";
     public static final String OSC_OUTLINE_THICKNESS_PREF_STRING = "seekbar_osc_outline_thickness";
     public static final int DEFAULT_PORTAL_READY_MS = 300;
@@ -100,6 +101,7 @@ public class PreferenceConfiguration {
     public static final int DEFAULT_PORTAL_PARTICLE_BRIGHTNESS = 100;
     public static final int DEFAULT_PORTAL_SONAR_SPEED = 100;
     public static final int DEFAULT_BLUR_AMOUNT = 100;
+    public static final String DEFAULT_BG_QUALITY = "720";
     public static final int DEFAULT_OSC_BLUR_AMOUNT = 100;
     public static final int DEFAULT_OSC_OUTLINE_THICKNESS = 100;
     private static final String BIND_ALL_USB_STRING = "checkbox_usb_bind_all";
@@ -320,6 +322,7 @@ public class PreferenceConfiguration {
     public int portalParticleBrightnessPercent;
     public int portalSonarSpeedPercent;
     public int blurAmountPercent;
+    public int bgQualityMaxShortEdge;
     public int oscOutlineThicknessPercent;
     //简化版性能信息
     public boolean enablePerfOverlayLite;
@@ -986,6 +989,11 @@ private static int getFramePacingValue(Context context) {
         config.portalParticleBrightnessPercent = prefs.getInt(PORTAL_PARTICLE_BRIGHTNESS_PREF_STRING, DEFAULT_PORTAL_PARTICLE_BRIGHTNESS);
         config.portalSonarSpeedPercent = prefs.getInt(PORTAL_SONAR_SPEED_PREF_STRING, DEFAULT_PORTAL_SONAR_SPEED);
         config.blurAmountPercent = prefs.getInt(BLUR_AMOUNT_PREF_STRING, DEFAULT_BLUR_AMOUNT);
+        try {
+            config.bgQualityMaxShortEdge = Integer.parseInt(prefs.getString(BG_QUALITY_PREF_STRING, DEFAULT_BG_QUALITY));
+        } catch (NumberFormatException e) {
+            config.bgQualityMaxShortEdge = 720;
+        }
         config.oscOutlineThicknessPercent = prefs.getInt(OSC_OUTLINE_THICKNESS_PREF_STRING, DEFAULT_OSC_OUTLINE_THICKNESS);
         config.enablePerfOverlayLite = prefs.getBoolean("checkbox_enable_perf_overlay_lite",DEFAULT_ENABLE_PERF_OVERLAY);
         config.enablePerfOverlayBottom = prefs.getBoolean("checkbox_enable_perf_overlay_bottom",DEFAULT_PERF_OVERLAY_BOTTOM);

@@ -552,6 +552,14 @@
             app:iconSpaceReserved="false"
             seekbar:min="0"
             seekbar:step="10" />
+        <ListPreference
+            android:defaultValue="720"
+            android:entries="@array/bg_quality_names"
+            android:entryValues="@array/bg_quality_values"
+            android:key="list_bg_quality"
+            android:summary="@string/summary_bg_quality"
+            android:title="@string/title_bg_quality"
+            app:iconSpaceReserved="false" />
         <SwitchPreferenceCompat
             android:defaultValue="false"
             android:key="checkbox_resume_without_confirm"

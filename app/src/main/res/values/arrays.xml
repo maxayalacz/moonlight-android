@@ -271,4 +271,17 @@
         <item>card</item>
     </string-array>
 
+    <string-array name="bg_quality_names">
+        <item>@string/bg_quality_540p</item>
+        <item>@string/bg_quality_720p</item>
+        <item>@string/bg_quality_1080p</item>
+        <item>@string/bg_quality_native</item>
+    </string-array>
+    <string-array name="bg_quality_values" translatable="false">
+        <item>540</item>
+        <item>720</item>
+        <item>1080</item>
+        <item>0</item>
+    </string-array>
+
 </resources>

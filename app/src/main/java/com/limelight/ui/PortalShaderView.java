@@ -42,7 +42,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  */
 public class PortalShaderView extends TextureView implements TextureView.SurfaceTextureListener {
 
-    private static final float BG_FBO_SCALE = 0.70f;
+    private static final int OVERLAY_MAX_SHORT_EDGE = 1080;
     private static final int BLUR_SHORT_EDGE = 64;
     private static final int BLUR_LONG_EDGE = 112;
     private static final long BLUR_INTERVAL_MS = 66L; // ~15 FPS off-UI-thread refraction updates
@@ -136,7 +136,9 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "                ) * 0.22;\n" +
             "\n" +
             "                vec2 pos = offs + (rnd - 0.5) * 0.55 + drift;\n" +
-            "                float dist = length(gv - pos);\n" +
+            "                vec2 diff = gv - pos;\n" +
+            "                if (abs(diff.x) > 0.12 || abs(diff.y) > 0.12) continue;\n" +
+            "                float dist = length(diff);\n" +
             "\n" +
             "                float radius = mix(0.035, 0.11, fract(rnd.x * 13.7));\n" +
             "                float bokeh = smoothstep(radius, radius * 0.15, dist);\n" +
@@ -276,6 +278,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
     private volatile float uParticleBrightness = 1f;
     private volatile float uSonarSpeed = 1f;
     private volatile int blurRadius = 4;
+    private volatile int bgMaxShortEdge = 720;
     private volatile boolean backgroundMode = false;
     private volatile boolean renderingDesired = false;
 
@@ -333,6 +336,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
         uSonarSpeed = Math.max(0.2f, Math.min(2.5f, cfg.portalSonarSpeedPercent / 100f));
         int blurPct = Math.max(0, Math.min(200, cfg.blurAmountPercent));
         blurRadius = blurPct == 0 ? 0 : Math.max(1, Math.min(10, Math.round(4f * (blurPct / 100f))));
+        bgMaxShortEdge = Math.max(0, cfg.bgQualityMaxShortEdge);
     }
 
     /**
@@ -616,18 +620,21 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
 
                 float sharedTime = getSharedTimeSec();
 
+                int shortEdge = Math.min(w, h);
                 if (backgroundMode) {
-                    int fboW = Math.max(1, Math.round(w * BG_FBO_SCALE));
-                    int fboH = Math.max(1, Math.round(h * BG_FBO_SCALE));
+                    int cap = bgMaxShortEdge;
+                    float scale = (cap > 0 && shortEdge > cap) ? (cap / (float) shortEdge) : 1.0f;
+                    int fboW = Math.max(1, Math.round(w * scale));
+                    int fboH = Math.max(1, Math.round(h * scale));
                     ensureBgFbo(fboW, fboH);
 
-                    // 1. Render full highp starfield into 0.70x offscreen FBO (centered, full aspect)
+                    // 1. Render full highp starfield into capped offscreen FBO (centered, full aspect)
                     GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, bgFbo);
                     GLES30.glViewport(0, 0, fboW, fboH);
                     GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT);
                     drawPortalShader(fboW, fboH, sharedTime);
 
-                    // 2. Blit 0.70x FBO fullscreen with GL_LINEAR filtering onto native EGL surface
+                    // 2. Blit FBO fullscreen with GL_LINEAR filtering onto native EGL surface
                     GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0);
                     GLES30.glViewport(0, 0, w, h);
                     GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT);
@@ -639,8 +646,24 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
                         lastBlurUpdateMs = nowMs;
                         updateBlurBitmapOnGlThread(w >= h);
                     }
+                } else if (shortEdge > OVERLAY_MAX_SHORT_EDGE) {
+                    // Game overlay mode on high-res tablets (>1080p short edge): cap to 1080p FBO
+                    float scale = OVERLAY_MAX_SHORT_EDGE / (float) shortEdge;
+                    int fboW = Math.max(1, Math.round(w * scale));
+                    int fboH = Math.max(1, Math.round(h * scale));
+                    ensureBgFbo(fboW, fboH);
+
+                    GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, bgFbo);
+                    GLES30.glViewport(0, 0, fboW, fboH);
+                    GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT);
+                    drawPortalShader(fboW, fboH, sharedTime);
+
+                    GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0);
+                    GLES30.glViewport(0, 0, w, h);
+                    GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT);
+                    drawBlitTexture(bgFboTex);
                 } else {
-                    // Game overlay mode: full native resolution directly on transparent EGL surface
+                    // Game overlay mode on <=1080p displays: direct native render with zero FBO overhead
                     GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0);
                     GLES30.glViewport(0, 0, w, h);
                     GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT);
