@@ -64,9 +64,9 @@
         <item name="android:windowActionBar">false</item>
         <item name="android:windowNoTitle">true</item>
         <item name="android:windowAnimationStyle">@style/NoSlideWindowAnimation</item>
-        <item name="android:statusBarColor">#080B12</item>
-        <item name="android:navigationBarColor">#080B12</item>
-        <item name="android:colorBackground">#0A0E17</item>
+        <item name="android:statusBarColor">#0B0E1C</item>
+        <item name="android:navigationBarColor">#0B0E1C</item>
+        <item name="android:colorBackground">#0B0E1C</item>
         <item name="android:windowBackground">@drawable/bg_oneui_ambient_surface</item>
         <item name="android:alertDialogTheme">@style/OneUI.DialogTheme</item>
         <item name="alertDialogTheme">@style/OneUI.DialogTheme</item>
@@ -82,8 +82,8 @@
     </style>
 
     <style name="StreamBaseTheme" parent="AppBaseTheme">
-        <!-- Transparent streaming background to avoid extra overdraw -->
-        <item name="android:windowBackground">@android:color/transparent</item>
+        <!-- Match starfield void color during PS Portal handoff; switched to pure black once connected -->
+        <item name="android:windowBackground">@drawable/bg_oneui_ambient_surface</item>
     </style>
 
     <!-- Stream activity theme -->
@@ -91,6 +91,7 @@
         <!-- All customizations that are NOT specific to a particular API-level can go here. -->
         <item name="android:windowActionBar">false</item>
         <item name="android:windowNoTitle">true</item>
+        <item name="android:windowAnimationStyle">@style/NoSlideWindowAnimation</item>
         <!-- Added for API 34+ where ImageButton requires these color attrs to inflate -->
         <item name="android:colorControlNormal">@android:color/white</item>
         <item name="android:colorControlHighlight">@android:color/white</item>
@@ -117,9 +118,10 @@
     </style>
 
     <style name="SettingsTheme" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowAnimationStyle">@style/NoSlideWindowAnimation</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
-        <item name="android:colorBackground">@android:color/transparent</item>
+        <item name="android:colorBackground">#0B0E1C</item>
         <item name="android:windowBackground">@drawable/bg_oneui_ambient_surface</item>
         <item name="android:alertDialogTheme">@style/OneUI.DialogTheme</item>
         <item name="alertDialogTheme">@style/OneUI.DialogTheme</item>
@@ -143,9 +145,8 @@
         <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:colorBackgroundCacheHint">@null</item>
-        <item name="android:backgroundDimEnabled">true</item>
-        <item name="android:backgroundDimAmount">0.55</item>
-        <item name="android:windowAnimationStyle">@android:style/Animation.Dialog</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:windowAnimationStyle">@style/NoSlideWindowAnimation</item>
     </style>
 
     <declare-styleable name="ApertureViewGroup">

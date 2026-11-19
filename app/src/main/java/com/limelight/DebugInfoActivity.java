@@ -42,11 +42,13 @@ public class DebugInfoActivity extends AppCompatActivity implements View.OnClick
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_axitest);
+        UiHelper.notifyNewRootView(this);
 
         tx_gamepad_info = findViewById(R.id.tx_game_pad_info);
         TextView tx_content = findViewById(R.id.tx_content);
+        UiHelper.applyLiquidGlassEffect(findViewById(R.id.debugControlsCard));
         UiHelper.applyLiquidGlassEffect(tx_content);
-        UiHelper.applyLiquidGlassEffect(tx_gamepad_info);
+        UiHelper.applyLiquidGlassEffect(findViewById(R.id.debugGamepadScrollCard));
         bt_vibrator = findViewById(R.id.bt_vibrator);
         bt_vibrator_value = findViewById(R.id.bt_vibrator_value);
 
@@ -66,6 +68,24 @@ public class DebugInfoActivity extends AppCompatActivity implements View.OnClick
         bt_vibrator.setText(getString(R.string.debug_info_test_device_vibration, content));
 
         showSimlateAmp();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        UiHelper.refreshBackdrop(this);
+        UiHelper.restoreMenuForegroundIfNeeded(this);
+    }
+
+    @Override
+    public void onConfigurationChanged(android.content.res.Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        UiHelper.applyReachabilitySpacing(this);
+    }
+
+    @Override
+    public void onBackPressed() {
+        UiHelper.finishMenuWithDepthTransition(this, super::onBackPressed);
     }
 
     private void showSimlateAmp() {

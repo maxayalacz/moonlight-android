@@ -122,6 +122,7 @@ public class StreamSettings extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         UiHelper.refreshBackdrop(this);
+        UiHelper.restoreMenuForegroundIfNeeded(this);
     }
 
     @Override
@@ -1146,8 +1147,8 @@ public class StreamSettings extends AppCompatActivity {
                 _pref.setOnPreferenceClickListener(new Preference.OnPreferenceClickListener() {
                     @Override
                     public boolean onPreferenceClick(@NonNull Preference preference) {
-                        Intent intent=new Intent(requireActivity(), DebugInfoActivity.class);
-                        requireActivity().startActivity(intent);
+                        Intent intent = new Intent(requireActivity(), DebugInfoActivity.class);
+                        UiHelper.startMenuActivityWithDepth(requireActivity(), intent);
                         return false;
                     }
                 });

@@ -249,6 +249,10 @@ public class PcView extends AppCompatActivity implements AdapterFragmentCallback
                 }
             });
             focusPagerRecycler.setAdapter(focusPcAdapter);
+            RecyclerView.ItemAnimator focusAnimator = focusPagerRecycler.getItemAnimator();
+            if (focusAnimator instanceof androidx.recyclerview.widget.SimpleItemAnimator) {
+                ((androidx.recyclerview.widget.SimpleItemAnimator) focusAnimator).setSupportsChangeAnimations(false);
+            }
             focusPagerRecycler.addOnScrollListener(new RecyclerView.OnScrollListener() {
                 @Override
                 public void onScrollStateChanged(@NonNull RecyclerView recyclerView, int newState) {
@@ -447,6 +451,7 @@ public class PcView extends AppCompatActivity implements AdapterFragmentCallback
     protected void onResume() {
         super.onResume();
         UiHelper.refreshBackdrop(this);
+        UiHelper.restoreMenuForegroundIfNeeded(this);
 
         // Display a decoder crash notification if we've returned after a crash
         UiHelper.showDecoderCrashDialog(this);
@@ -467,7 +472,7 @@ public class PcView extends AppCompatActivity implements AdapterFragmentCallback
                     list.add((ComputerObject) item);
                 }
             }
-            focusPcAdapter.submitComputers(list);
+            focusPcAdapter.submitComputers(list, AppThemePalette.getCurrent(this).key);
             if (currentFocusPage >= list.size()) {
                 currentFocusPage = Math.max(0, list.size() - 1);
             }

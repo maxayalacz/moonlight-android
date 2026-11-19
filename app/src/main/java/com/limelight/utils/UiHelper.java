@@ -107,12 +107,18 @@ public class UiHelper {
         com.limelight.ui.PortalShaderView portal = (portalCandidate instanceof com.limelight.ui.PortalShaderView)
                 ? (com.limelight.ui.PortalShaderView) portalCandidate
                 : null;
+        float radiusPx = dpToPx(view.getContext(), cornerRadiusDp);
+        if (view.getBackground() instanceof com.limelight.ui.FlowingAuroraView.FrostedCardDrawable) {
+            ((com.limelight.ui.FlowingAuroraView.FrostedCardDrawable) view.getBackground())
+                    .updateStyle(cornerMode, radiusPx, frostTintColor, aurora, portal);
+            return true;
+        }
         view.setBackground(new com.limelight.ui.FlowingAuroraView.FrostedCardDrawable(
                 view,
                 aurora,
                 portal,
                 cornerMode,
-                dpToPx(view.getContext(), cornerRadiusDp),
+                radiusPx,
                 frostTintColor,
                 Math.max(1f, dpToPx(view.getContext(), 1f))));
         return true;
@@ -354,6 +360,48 @@ public class UiHelper {
         clearOpaquePanelBackgrounds(decorView);
         attachDialogBackdropBlur(dialog, decorView);
         applyDialogButtonPalette(dialog);
+        animateDialogEntranceIfNeeded(dialog, decorView);
+    }
+
+    private static void animateDialogEntranceIfNeeded(final android.app.Dialog dialog, final View decorView) {
+        if (dialog == null || decorView == null || !dialog.isShowing()) {
+            return;
+        }
+        if (Boolean.TRUE.equals(decorView.getTag(R.id.oneui_dialog_entered_tag))) {
+            return;
+        }
+        decorView.setTag(R.id.oneui_dialog_entered_tag, Boolean.TRUE);
+        decorView.setAlpha(0f);
+        decorView.setScaleX(0.94f);
+        decorView.setScaleY(0.94f);
+        final Runnable runEnter = () -> {
+            if (decorView.getWidth() > 0 && decorView.getHeight() > 0) {
+                decorView.setPivotX(decorView.getWidth() * 0.5f);
+                decorView.setPivotY(decorView.getHeight() * 0.5f);
+            }
+            decorView.animate().cancel();
+            decorView.animate()
+                    .alpha(1f)
+                    .scaleX(1f)
+                    .scaleY(1f)
+                    .setDuration(200L)
+                    .setInterpolator(new android.view.animation.PathInterpolator(0.22f, 1f, 0.36f, 1f))
+                    .start();
+        };
+        if (decorView.getWidth() > 0 && decorView.getHeight() > 0) {
+            decorView.postOnAnimation(runEnter);
+        } else {
+            decorView.getViewTreeObserver().addOnPreDrawListener(new android.view.ViewTreeObserver.OnPreDrawListener() {
+                @Override
+                public boolean onPreDraw() {
+                    if (decorView.getViewTreeObserver().isAlive()) {
+                        decorView.getViewTreeObserver().removeOnPreDrawListener(this);
+                    }
+                    runEnter.run();
+                    return true;
+                }
+            });
+        }
     }
 
     private static void applyDialogButtonPalette(final android.app.Dialog dialog) {
@@ -605,8 +653,31 @@ public class UiHelper {
             int offsetX = dialogLoc[0] - activityLoc[0];
             int offsetY = dialogLoc[1] - activityLoc[1];
 
-            target.eraseColor(android.graphics.Color.TRANSPARENT);
+            target.eraseColor(0xFF0B0E1C);
             android.graphics.Canvas canvas = new android.graphics.Canvas(target);
+            View portalCandidate = activityDecor.findViewWithTag("oneui_portal_starfield_bg");
+            if (portalCandidate instanceof com.limelight.ui.PortalShaderView
+                    && portalCandidate.getWidth() > 0 && portalCandidate.getHeight() > 0) {
+                android.graphics.Bitmap portalBmp = ((com.limelight.ui.PortalShaderView) portalCandidate).getBlurredBitmap();
+                if (portalBmp != null && !portalBmp.isRecycled()) {
+                    int[] portalLoc = new int[2];
+                    portalCandidate.getLocationOnScreen(portalLoc);
+                    float sx = portalBmp.getWidth() / (float) portalCandidate.getWidth();
+                    float sy = portalBmp.getHeight() / (float) portalCandidate.getHeight();
+                    int relX = dialogLoc[0] - portalLoc[0];
+                    int relY = dialogLoc[1] - portalLoc[1];
+                    android.graphics.Rect srcR = new android.graphics.Rect(
+                            Math.max(0, Math.round(relX * sx)),
+                            Math.max(0, Math.round(relY * sy)),
+                            Math.min(portalBmp.getWidth(), Math.round((relX + decorView.getWidth()) * sx)),
+                            Math.min(portalBmp.getHeight(), Math.round((relY + decorView.getHeight()) * sy)));
+                    if (!srcR.isEmpty()) {
+                        android.graphics.Rect dstR = new android.graphics.Rect(0, 0, target.getWidth(), target.getHeight());
+                        android.graphics.Paint bmpPaint = new android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG);
+                        canvas.drawBitmap(portalBmp, srcR, dstR, bmpPaint);
+                    }
+                }
+            }
             canvas.scale(0.25f, 0.25f);
             canvas.translate(-offsetX, -offsetY);
             activityDecor.draw(canvas);
@@ -728,29 +799,37 @@ public class UiHelper {
         for (int pass = 0; pass < 2; pass++) {
             for (int y = 0; y < h; y++) {
                 int row = y * w;
+                int rSum = 0, gSum = 0, bSum = 0;
+                for (int k = -radius; k <= radius; k++) {
+                    int c = pix[row + Math.max(0, Math.min(w - 1, k))];
+                    rSum += (c >> 16) & 0xFF;
+                    gSum += (c >> 8) & 0xFF;
+                    bSum += c & 0xFF;
+                }
                 for (int x = 0; x < w; x++) {
-                    int r = 0, g = 0, b = 0;
-                    for (int k = -radius; k <= radius; k++) {
-                        int sx = Math.max(0, Math.min(w - 1, x + k));
-                        int c = pix[row + sx];
-                        r += (c >> 16) & 0xFF;
-                        g += (c >> 8) & 0xFF;
-                        b += c & 0xFF;
-                    }
-                    tmp[row + x] = 0xFF000000 | ((r / div) << 16) | ((g / div) << 8) | (b / div);
+                    tmp[row + x] = 0xFF000000 | ((rSum / div) << 16) | ((gSum / div) << 8) | (bSum / div);
+                    int outC = pix[row + Math.max(0, x - radius)];
+                    int inC = pix[row + Math.min(w - 1, x + radius + 1)];
+                    rSum += ((inC >> 16) & 0xFF) - ((outC >> 16) & 0xFF);
+                    gSum += ((inC >> 8) & 0xFF) - ((outC >> 8) & 0xFF);
+                    bSum += (inC & 0xFF) - (outC & 0xFF);
                 }
             }
             for (int x = 0; x < w; x++) {
+                int rSum = 0, gSum = 0, bSum = 0;
+                for (int k = -radius; k <= radius; k++) {
+                    int c = tmp[Math.max(0, Math.min(h - 1, k)) * w + x];
+                    rSum += (c >> 16) & 0xFF;
+                    gSum += (c >> 8) & 0xFF;
+                    bSum += c & 0xFF;
+                }
                 for (int y = 0; y < h; y++) {
-                    int r = 0, g = 0, b = 0;
-                    for (int k = -radius; k <= radius; k++) {
-                        int sy = Math.max(0, Math.min(h - 1, y + k));
-                        int c = tmp[sy * w + x];
-                        r += (c >> 16) & 0xFF;
-                        g += (c >> 8) & 0xFF;
-                        b += c & 0xFF;
-                    }
-                    pix[y * w + x] = 0xFF000000 | ((r / div) << 16) | ((g / div) << 8) | (b / div);
+                    pix[y * w + x] = 0xFF000000 | ((rSum / div) << 16) | ((gSum / div) << 8) | (bSum / div);
+                    int outC = tmp[Math.max(0, y - radius) * w + x];
+                    int inC = tmp[Math.min(h - 1, y + radius + 1) * w + x];
+                    rSum += ((inC >> 16) & 0xFF) - ((outC >> 16) & 0xFF);
+                    gSum += ((inC >> 8) & 0xFF) - ((outC >> 8) & 0xFF);
+                    bSum += (inC & 0xFF) - (outC & 0xFF);
                 }
             }
         }
@@ -777,10 +856,10 @@ public class UiHelper {
         updateBlur.accept(blurEnabled);
 
         final View decorView = window.getDecorView();
-        if (wm == null || decorView.getTag(R.id.oneuiHeaderContainer) != null) {
+        if (wm == null || decorView.getTag(R.id.oneui_window_blur_listener_tag) != null) {
             return;
         }
-        decorView.setTag(R.id.oneuiHeaderContainer, Boolean.TRUE);
+        decorView.setTag(R.id.oneui_window_blur_listener_tag, Boolean.TRUE);
         decorView.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
             @Override
             public void onViewAttachedToWindow(View v) {
@@ -915,6 +994,18 @@ public class UiHelper {
     }
 
     private static volatile boolean portalLifecycleRegistered = false;
+    private static int animGenerationCounter = 0;
+
+    private static int nextAnimGeneration() {
+        return ++animGenerationCounter;
+    }
+
+    private static boolean isLandscapeActivity(Activity activity) {
+        if (activity == null) {
+            return false;
+        }
+        return activity.getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE;
+    }
 
     private static void ensurePortalBackdropLifecycleRegistered(Activity activity) {
         if (portalLifecycleRegistered || activity == null || activity.getApplication() == null) {
@@ -926,7 +1017,9 @@ public class UiHelper {
             public void onActivityCreated(Activity a, android.os.Bundle savedInstanceState) {}
 
             @Override
-            public void onActivityStarted(Activity a) {}
+            public void onActivityStarted(Activity a) {
+                setPortalBackdropRendering(a, true);
+            }
 
             @Override
             public void onActivityResumed(Activity a) {
@@ -935,7 +1028,8 @@ public class UiHelper {
 
             @Override
             public void onActivityPaused(Activity a) {
-                setPortalBackdropRendering(a, false);
+                // Keep starfield alive while visible behind dialogs or translucent SessionMetricsActivity,
+                // and avoid stalling the UI thread during activity handoffs.
             }
 
             @Override
@@ -953,6 +1047,26 @@ public class UiHelper {
         });
     }
 
+    private static void syncHandoffBackdrop(Activity activity, View rootView, com.limelight.ui.PortalShaderView psv) {
+        View handoffCandidate = rootView.findViewWithTag("oneui_portal_handoff_bg");
+        if (!(handoffCandidate instanceof android.widget.ImageView)) {
+            return;
+        }
+        final android.widget.ImageView handoffView = (android.widget.ImageView) handoffCandidate;
+        if (psv.hasRenderedFrame()) {
+            handoffView.setVisibility(View.GONE);
+            return;
+        }
+        android.graphics.Bitmap snap = com.limelight.ui.PortalShaderView.getHandoffBitmap(isLandscapeActivity(activity));
+        if (snap != null) {
+            handoffView.setImageBitmap(snap);
+        } else {
+            handoffView.setImageDrawable(null);
+        }
+        handoffView.setVisibility(View.VISIBLE);
+        psv.setFirstFrameListener(() -> handoffView.setVisibility(View.GONE));
+    }
+
     private static void setPortalBackdropRendering(Activity activity, boolean running) {
         if (activity == null || activity instanceof Game || activity instanceof ExternalDisplayControlActivity) {
             return;
@@ -963,11 +1077,27 @@ public class UiHelper {
         }
         View bg = rootView.findViewWithTag("oneui_portal_starfield_bg");
         if (bg instanceof com.limelight.ui.PortalShaderView) {
+            com.limelight.ui.PortalShaderView psv = (com.limelight.ui.PortalShaderView) bg;
             if (running) {
-                ((com.limelight.ui.PortalShaderView) bg).startRendering();
+                syncHandoffBackdrop(activity, rootView, psv);
+                psv.startRendering();
             } else {
-                ((com.limelight.ui.PortalShaderView) bg).stopRendering();
+                psv.stopRenderingAsync();
             }
+        }
+    }
+
+    public static void captureCurrentStarfieldHandoff(Activity activity) {
+        if (activity == null) {
+            return;
+        }
+        View rootView = activity.findViewById(android.R.id.content);
+        if (rootView == null) {
+            return;
+        }
+        View bg = rootView.findViewWithTag("oneui_portal_starfield_bg");
+        if (bg instanceof com.limelight.ui.PortalShaderView) {
+            com.limelight.ui.PortalShaderView.captureHandoffFrame((com.limelight.ui.PortalShaderView) bg);
         }
     }
 
@@ -983,18 +1113,36 @@ public class UiHelper {
         if (contentFrame.findViewWithTag("oneui_portal_starfield_bg") != null) {
             return;
         }
+
+        // Seamless starfield handoff placeholder shown on Frame 0 while GL initializes,
+        // automatically hidden the instant PortalShaderView swaps its first live frame.
+        final android.widget.ImageView handoffView = new android.widget.ImageView(activity);
+        handoffView.setTag("oneui_portal_handoff_bg");
+        handoffView.setScaleType(android.widget.ImageView.ScaleType.CENTER_CROP);
+        handoffView.setBackgroundColor(0xFF0B0E1C);
+        handoffView.setClickable(false);
+        handoffView.setFocusable(false);
+        handoffView.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        android.graphics.Bitmap snap = com.limelight.ui.PortalShaderView.getHandoffBitmap(isLandscapeActivity(activity));
+        if (snap != null) {
+            handoffView.setImageBitmap(snap);
+        }
+        contentFrame.addView(handoffView, 0, new android.widget.FrameLayout.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT));
+
         com.limelight.ui.PortalShaderView starfieldView = new com.limelight.ui.PortalShaderView(activity);
         starfieldView.setTag("oneui_portal_starfield_bg");
         starfieldView.configureStarfieldBackgroundMode();
-        contentFrame.addView(starfieldView, 0, new android.widget.FrameLayout.LayoutParams(
+        starfieldView.setFirstFrameListener(() -> handoffView.setVisibility(View.GONE));
+        contentFrame.addView(starfieldView, 1, new android.widget.FrameLayout.LayoutParams(
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT,
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT));
         starfieldView.startRendering();
-        if (contentFrame.getChildCount() > 1) {
-            View firstContent = contentFrame.getChildAt(1);
-            if (firstContent != null) {
-                firstContent.setBackgroundColor(android.graphics.Color.TRANSPARENT);
-            }
+
+        View fg = getMenuForegroundView(activity);
+        if (fg != null) {
+            fg.setBackgroundColor(android.graphics.Color.TRANSPARENT);
         }
     }
 
@@ -1014,7 +1162,23 @@ public class UiHelper {
         if (starfield instanceof com.limelight.ui.PortalShaderView) {
             com.limelight.ui.PortalShaderView psv = (com.limelight.ui.PortalShaderView) starfield;
             psv.refreshFromPrefs();
+            syncHandoffBackdrop(activity, rootView, psv);
             psv.startRendering();
+        }
+    }
+
+    /**
+     * Disables system open & close transitions on this Activity. On Android 14+ (API 34+),
+     * overrideActivityTransition() is a persistent property of the target Activity and must be
+     * registered in onCreate() so WindowManager Shell never inserts a solid transition scrim.
+     */
+    public static void disableAllActivityTransitions(Activity activity) {
+        if (activity == null) {
+            return;
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            activity.overrideActivityTransition(Activity.OVERRIDE_TRANSITION_OPEN, 0, 0);
+            activity.overrideActivityTransition(Activity.OVERRIDE_TRANSITION_CLOSE, 0, 0);
         }
     }
 
@@ -1081,6 +1245,7 @@ public class UiHelper {
             if (child != null
                     && !"oneui_flowing_aurora".equals(child.getTag())
                     && !"oneui_portal_starfield_bg".equals(child.getTag())
+                    && !"oneui_portal_handoff_bg".equals(child.getTag())
                     && !"oneui_portal_overlay".equals(child.getTag())) {
                 return child;
             }
@@ -1096,34 +1261,55 @@ public class UiHelper {
         if (Boolean.TRUE.equals(fg.getTag(R.id.oneui_enter_anim_running_tag))) {
             return;
         }
-        fg.animate().cancel();
+        final int gen = nextAnimGeneration();
+        fg.animate().setListener(null).cancel();
+        fg.setTag(R.id.oneui_anim_generation_tag, gen);
+        fg.setTag(R.id.oneui_exit_anim_running_tag, null);
         fg.setTag(R.id.oneui_enter_anim_running_tag, Boolean.TRUE);
-        final float startScale = returningFromDeeper ? 1.05f : 0.94f;
-        final long duration = returningFromDeeper ? 280L : 260L;
+        final float startScale = returningFromDeeper ? 1.045f : 0.945f;
+        final long duration = returningFromDeeper ? 270L : 250L;
         fg.setAlpha(0f);
         fg.setScaleX(startScale);
         fg.setScaleY(startScale);
 
         final Runnable startAnim = () -> {
+            if (!Integer.valueOf(gen).equals(fg.getTag(R.id.oneui_anim_generation_tag))) {
+                return;
+            }
             if (fg.getWidth() > 0 && fg.getHeight() > 0) {
                 fg.setPivotX(fg.getWidth() * 0.5f);
                 fg.setPivotY(fg.getHeight() * 0.5f);
             }
-            fg.animate().cancel();
+            fg.animate().setListener(null).cancel();
             fg.animate()
                     .alpha(1f)
                     .scaleX(1f)
                     .scaleY(1f)
                     .setDuration(duration)
-                    .setInterpolator(new android.view.animation.DecelerateInterpolator(2.2f))
+                    .setInterpolator(new android.view.animation.PathInterpolator(0.22f, 1f, 0.36f, 1f))
                     .withLayer()
-                    .withEndAction(() -> fg.setTag(R.id.oneui_enter_anim_running_tag, null))
+                    .setListener(new android.animation.AnimatorListenerAdapter() {
+                        @Override
+                        public void onAnimationEnd(android.animation.Animator animation) {
+                            fg.animate().setListener(null);
+                            if (Integer.valueOf(gen).equals(fg.getTag(R.id.oneui_anim_generation_tag))) {
+                                fg.setTag(R.id.oneui_enter_anim_running_tag, null);
+                            }
+                        }
+
+                        @Override
+                        public void onAnimationCancel(android.animation.Animator animation) {
+                            fg.animate().setListener(null);
+                            if (Integer.valueOf(gen).equals(fg.getTag(R.id.oneui_anim_generation_tag))) {
+                                fg.setTag(R.id.oneui_enter_anim_running_tag, null);
+                            }
+                        }
+                    })
                     .start();
         };
 
         if (fg.getWidth() > 0 && fg.getHeight() > 0) {
-            // Post two animation frames so resumed activity layout & GL surface handoff settle first
-            fg.postOnAnimation(() -> fg.postOnAnimation(startAnim));
+            fg.postOnAnimation(startAnim);
         } else {
             fg.getViewTreeObserver().addOnPreDrawListener(new android.view.ViewTreeObserver.OnPreDrawListener() {
                 @Override
@@ -1149,6 +1335,7 @@ public class UiHelper {
         if (fg == null) {
             return;
         }
+        fg.setTag(R.id.oneui_exit_anim_running_tag, null);
         if (Boolean.TRUE.equals(fg.getTag(R.id.oneui_enter_anim_running_tag))) {
             return;
         }
@@ -1163,32 +1350,62 @@ public class UiHelper {
     }
 
     public static void startMenuActivityWithDepth(final Activity from, final Intent intent) {
-        if (from == null || intent == null) {
+        if (from == null || intent == null || from.isFinishing()) {
             return;
         }
         final View fg = getMenuForegroundView(from);
         if (fg == null) {
+            captureCurrentStarfieldHandoff(from);
             from.startActivity(intent);
-            disableActivityTransition(from, false);
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                from.overridePendingTransition(0, 0);
+            }
             return;
         }
+        if (Boolean.TRUE.equals(fg.getTag(R.id.oneui_exit_anim_running_tag))) {
+            return;
+        }
+        final int gen = nextAnimGeneration();
+        fg.animate().setListener(null).cancel();
+        fg.setTag(R.id.oneui_anim_generation_tag, gen);
         fg.setTag(R.id.oneui_enter_anim_running_tag, null);
+        fg.setTag(R.id.oneui_exit_anim_running_tag, Boolean.TRUE);
         if (fg.getWidth() > 0 && fg.getHeight() > 0) {
             fg.setPivotX(fg.getWidth() * 0.5f);
             fg.setPivotY(fg.getHeight() * 0.5f);
         }
-        fg.animate().cancel();
         fg.animate()
                 .alpha(0f)
-                .scaleX(1.05f)
-                .scaleY(1.05f)
-                .setDuration(150L)
-                .setInterpolator(new android.view.animation.AccelerateInterpolator(1.5f))
+                .scaleX(1.045f)
+                .scaleY(1.045f)
+                .setDuration(145L)
+                .setInterpolator(new android.view.animation.PathInterpolator(0.4f, 0f, 1f, 1f))
                 .withLayer()
-                .withEndAction(() -> {
-                    if (!from.isFinishing()) {
-                        from.startActivity(intent);
-                        disableActivityTransition(from, false);
+                .setListener(new android.animation.AnimatorListenerAdapter() {
+                    private boolean canceled = false;
+
+                    @Override
+                    public void onAnimationCancel(android.animation.Animator animation) {
+                        canceled = true;
+                        fg.animate().setListener(null);
+                        if (Integer.valueOf(gen).equals(fg.getTag(R.id.oneui_anim_generation_tag))) {
+                            fg.setTag(R.id.oneui_exit_anim_running_tag, null);
+                        }
+                    }
+
+                    @Override
+                    public void onAnimationEnd(android.animation.Animator animation) {
+                        fg.animate().setListener(null);
+                        if (Integer.valueOf(gen).equals(fg.getTag(R.id.oneui_anim_generation_tag))) {
+                            fg.setTag(R.id.oneui_exit_anim_running_tag, null);
+                        }
+                        if (!canceled && !from.isFinishing()) {
+                            captureCurrentStarfieldHandoff(from);
+                            from.startActivity(intent);
+                            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                                from.overridePendingTransition(0, 0);
+                            }
+                        }
                     }
                 })
                 .start();
@@ -1200,26 +1417,64 @@ public class UiHelper {
         }
         final View fg = getMenuForegroundView(activity);
         if (fg == null) {
+            captureCurrentStarfieldHandoff(activity);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                disableActivityTransition(activity, true);
+            }
             superFinish.run();
-            disableActivityTransition(activity, true);
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                activity.overridePendingTransition(0, 0);
+            }
             return;
         }
+        if (Boolean.TRUE.equals(fg.getTag(R.id.oneui_exit_anim_running_tag))) {
+            return;
+        }
+        final int gen = nextAnimGeneration();
+        fg.animate().setListener(null).cancel();
+        fg.setTag(R.id.oneui_anim_generation_tag, gen);
         fg.setTag(R.id.oneui_enter_anim_running_tag, null);
+        fg.setTag(R.id.oneui_exit_anim_running_tag, Boolean.TRUE);
         if (fg.getWidth() > 0 && fg.getHeight() > 0) {
             fg.setPivotX(fg.getWidth() * 0.5f);
             fg.setPivotY(fg.getHeight() * 0.5f);
         }
-        fg.animate().cancel();
         fg.animate()
                 .alpha(0f)
-                .scaleX(0.94f)
-                .scaleY(0.94f)
-                .setDuration(160L)
-                .setInterpolator(new android.view.animation.AccelerateInterpolator(1.5f))
+                .scaleX(0.945f)
+                .scaleY(0.945f)
+                .setDuration(155L)
+                .setInterpolator(new android.view.animation.PathInterpolator(0.4f, 0f, 1f, 1f))
                 .withLayer()
-                .withEndAction(() -> {
-                    superFinish.run();
-                    disableActivityTransition(activity, true);
+                .setListener(new android.animation.AnimatorListenerAdapter() {
+                    private boolean canceled = false;
+
+                    @Override
+                    public void onAnimationCancel(android.animation.Animator animation) {
+                        canceled = true;
+                        fg.animate().setListener(null);
+                        if (Integer.valueOf(gen).equals(fg.getTag(R.id.oneui_anim_generation_tag))) {
+                            fg.setTag(R.id.oneui_exit_anim_running_tag, null);
+                        }
+                    }
+
+                    @Override
+                    public void onAnimationEnd(android.animation.Animator animation) {
+                        fg.animate().setListener(null);
+                        if (Integer.valueOf(gen).equals(fg.getTag(R.id.oneui_anim_generation_tag))) {
+                            fg.setTag(R.id.oneui_exit_anim_running_tag, null);
+                        }
+                        if (!canceled) {
+                            captureCurrentStarfieldHandoff(activity);
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                                disableActivityTransition(activity, true);
+                            }
+                            superFinish.run();
+                            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                                activity.overridePendingTransition(0, 0);
+                            }
+                        }
+                    }
                 })
                 .start();
     }
@@ -1231,6 +1486,11 @@ public class UiHelper {
 
         // Set GameState.MODE_NONE initially for all activities
         setGameModeStatus(activity, false, false);
+
+        // Disable system activity open/close animations on API 34+ before first frame
+        if (!(activity instanceof Game || activity instanceof ExternalDisplayControlActivity)) {
+            disableAllActivityTransitions(activity);
+        }
 
         attachFlowingAuroraBackground(activity, rootView);
         applyReachabilitySpacing(activity);

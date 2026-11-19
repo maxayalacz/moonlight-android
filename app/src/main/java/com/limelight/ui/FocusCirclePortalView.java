@@ -26,7 +26,6 @@ import androidx.core.content.ContextCompat;
 import com.limelight.R;
 import com.limelight.nvstream.http.ComputerDetails;
 import com.limelight.nvstream.http.PairingManager;
-import com.limelight.utils.UiHelper;
 
 import java.lang.ref.WeakReference;
 
@@ -65,6 +64,12 @@ public class FocusCirclePortalView extends View {
 
     private ValueAnimator continuousTicker;
     private WeakReference<FlowingAuroraView> auroraRef;
+    private WeakReference<PortalShaderView> portalRef;
+
+    private float density = 1f;
+    private PorterDuffColorFilter onlineIconFilter;
+    private PorterDuffColorFilter offlineIconFilter;
+    private PorterDuffColorFilter lockIconFilter;
 
     private int cachedW = -1;
     private int cachedH = -1;
@@ -72,7 +77,6 @@ public class FocusCirclePortalView extends View {
     private String cachedPaletteKey = "";
     private boolean cachedOnline = false;
     private boolean cachedPressed = false;
-    private float cachedBloomAlpha = -1f;
 
     private Drawable computerDrawable;
     private Drawable lockDrawable;
@@ -88,6 +92,7 @@ public class FocusCirclePortalView extends View {
     }
 
     private void init(Context context) {
+        density = context.getResources().getDisplayMetrics().density;
         ringPaint.setStyle(Paint.Style.STROKE);
         specularPaint.setStyle(Paint.Style.STROKE);
         spinnerPaint.setStyle(Paint.Style.STROKE);
@@ -98,6 +103,10 @@ public class FocusCirclePortalView extends View {
         frostedTintPaint.setColor(0x52121826);
         innerBadgePaint.setStyle(Paint.Style.FILL);
 
+        onlineIconFilter = new PorterDuffColorFilter(0xF2FFFFFF, PorterDuff.Mode.SRC_IN);
+        offlineIconFilter = new PorterDuffColorFilter(0x7AFFFFFF, PorterDuff.Mode.SRC_IN);
+        lockIconFilter = new PorterDuffColorFilter(0xFFFFB300, PorterDuff.Mode.SRC_IN);
+
         computerDrawable = ContextCompat.getDrawable(context, R.drawable.ic_computer);
         if (computerDrawable != null) {
             computerDrawable = computerDrawable.mutate();
@@ -107,6 +116,10 @@ public class FocusCirclePortalView extends View {
             lockDrawable = lockDrawable.mutate();
         }
         palette = AppThemePalette.getCurrent(context);
+    }
+
+    private float dp(float dpValue) {
+        return dpValue * density;
     }
 
     public void bind(ComputerDetails details, boolean isActivePage) {
@@ -135,6 +148,13 @@ public class FocusCirclePortalView extends View {
         }
     }
 
+    private boolean shouldAnimate() {
+        return isActivePage
+                && isAttachedToWindow()
+                && getWindowVisibility() == VISIBLE
+                && isShown();
+    }
+
     private void syncAnimators() {
         if (!isAttachedToWindow()) {
             return;
@@ -146,20 +166,19 @@ public class FocusCirclePortalView extends View {
             continuousTicker.setRepeatMode(ValueAnimator.RESTART);
             continuousTicker.setInterpolator(new LinearInterpolator());
             continuousTicker.addUpdateListener(anim -> {
-                if (isActivePage) {
+                if (shouldAnimate()) {
                     long now = SystemClock.uptimeMillis();
                     float floatCycle = (now % 5500L) / 5500f;
-                    float offsetPx = UiHelper.dpToPx(getContext(), 6f)
-                            * (float) Math.sin(floatCycle * Math.PI * 2.0);
+                    float offsetPx = dp(6f) * (float) Math.sin(floatCycle * Math.PI * 2.0);
                     setTranslationY(offsetPx);
+                    invalidate();
                 } else {
                     setTranslationY(0f);
                 }
-                invalidate();
             });
         }
 
-        if (isActivePage) {
+        if (shouldAnimate()) {
             if (!continuousTicker.isStarted()) {
                 continuousTicker.start();
             }
@@ -169,6 +188,23 @@ public class FocusCirclePortalView extends View {
             }
             setTranslationY(0f);
         }
+    }
+
+    @Nullable
+    private PortalShaderView resolvePortalView() {
+        PortalShaderView cached = portalRef != null ? portalRef.get() : null;
+        if (cached != null && cached.isAttachedToWindow()) {
+            return cached;
+        }
+        View root = getRootView();
+        if (root != null) {
+            View found = root.findViewWithTag("oneui_portal_starfield_bg");
+            if (found instanceof PortalShaderView) {
+                portalRef = new WeakReference<>((PortalShaderView) found);
+                return (PortalShaderView) found;
+            }
+        }
+        return null;
     }
 
     @Nullable
@@ -213,6 +249,15 @@ public class FocusCirclePortalView extends View {
                         0x00000000
                 },
                 new float[]{0.62f, 0.82f, 1.0f},
+                Shader.TileMode.CLAMP));
+
+        accentGlowPaint.setShader(new RadialGradient(
+                cx, cy, outerRadius + glowMargin * 0.9f,
+                new int[]{
+                        AppThemePalette.withAlpha(palette.accent, 1.0f),
+                        0x00000000
+                },
+                new float[]{0.55f, 1.0f},
                 Shader.TileMode.CLAMP));
 
         interiorPaint.setShader(new RadialGradient(
@@ -264,11 +309,25 @@ public class FocusCirclePortalView extends View {
     }
 
     @Override
+    protected void onVisibilityChanged(@NonNull View changedView, int visibility) {
+        super.onVisibilityChanged(changedView, visibility);
+        syncAnimators();
+    }
+
+    @Override
+    protected void onWindowVisibilityChanged(int visibility) {
+        super.onWindowVisibilityChanged(visibility);
+        syncAnimators();
+    }
+
+    @Override
     protected void onDetachedFromWindow() {
         if (continuousTicker != null) {
             continuousTicker.cancel();
             continuousTicker = null;
         }
+        portalRef = null;
+        auroraRef = null;
         super.onDetachedFromWindow();
     }
 
@@ -288,8 +347,8 @@ public class FocusCirclePortalView extends View {
 
         float cx = w * 0.5f;
         float cy = h * 0.5f;
-        float ringStroke = UiHelper.dpToPx(getContext(), isPressedOrFocused ? 4.5f : 3.5f);
-        float glowMargin = UiHelper.dpToPx(getContext(), 20f);
+        float ringStroke = dp(isPressedOrFocused ? 4.5f : 3.5f);
+        float glowMargin = dp(20f);
         float outerRadius = Math.max(16f, Math.min(w, h) * 0.5f - glowMargin);
         float innerRadius = outerRadius - ringStroke * 0.5f;
 
@@ -298,20 +357,10 @@ public class FocusCirclePortalView extends View {
         // 1. Status perimeter halo
         canvas.drawCircle(cx, cy, outerRadius + glowMargin, glowPaint);
 
-        // 2. Active page breathing accent bloom
+        // 2. Active page breathing accent bloom (zero allocations per frame)
         if (isActivePage || isPressedOrFocused) {
             float bloomAlpha = isPressedOrFocused ? 0.45f : glowPhase;
-            if (Math.abs(bloomAlpha - cachedBloomAlpha) > 0.01f || accentGlowPaint.getShader() == null) {
-                cachedBloomAlpha = bloomAlpha;
-                accentGlowPaint.setShader(new RadialGradient(
-                        cx, cy, outerRadius + glowMargin * 0.9f,
-                        new int[]{
-                                AppThemePalette.withAlpha(palette.accent, bloomAlpha),
-                                0x00000000
-                        },
-                        new float[]{0.55f, 1.0f},
-                        Shader.TileMode.CLAMP));
-            }
+            accentGlowPaint.setAlpha(Math.max(0, Math.min(255, Math.round(bloomAlpha * 255f))));
             canvas.drawCircle(cx, cy, outerRadius + glowMargin * 0.9f, accentGlowPaint);
         }
 
@@ -323,13 +372,10 @@ public class FocusCirclePortalView extends View {
 
         View backdropView = null;
         Bitmap blurred = null;
-        View rootView = getRootView();
-        if (rootView != null) {
-            View portalCandidate = rootView.findViewWithTag("oneui_portal_starfield_bg");
-            if (portalCandidate instanceof PortalShaderView) {
-                backdropView = portalCandidate;
-                blurred = ((PortalShaderView) portalCandidate).getBlurredBitmap();
-            }
+        PortalShaderView portal = resolvePortalView();
+        if (portal != null) {
+            backdropView = portal;
+            blurred = portal.getBlurredBitmap();
         }
         if (backdropView == null || blurred == null) {
             FlowingAuroraView aurora = resolveAuroraView();
@@ -379,8 +425,7 @@ public class FocusCirclePortalView extends View {
                     Math.round(cy) - half,
                     Math.round(cx) + half,
                     Math.round(cy) + half);
-            int iconTint = isOnline ? 0xF2FFFFFF : 0x7AFFFFFF;
-            computerDrawable.setColorFilter(new PorterDuffColorFilter(iconTint, PorterDuff.Mode.SRC_IN));
+            computerDrawable.setColorFilter(isOnline ? onlineIconFilter : offlineIconFilter);
             computerDrawable.draw(canvas);
         }
 
@@ -389,7 +434,7 @@ public class FocusCirclePortalView extends View {
             float spinR = innerRadius * 0.56f;
             spinnerRect.set(cx - spinR, cy - spinR, cx + spinR, cy + spinR);
             spinnerPaint.setColor(AppThemePalette.withAlpha(palette.accentLight, 0.85f));
-            spinnerPaint.setStrokeWidth(UiHelper.dpToPx(getContext(), 2.5f));
+            spinnerPaint.setStrokeWidth(dp(2.5f));
             canvas.drawArc(spinnerRect, spinAngle, 110f, false, spinnerPaint);
         } else if (isOnline && !isPaired && lockDrawable != null) {
             int badgeSize = Math.round(innerRadius * 0.24f);
@@ -402,7 +447,7 @@ public class FocusCirclePortalView extends View {
                     Math.round(by - badgeSize * 0.5f),
                     Math.round(bx + badgeSize * 0.5f),
                     Math.round(by + badgeSize * 0.5f));
-            lockDrawable.setColorFilter(new PorterDuffColorFilter(0xFFFFB300, PorterDuff.Mode.SRC_IN));
+            lockDrawable.setColorFilter(lockIconFilter);
             lockDrawable.draw(canvas);
         }
 
@@ -413,11 +458,11 @@ public class FocusCirclePortalView extends View {
 
         if (isPressedOrFocused) {
             specularPaint.setColor(0xD9FFFFFF);
-            specularPaint.setStrokeWidth(UiHelper.dpToPx(getContext(), 2f));
+            specularPaint.setStrokeWidth(dp(2f));
             canvas.drawCircle(cx, cy, outerRadius + ringStroke * 0.65f, specularPaint);
         } else {
-            specularPaint.setStrokeWidth(UiHelper.dpToPx(getContext(), 1.2f));
-            canvas.drawCircle(cx, cy, innerRadius - UiHelper.dpToPx(getContext(), 0.6f), specularPaint);
+            specularPaint.setStrokeWidth(dp(1.2f));
+            canvas.drawCircle(cx, cy, innerRadius - dp(0.6f), specularPaint);
         }
     }
 }

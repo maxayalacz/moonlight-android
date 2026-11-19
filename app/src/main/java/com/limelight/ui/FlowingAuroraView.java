@@ -481,11 +481,12 @@ public class FlowingAuroraView extends View {
      */
     public static class FrostedCardDrawable extends Drawable {
         private final WeakReference<View> hostViewRef;
-        private final WeakReference<FlowingAuroraView> auroraRef;
-        private final WeakReference<PortalShaderView> portalRef;
-        private final CornerMode cornerMode;
-        private final float cornerRadiusPx;
-        private final int frostTintColor;
+        private WeakReference<FlowingAuroraView> auroraRef;
+        private WeakReference<PortalShaderView> portalRef;
+        private CornerMode cornerMode;
+        private float cornerRadiusPx;
+        private int frostTintColor;
+        private final float[] radii = new float[8];
         private final Paint bitmapPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
         private final Paint tintPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint strokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -512,6 +513,7 @@ public class FlowingAuroraView extends View {
             this.cornerMode = cornerMode;
             this.cornerRadiusPx = cornerRadiusPx;
             this.frostTintColor = frostTintColor;
+            updateRadii();
             this.tintPaint.setColor(frostTintColor);
             this.strokePaint.setStyle(Paint.Style.STROKE);
             this.strokePaint.setStrokeWidth(strokeWidthPx);
@@ -522,6 +524,50 @@ public class FlowingAuroraView extends View {
             if (portalView != null) {
                 portalView.registerFrostedDrawable(this);
             }
+        }
+
+        public void updateStyle(
+                CornerMode cornerMode,
+                float cornerRadiusPx,
+                int frostTintColor,
+                @Nullable FlowingAuroraView auroraView,
+                @Nullable PortalShaderView portalView) {
+            boolean changed = false;
+            if (this.cornerMode != cornerMode || Math.abs(this.cornerRadiusPx - cornerRadiusPx) > 0.5f) {
+                this.cornerMode = cornerMode;
+                this.cornerRadiusPx = cornerRadiusPx;
+                updateRadii();
+                changed = true;
+            }
+            if (this.frostTintColor != frostTintColor) {
+                this.frostTintColor = frostTintColor;
+                if (!isHighlighted) {
+                    this.tintPaint.setColor(frostTintColor);
+                }
+                changed = true;
+            }
+            if (auroraView != null && this.auroraRef.get() != auroraView) {
+                this.auroraRef = new WeakReference<>(auroraView);
+                auroraView.registerFrostedDrawable(this);
+                changed = true;
+            }
+            if (portalView != null && this.portalRef.get() != portalView) {
+                this.portalRef = new WeakReference<>(portalView);
+                portalView.registerFrostedDrawable(this);
+                changed = true;
+            }
+            if (changed) {
+                invalidateSelf();
+            }
+        }
+
+        private void updateRadii() {
+            float top = (cornerMode == CornerMode.ALL || cornerMode == CornerMode.TOP) ? cornerRadiusPx : 0f;
+            float bot = (cornerMode == CornerMode.ALL || cornerMode == CornerMode.BOTTOM) ? cornerRadiusPx : 0f;
+            radii[0] = top; radii[1] = top;
+            radii[2] = top; radii[3] = top;
+            radii[4] = bot; radii[5] = bot;
+            radii[6] = bot; radii[7] = bot;
         }
 
         @Override
@@ -543,13 +589,12 @@ public class FlowingAuroraView extends View {
             }
             if (active != isHighlighted) {
                 isHighlighted = active;
-                FlowingAuroraView aurora = auroraRef.get();
-                if (active && aurora != null) {
-                    tintPaint.setColor(AppThemePalette.withAlpha(aurora.palette.accent, 0.24f));
-                    strokePaint.setColor(AppThemePalette.withAlpha(aurora.palette.accentLight, 0.90f));
+                if (active) {
+                    tintPaint.setColor(AppThemePalette.withAlpha(AppThemePalette.MIDNIGHT.accent, 0.24f));
+                    strokePaint.setColor(AppThemePalette.withAlpha(AppThemePalette.MIDNIGHT.accentLight, 0.90f));
                 } else {
-                    tintPaint.setColor(active ? 0x681A2438 : frostTintColor);
-                    strokePaint.setColor(active ? 0x9958A6FF : 0x42FFFFFF);
+                    tintPaint.setColor(frostTintColor);
+                    strokePaint.setColor(0x42FFFFFF);
                 }
                 invalidateSelf();
                 return true;
@@ -564,23 +609,6 @@ public class FlowingAuroraView extends View {
                 return;
             }
             rectF.set(bounds);
-            float[] radii;
-            switch (cornerMode) {
-                case TOP:
-                    radii = new float[]{cornerRadiusPx, cornerRadiusPx, cornerRadiusPx, cornerRadiusPx, 0f, 0f, 0f, 0f};
-                    break;
-                case BOTTOM:
-                    radii = new float[]{0f, 0f, 0f, 0f, cornerRadiusPx, cornerRadiusPx, cornerRadiusPx, cornerRadiusPx};
-                    break;
-                case MIDDLE:
-                    radii = new float[]{0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f};
-                    break;
-                case ALL:
-                default:
-                    radii = new float[]{cornerRadiusPx, cornerRadiusPx, cornerRadiusPx, cornerRadiusPx,
-                            cornerRadiusPx, cornerRadiusPx, cornerRadiusPx, cornerRadiusPx};
-                    break;
-            }
 
             clipPath.reset();
             clipPath.addRoundRect(rectF, radii, Path.Direction.CW);

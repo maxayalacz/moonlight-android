@@ -391,7 +391,10 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
 
         clipboardManager = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
 
-        UiHelper.disableActivityTransition(this, false);
+        UiHelper.disableAllActivityTransitions(this);
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            UiHelper.disableActivityTransition(this, false);
+        }
 
         portalOverlay = findViewById(R.id.portalConnectionOverlay);
         if (portalOverlay != null) {
@@ -404,9 +407,17 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
                     getResources().getString(R.string.conn_establishing_msg),
                     () -> {
                         if (!isFinishing()) {
+                            if (getWindow() != null) {
+                                getWindow().setBackgroundDrawableResource(R.drawable.bg_oneui_ambient_surface);
+                            }
                             UiHelper.markReturningFromStream();
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                                UiHelper.disableActivityTransition(this, true);
+                            }
                             finish();
-                            UiHelper.disableActivityTransition(this, true);
+                            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                                UiHelper.disableActivityTransition(this, true);
+                            }
                         }
                     },
                     () -> {
@@ -2026,8 +2037,16 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
 
                     // Quit
                     case KeyEvent.KEYCODE_Q:
-                        maybeLaunchSessionMetrics();
-                        finish();
+                        if (connected && !connecting) {
+                            finishWithDisconnectPortal();
+                        } else {
+                            maybeLaunchSessionMetrics();
+                            UiHelper.markReturningFromStream();
+                            finish();
+                            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                                UiHelper.disableActivityTransition(this, true);
+                            }
+                        }
                         break;
 
                     // Toggle cursor visibility
@@ -3667,7 +3686,8 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
                 // Ungrab input
                 setInputGrabState(false);
 
-                if (portalOverlay != null) {
+                final boolean wasConnected = connected && !connecting;
+                if (portalOverlay != null && !disconnectingWithPortal) {
                     portalOverlay.releaseAndHide();
                 }
 
@@ -3727,9 +3747,17 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
                         Dialog.displayDialog(Game.this, getResources().getString(R.string.conn_terminated_title),
                                 message, true);
                     }
-                    else {
-                        maybeLaunchSessionMetrics();
-                        finish();
+                    else if (!disconnectingWithPortal) {
+                        if (wasConnected && portalOverlay != null) {
+                            finishWithDisconnectPortal();
+                        } else {
+                            maybeLaunchSessionMetrics();
+                            UiHelper.markReturningFromStream();
+                            finish();
+                            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                                UiHelper.disableActivityTransition(Game.this, true);
+                            }
+                        }
                     }
                 }
             }
@@ -3771,6 +3799,9 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
+                if (getWindow() != null) {
+                    getWindow().setBackgroundDrawableResource(android.R.color.black);
+                }
                 boolean portalActive = portalOverlay != null && portalOverlay.isOverlayActive();
                 if (portalActive) {
                     portalOverlay.onConnectionStarted();
@@ -4092,8 +4123,16 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
             showGameMenu(null);
             return;
         }
+        if (connected && !connecting) {
+            finishWithDisconnectPortal();
+            return;
+        }
         maybeLaunchSessionMetrics();
+        UiHelper.markReturningFromStream();
         super.onBackPressed();
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            UiHelper.disableActivityTransition(this, true);
+        }
     }
 
     public void sendExecServerCmd(int cmdId) {
@@ -4338,6 +4377,9 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
         if (prefConfig != null && prefConfig.enablePostSessionMetrics && SessionMetricsStore.hasEnoughData()) {
             launchedSessionMetrics = true;
             startActivity(new Intent(this, SessionMetricsActivity.class));
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                overridePendingTransition(0, 0);
+            }
         }
     }
 
@@ -4348,20 +4390,24 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
             return;
         }
         disconnectingWithPortal = true;
+        Runnable completeFinish = () -> {
+            if (getWindow() != null) {
+                getWindow().setBackgroundDrawableResource(R.drawable.bg_oneui_ambient_surface);
+            }
+            maybeLaunchSessionMetrics();
+            UiHelper.markReturningFromStream();
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                UiHelper.disableActivityTransition(this, true);
+            }
+            finish();
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                UiHelper.disableActivityTransition(this, true);
+            }
+        };
         if (portalOverlay != null) {
-            portalOverlay.startDisconnecting(() -> {
-                maybeLaunchSessionMetrics();
-                UiHelper.markReturningFromStream();
-                finish();
-                UiHelper.disableActivityTransition(this, true);
-            });
+            portalOverlay.startDisconnecting(completeFinish);
         } else {
-            SpinnerDialog.displayDisconnectPortal(this, () -> {
-                maybeLaunchSessionMetrics();
-                UiHelper.markReturningFromStream();
-                finish();
-                UiHelper.disableActivityTransition(this, true);
-            });
+            SpinnerDialog.displayDisconnectPortal(this, completeFinish);
         }
     }
 

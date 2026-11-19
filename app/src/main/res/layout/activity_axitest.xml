@@ -72,6 +72,7 @@
         android:text="@string/debug_info_refresh_gamepad_info" />
 
     <ScrollView
+        android:id="@+id/debugGamepadScrollCard"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_marginTop="12dp"

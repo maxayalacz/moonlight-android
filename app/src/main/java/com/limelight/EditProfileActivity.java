@@ -44,7 +44,6 @@ public class EditProfileActivity extends AppCompatActivity {
 
         // Setup toolbar
         Toolbar toolbar = findViewById(R.id.toolbar);
-        UiHelper.applyLiquidGlassEffect(toolbar);
         setSupportActionBar(toolbar);
         getSupportActionBar().setDisplayHomeAsUpEnabled(true);
 
@@ -75,8 +74,12 @@ public class EditProfileActivity extends AppCompatActivity {
             inMemoryPrefs = new InMemorySharedPreferences(PreferenceManager.getDefaultSharedPreferences(this).getAll());
         }
 
-        prefsFragment = new ProfilePreferenceFragment(this, inMemoryPrefs);
+        // Attach shared GPU starfield BEFORE applying live frosted glass backgrounds
+        UiHelper.notifyNewRootView(this);
+        UiHelper.applyLiquidGlassEffect(toolbar);
         UiHelper.applyLiquidGlassEffect(findViewById(R.id.preferences_container));
+
+        prefsFragment = new ProfilePreferenceFragment(this, inMemoryPrefs);
 
         getSupportFragmentManager().registerFragmentLifecycleCallbacks(
                 new androidx.fragment.app.FragmentManager.FragmentLifecycleCallbacks() {
@@ -94,13 +97,18 @@ public class EditProfileActivity extends AppCompatActivity {
             .beginTransaction()
             .replace(R.id.preferences_container, prefsFragment)
             .commit();
-
-        UiHelper.notifyNewRootView(this);
     }
 
     @Override
     protected void onResume() {
         super.onResume();
+        UiHelper.refreshBackdrop(this);
+        UiHelper.restoreMenuForegroundIfNeeded(this);
+    }
+
+    @Override
+    public void onBackPressed() {
+        UiHelper.finishMenuWithDepthTransition(this, super::onBackPressed);
     }
 
     @Override
@@ -120,7 +128,7 @@ public class EditProfileActivity extends AppCompatActivity {
         int id = item.getItemId();
 
         if (id == android.R.id.home) {
-            finish();
+            UiHelper.finishMenuWithDepthTransition(this, this::finish);
             return true;
         } else if (id == R.id.action_save) {
             saveProfile();
@@ -179,7 +187,7 @@ public class EditProfileActivity extends AppCompatActivity {
             Toast.makeText(this, R.string.profile_manager_failed_to_save, Toast.LENGTH_LONG).show();
         }
 
-        finish();
+        UiHelper.finishMenuWithDepthTransition(this, this::finish);
     }
 
     private void showRenameDialog() {

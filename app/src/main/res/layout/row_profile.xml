@@ -5,11 +5,12 @@
     android:layout_height="wrap_content"
     android:layout_marginTop="6dp"
     android:layout_marginBottom="6dp"
-    app:cardBackgroundColor="#25000000"
+    app:cardBackgroundColor="@android:color/transparent"
     app:cardCornerRadius="@dimen/oneui_squircle_radius"
     app:cardElevation="0dp">
 
     <LinearLayout
+        android:id="@+id/profileCardContent"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"

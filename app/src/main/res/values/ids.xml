@@ -3,4 +3,9 @@
     <item name="oneui_dialog_blur_tag" type="id" />
     <item name="oneui_immersive_listener_tag" type="id" />
     <item name="oneui_enter_anim_running_tag" type="id" />
+    <item name="oneui_exit_anim_running_tag" type="id" />
+    <item name="oneui_anim_generation_tag" type="id" />
+    <item name="oneui_window_blur_listener_tag" type="id" />
+    <item name="oneui_dialog_entered_tag" type="id" />
+    <item name="oneui_glow_effect_tag" type="id" />
 </resources>

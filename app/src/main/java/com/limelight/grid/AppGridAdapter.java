@@ -181,8 +181,11 @@ public class AppGridAdapter extends GenericGridAdapter<AppView.AppObject> {
         // Configure ambient glow layer behind the dark frosted glass frame so box art emits light
         if (glowView != null) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                float blurPx = UiHelper.dpToPx(glowView.getContext(), 20f);
-                glowView.setRenderEffect(RenderEffect.createBlurEffect(blurPx, blurPx, Shader.TileMode.CLAMP));
+                if (!Boolean.TRUE.equals(glowView.getTag(R.id.oneui_glow_effect_tag))) {
+                    float blurPx = UiHelper.dpToPx(glowView.getContext(), 20f);
+                    glowView.setRenderEffect(RenderEffect.createBlurEffect(blurPx, blurPx, Shader.TileMode.CLAMP));
+                    glowView.setTag(R.id.oneui_glow_effect_tag, Boolean.TRUE);
+                }
                 glowView.setAlpha(0.75f);
             } else {
                 glowView.setAlpha(0.38f);

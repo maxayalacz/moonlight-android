@@ -1,12 +1,12 @@
 <resources>
 
     <!--
-      Use a black background to avoid the transparent background when switching apps.
-      android:windowBackgroundFallback is supposed to do this, but it wasn't working for
-      me as of Android 7.1
+      Use an opaque starfield-void background on launch so Game never flashes solid black
+      during the PS Portal handoff or transparent when switching apps (switched to pure black
+      once connected while the opaque portal overlay covers the screen).
     -->
     <style name="StreamBaseTheme" parent="AppBaseTheme">
-        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:windowBackground">@drawable/bg_oneui_ambient_surface</item>
     </style>
 
 </resources>

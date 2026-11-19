@@ -26,7 +26,6 @@ import java.lang.ref.WeakReference;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
-import java.util.Iterator;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
@@ -270,6 +269,47 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
         return (SystemClock.uptimeMillis() % 1_000_000L) / 1000.0f;
     }
 
+    private static final int HANDOFF_SHORT_EDGE = 360;
+    private static volatile Bitmap sHandoffBitmap;
+    private static volatile boolean sHandoffLandscape;
+
+    /**
+     * Captures a lightweight snapshot of the live GL starfield right before an activity transition
+     * so the incoming or returning activity displays the exact starfield from Frame 0 while its
+     * EGL context & shaders initialize (zero solid-color flash).
+     */
+    public static void captureHandoffFrame(@Nullable PortalShaderView view) {
+        if (view == null || !view.isAvailable()) {
+            return;
+        }
+        int w = view.getWidth();
+        int h = view.getHeight();
+        if (w <= 0 || h <= 0) {
+            return;
+        }
+        int shortEdge = Math.min(w, h);
+        float scale = shortEdge > HANDOFF_SHORT_EDGE ? (HANDOFF_SHORT_EDGE / (float) shortEdge) : 1.0f;
+        int tw = Math.max(1, Math.round(w * scale));
+        int th = Math.max(1, Math.round(h * scale));
+        try {
+            Bitmap bmp = view.getBitmap(tw, th);
+            if (bmp != null) {
+                sHandoffBitmap = bmp;
+                sHandoffLandscape = (tw >= th);
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    @Nullable
+    public static Bitmap getHandoffBitmap(boolean landscape) {
+        Bitmap bmp = sHandoffBitmap;
+        if (bmp == null || bmp.isRecycled() || sHandoffLandscape != landscape) {
+            return null;
+        }
+        return bmp;
+    }
+
     private volatile float uReadyMix = 0f;
     private volatile float uPreviewMix = 0f;
     private volatile float uExpandProgress = 1f;
@@ -281,11 +321,14 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
     private volatile int bgMaxShortEdge = 720;
     private volatile boolean backgroundMode = false;
     private volatile boolean renderingDesired = false;
+    private volatile boolean firstFrameDispatched = false;
 
     private PortalGlThread renderThread;
+    private PortalGlThread stoppingThread;
     private SurfaceTexture activeSurfaceTexture;
     private int activeWidth = 0;
     private int activeHeight = 0;
+    private Runnable firstFrameListener;
 
     // Off-UI-thread blurred refraction bitmap (~64x112 @ ~15 FPS)
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -296,11 +339,10 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
         if (frostedDrawables.isEmpty()) {
             return;
         }
-        Iterator<WeakReference<Drawable>> it = frostedDrawables.iterator();
-        while (it.hasNext()) {
-            Drawable d = it.next().get();
+        for (WeakReference<Drawable> ref : frostedDrawables) {
+            Drawable d = ref.get();
             if (d == null) {
-                frostedDrawables.remove(it);
+                frostedDrawables.remove(ref);
             } else {
                 d.invalidateSelf();
             }
@@ -341,7 +383,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
 
     /**
      * Configures this view to render the full-screen cosmic starfield background
-     * via a 0.70x offscreen GL FBO + fullscreen linear blit.
+     * via a capped offscreen GL FBO + fullscreen linear blit.
      */
     public void configureStarfieldBackgroundMode() {
         backgroundMode = true;
@@ -382,12 +424,51 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
     }
 
     public void registerFrostedDrawable(@NonNull Drawable drawable) {
+        for (WeakReference<Drawable> ref : frostedDrawables) {
+            if (ref.get() == drawable) {
+                return;
+            }
+        }
         frostedDrawables.add(new WeakReference<>(drawable));
     }
 
     @Nullable
     public Bitmap getBlurredBitmap() {
         return publishedBlurBitmap;
+    }
+
+    public boolean hasRenderedFrame() {
+        return firstFrameDispatched && renderThread != null && renderThread.isRunning();
+    }
+
+    /**
+     * Invokes {@code listener} on the UI thread as soon as the first live GL frame has been
+     * swapped to this TextureView (or immediately if a live frame is already on screen).
+     */
+    public void setFirstFrameListener(@Nullable Runnable listener) {
+        if (listener == null) {
+            this.firstFrameListener = null;
+            return;
+        }
+        if (hasRenderedFrame()) {
+            this.firstFrameListener = null;
+            listener.run();
+        } else {
+            this.firstFrameListener = listener;
+        }
+    }
+
+    private void joinStoppingThreadIfNeeded() {
+        PortalGlThread prev = stoppingThread;
+        stoppingThread = null;
+        if (prev != null && prev.isAlive()) {
+            prev.requestStop();
+            try {
+                prev.join(450L);
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
+        }
     }
 
     public void startRendering() {
@@ -403,13 +484,32 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             activeHeight = getHeight();
         }
         if (st != null && activeWidth > 0 && activeHeight > 0) {
+            joinStoppingThreadIfNeeded();
+            firstFrameDispatched = false;
             renderThread = new PortalGlThread(st, activeWidth, activeHeight);
             renderThread.start();
         }
     }
 
+    /**
+     * Signals the GL render loop to exit and release resources without blocking the UI thread.
+     * Ideal for Activity.onStop() so backgrounded menus free GPU memory with 0 ms UI stall.
+     */
+    public void stopRenderingAsync() {
+        renderingDesired = false;
+        firstFrameDispatched = false;
+        PortalGlThread t = renderThread;
+        renderThread = null;
+        if (t != null) {
+            t.requestStop();
+            stoppingThread = t;
+        }
+    }
+
     public void stopRendering() {
         renderingDesired = false;
+        firstFrameDispatched = false;
+        firstFrameListener = null;
         PortalGlThread t = renderThread;
         renderThread = null;
         if (t != null) {
@@ -420,6 +520,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
                 Thread.currentThread().interrupt();
             }
         }
+        joinStoppingThreadIfNeeded();
     }
 
     @Override
@@ -438,6 +539,8 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
                     Thread.currentThread().interrupt();
                 }
             }
+            joinStoppingThreadIfNeeded();
+            firstFrameDispatched = false;
             renderThread = new PortalGlThread(surface, width, height);
             renderThread.start();
         }
@@ -456,6 +559,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
 
     @Override
     public boolean onSurfaceTextureDestroyed(@NonNull SurfaceTexture surface) {
+        firstFrameDispatched = false;
         PortalGlThread t = renderThread;
         renderThread = null;
         if (t != null) {
@@ -466,6 +570,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
                 Thread.currentThread().interrupt();
             }
         }
+        joinStoppingThreadIfNeeded();
         activeSurfaceTexture = null;
         activeWidth = 0;
         activeHeight = 0;
@@ -474,7 +579,14 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
 
     @Override
     public void onSurfaceTextureUpdated(@NonNull SurfaceTexture surface) {
-        // No-op
+        if (!firstFrameDispatched && renderingDesired) {
+            firstFrameDispatched = true;
+            Runnable listener = firstFrameListener;
+            firstFrameListener = null;
+            if (listener != null) {
+                listener.run();
+            }
+        }
     }
 
     @Override
@@ -944,8 +1056,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
                     .asFloatBuffer();
             quadBuffer.put(FULLSCREEN_QUAD).position(0);
 
-            GLES30.glEnable(GLES30.GL_BLEND);
-            GLES30.glBlendFunc(GLES30.GL_ONE, GLES30.GL_ONE_MINUS_SRC_ALPHA);
+            GLES30.glDisable(GLES30.GL_BLEND);
             GLES30.glClearColor(0f, 0f, 0f, 0f);
             return true;
         }

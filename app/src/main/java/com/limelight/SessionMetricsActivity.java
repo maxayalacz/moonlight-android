@@ -1,5 +1,7 @@
 package com.limelight;
 
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
 import android.animation.ValueAnimator;
 import android.content.Intent;
 import android.graphics.Bitmap;
@@ -15,8 +17,9 @@ import android.util.DisplayMetrics;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
 import android.view.WindowManager;
-import android.view.animation.DecelerateInterpolator;
+import android.view.animation.PathInterpolator;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -32,6 +35,7 @@ import com.limelight.utils.UiHelper;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
@@ -52,9 +56,12 @@ public class SessionMetricsActivity extends AppCompatActivity {
     private static final int AUTO_DISMISS_SEC = 20;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
+    private final List<ValueAnimator> activeChartAnimators = new ArrayList<>();
     private int countdown = AUTO_DISMISS_SEC;
     private boolean sharingInProgress = false;
+    private boolean dismissing = false;
 
+    private View rootBackdrop;
     private ScrollView scrollView;
     private View cardContainer;
     private TextView countdownText;
@@ -66,12 +73,12 @@ public class SessionMetricsActivity extends AppCompatActivity {
     private final Runnable countdownTick = new Runnable() {
         @Override
         public void run() {
-            if (isFinishing() || isDestroyed() || sharingInProgress) {
+            if (isFinishing() || isDestroyed() || sharingInProgress || dismissing) {
                 return;
             }
             countdown--;
             if (countdown <= 0) {
-                finish();
+                dismissSmoothly();
                 return;
             }
             if (countdownText != null) {
@@ -85,6 +92,10 @@ public class SessionMetricsActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         UiHelper.setLocale(this);
+        UiHelper.disableAllActivityTransitions(this);
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            overridePendingTransition(0, 0);
+        }
 
         snapshot = SessionMetricsStore.getSnapshot();
         if (snapshot.points.size() < 2) {
@@ -95,48 +106,43 @@ public class SessionMetricsActivity extends AppCompatActivity {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             WindowManager wm = getSystemService(WindowManager.class);
             if (wm != null && wm.isCrossWindowBlurEnabled() && getWindow() != null) {
-                getWindow().setBackgroundBlurRadius(Math.round(dp(20f)));
+                getWindow().setBackgroundBlurRadius(Math.round(dp(24f)));
             }
         }
 
         setContentView(R.layout.activity_session_metrics);
+        UiHelper.applyMenuImmersiveMode(this);
+        if (getWindow() != null) {
+            final View decorView = getWindow().getDecorView();
+            decorView.getViewTreeObserver().addOnWindowFocusChangeListener(hasFocus -> {
+                if (hasFocus) {
+                    UiHelper.applyMenuImmersiveMode(this);
+                }
+            });
+        }
 
         AppThemePalette palette = AppThemePalette.getCurrent(this);
-        View rootBackdrop = findViewById(R.id.metricsRootBackdrop);
+        rootBackdrop = findViewById(R.id.metricsRootBackdrop);
         cardContainer = findViewById(R.id.metricsCardContainer);
         scrollView = findViewById(R.id.metricsScrollView);
         countdownText = findViewById(R.id.metricsCountdownText);
 
         DisplayMetrics dm = getResources().getDisplayMetrics();
         int maxCardWidth = Math.min(Math.round(dp(560f)), Math.max(Math.round(dp(280f)), dm.widthPixels - Math.round(dp(24f))));
-        int maxCardHeight = Math.max(Math.round(dp(320f)), dm.heightPixels - Math.round(dp(24f)));
+        final int maxCardHeight = Math.max(Math.round(dp(320f)), dm.heightPixels - Math.round(dp(24f)));
         FrameLayout.LayoutParams cardLp = (FrameLayout.LayoutParams) cardContainer.getLayoutParams();
         cardLp.width = maxCardWidth;
         cardContainer.setLayoutParams(cardLp);
-        if (cardContainer instanceof ViewGroup) {
-            cardContainer.post(() -> {
-                if (cardContainer.getHeight() > maxCardHeight) {
-                    ViewGroup.LayoutParams lp = cardContainer.getLayoutParams();
-                    lp.height = maxCardHeight;
-                    cardContainer.setLayoutParams(lp);
-                }
-            });
-        }
 
-        if (!UiHelper.applyFrostedCardBackground(
-                cardContainer,
-                com.limelight.ui.FlowingAuroraView.CornerMode.ALL,
-                22f,
-                0x78121826)) {
-            GradientDrawable cardBg = new GradientDrawable();
-            cardBg.setShape(GradientDrawable.RECTANGLE);
-            cardBg.setCornerRadius(dp(22f));
-            cardBg.setColor(AppThemePalette.withAlpha(palette.surface, 0.88f));
-            cardBg.setStroke(Math.max(1, Math.round(dp(1f))), 0x38FFFFFF);
-            cardContainer.setBackground(cardBg);
-        }
+        // Rich frosted glass surface letting live GPU starfield & API 31+ window blur breathe through
+        GradientDrawable cardBg = new GradientDrawable();
+        cardBg.setShape(GradientDrawable.RECTANGLE);
+        cardBg.setCornerRadius(dp(24f));
+        cardBg.setColor(0xC80F1526);
+        cardBg.setStroke(Math.max(1, Math.round(dp(1f))), 0x42FFFFFF);
+        cardContainer.setBackground(cardBg);
 
-        rootBackdrop.setOnClickListener(v -> finish());
+        rootBackdrop.setOnClickListener(v -> dismissSmoothly());
         cardContainer.setOnClickListener(v -> resetCountdown());
 
         View shareButton = findViewById(R.id.metricsShareButton);
@@ -145,14 +151,14 @@ public class SessionMetricsActivity extends AppCompatActivity {
             resetCountdown();
             shareSummary();
         });
-        closeButton.setOnClickListener(v -> finish());
+        closeButton.setOnClickListener(v -> dismissSmoothly());
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             scrollView.setOnScrollChangeListener((v, sx, sy, osx, osy) -> resetCountdown());
         }
 
         populateMetrics(palette);
-        runEntranceAnimations();
+        prepareAndRunEntranceAnimations(maxCardHeight);
         countdownText.setText(countdown + "s");
         handler.postDelayed(countdownTick, 1000L);
     }
@@ -160,20 +166,29 @@ public class SessionMetricsActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        UiHelper.applyMenuImmersiveMode(this);
         sharingInProgress = false;
-        resetCountdown();
+        if (!dismissing) {
+            resetCountdown();
+        }
     }
 
     @Override
     protected void onDestroy() {
         handler.removeCallbacksAndMessages(null);
+        cancelChartAnimators();
         super.onDestroy();
+    }
+
+    @Override
+    public void onBackPressed() {
+        dismissSmoothly();
     }
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if (keyCode == KeyEvent.KEYCODE_BUTTON_B || keyCode == KeyEvent.KEYCODE_ESCAPE) {
-            finish();
+            dismissSmoothly();
             return true;
         }
         if (keyCode == KeyEvent.KEYCODE_BUTTON_Y) {
@@ -192,6 +207,76 @@ public class SessionMetricsActivity extends AppCompatActivity {
             return true;
         }
         return super.onKeyDown(keyCode, event);
+    }
+
+    private void dismissSmoothly() {
+        if (dismissing || isFinishing()) {
+            return;
+        }
+        dismissing = true;
+        handler.removeCallbacks(countdownTick);
+        cancelChartAnimators();
+
+        PathInterpolator exitEase = new PathInterpolator(0.4f, 0f, 1f, 1f);
+        if (cardContainer != null) {
+            cardContainer.animate().setListener(null).cancel();
+            if (cardContainer.getWidth() > 0 && cardContainer.getHeight() > 0) {
+                cardContainer.setPivotX(cardContainer.getWidth() * 0.5f);
+                cardContainer.setPivotY(cardContainer.getHeight() * 0.5f);
+            }
+            cardContainer.animate()
+                    .alpha(0f)
+                    .scaleX(0.94f)
+                    .scaleY(0.94f)
+                    .translationY(dp(10f))
+                    .setDuration(180L)
+                    .setInterpolator(exitEase)
+                    .withLayer()
+                    .start();
+        }
+        if (rootBackdrop != null) {
+            rootBackdrop.animate().setListener(null).cancel();
+            rootBackdrop.animate()
+                    .alpha(0f)
+                    .setDuration(185L)
+                    .setInterpolator(exitEase)
+                    .setListener(new AnimatorListenerAdapter() {
+                        @Override
+                        public void onAnimationEnd(Animator animation) {
+                            rootBackdrop.animate().setListener(null);
+                            finishWithoutTransition();
+                        }
+
+                        @Override
+                        public void onAnimationCancel(Animator animation) {
+                            rootBackdrop.animate().setListener(null);
+                            finishWithoutTransition();
+                        }
+                    })
+                    .start();
+        } else {
+            finishWithoutTransition();
+        }
+    }
+
+    private void finishWithoutTransition() {
+        if (isFinishing()) {
+            return;
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            UiHelper.disableActivityTransition(this, true);
+        }
+        finish();
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            overridePendingTransition(0, 0);
+        }
+    }
+
+    private void cancelChartAnimators() {
+        for (ValueAnimator anim : activeChartAnimators) {
+            anim.cancel();
+        }
+        activeChartAnimators.clear();
     }
 
     private void resetCountdown() {
@@ -296,9 +381,9 @@ public class SessionMetricsActivity extends AppCompatActivity {
 
         GradientDrawable bg = new GradientDrawable();
         bg.setShape(GradientDrawable.RECTANGLE);
-        bg.setCornerRadius(dp(10f));
+        bg.setCornerRadius(dp(12f));
         bg.setColor(AppThemePalette.withAlpha(palette.background, 0.55f));
-        bg.setStroke(Math.max(1, Math.round(dp(0.8f))), 0x16FFFFFF);
+        bg.setStroke(Math.max(1, Math.round(dp(0.8f))), 0x1AFFFFFF);
         card.setBackground(bg);
 
         TextView labelTv = new TextView(this);
@@ -333,9 +418,9 @@ public class SessionMetricsActivity extends AppCompatActivity {
     private void stylePanel(View panel, AppThemePalette palette) {
         GradientDrawable bg = new GradientDrawable();
         bg.setShape(GradientDrawable.RECTANGLE);
-        bg.setCornerRadius(dp(12f));
-        bg.setColor(AppThemePalette.withAlpha(palette.background, 0.42f));
-        bg.setStroke(Math.max(1, Math.round(dp(0.8f))), 0x14FFFFFF);
+        bg.setCornerRadius(dp(14f));
+        bg.setColor(AppThemePalette.withAlpha(palette.background, 0.44f));
+        bg.setStroke(Math.max(1, Math.round(dp(0.8f))), 0x18FFFFFF);
         panel.setBackground(bg);
     }
 
@@ -349,47 +434,118 @@ public class SessionMetricsActivity extends AppCompatActivity {
         badge.setBackground(bg);
     }
 
-    private void runEntranceAnimations() {
-        View summaryScroll = findViewById(R.id.metricsSummaryScroll);
-        View chartsGrid = findViewById(R.id.metricsChartsGrid);
-        MetricChartView fpsChart = findViewById(R.id.metricsFpsChart);
-        MetricChartView decodeChart = findViewById(R.id.metricsDecodeChart);
-        MetricChartView bitrateChart = findViewById(R.id.metricsBitrateChart);
-        MetricChartView dropChart = findViewById(R.id.metricsDropChart);
+    private void prepareAndRunEntranceAnimations(final int maxCardHeight) {
+        final LinearLayout summaryRow = findViewById(R.id.metricsSummaryRow);
+        final View[] panels = {
+                findViewById(R.id.metricsFpsPanel),
+                findViewById(R.id.metricsDecodePanel),
+                findViewById(R.id.metricsBitratePanel),
+                findViewById(R.id.metricsDropPanel)
+        };
+        final MetricChartView[] charts = {
+                findViewById(R.id.metricsFpsChart),
+                findViewById(R.id.metricsDecodeChart),
+                findViewById(R.id.metricsBitrateChart),
+                findViewById(R.id.metricsDropChart)
+        };
 
-        summaryScroll.setAlpha(0f);
-        summaryScroll.setTranslationY(dp(12f));
-        summaryScroll.animate()
-                .alpha(1f)
-                .translationY(0f)
-                .setDuration(420L)
-                .setInterpolator(new DecelerateInterpolator())
-                .start();
+        rootBackdrop.setAlpha(0f);
+        cardContainer.setAlpha(0f);
+        cardContainer.setScaleX(0.93f);
+        cardContainer.setScaleY(0.93f);
+        cardContainer.setTranslationY(dp(16f));
 
-        chartsGrid.setAlpha(0f);
-        chartsGrid.animate()
-                .alpha(1f)
-                .setStartDelay(180L)
-                .setDuration(350L)
-                .start();
+        for (int i = 0; i < summaryRow.getChildCount(); i++) {
+            View child = summaryRow.getChildAt(i);
+            child.setAlpha(0f);
+            child.setTranslationY(dp(8f));
+        }
+        for (View panel : panels) {
+            panel.setAlpha(0f);
+            panel.setTranslationY(dp(10f));
+        }
+        for (MetricChartView chart : charts) {
+            chart.setDrawProgress(0f);
+        }
 
-        fpsChart.setDrawProgress(0f);
-        decodeChart.setDrawProgress(0f);
-        bitrateChart.setDrawProgress(0f);
-        dropChart.setDrawProgress(0f);
+        cardContainer.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
+            private boolean heightConstrained = false;
 
-        ValueAnimator chartAnim = ValueAnimator.ofFloat(0f, 1f);
-        chartAnim.setStartDelay(220L);
-        chartAnim.setDuration(850L);
-        chartAnim.setInterpolator(new DecelerateInterpolator(1.6f));
-        chartAnim.addUpdateListener(anim -> {
-            float p = (float) anim.getAnimatedValue();
-            fpsChart.setDrawProgress(p);
-            decodeChart.setDrawProgress(p);
-            bitrateChart.setDrawProgress(p);
-            dropChart.setDrawProgress(p);
+            @Override
+            public boolean onPreDraw() {
+                if (!heightConstrained && cardContainer.getHeight() > maxCardHeight) {
+                    heightConstrained = true;
+                    ViewGroup.LayoutParams lp = cardContainer.getLayoutParams();
+                    lp.height = maxCardHeight;
+                    cardContainer.setLayoutParams(lp);
+                    return false;
+                }
+                if (cardContainer.getViewTreeObserver().isAlive()) {
+                    cardContainer.getViewTreeObserver().removeOnPreDrawListener(this);
+                }
+                cardContainer.postOnAnimation(() -> startChoreographedEntrance(summaryRow, panels, charts));
+                return true;
+            }
         });
-        chartAnim.start();
+    }
+
+    private void startChoreographedEntrance(LinearLayout summaryRow, View[] panels, MetricChartView[] charts) {
+        if (dismissing || isFinishing()) {
+            return;
+        }
+        PathInterpolator easeOut = new PathInterpolator(0.22f, 1f, 0.36f, 1f);
+
+        rootBackdrop.animate()
+                .alpha(1f)
+                .setDuration(240L)
+                .setInterpolator(easeOut)
+                .start();
+
+        if (cardContainer.getWidth() > 0 && cardContainer.getHeight() > 0) {
+            cardContainer.setPivotX(cardContainer.getWidth() * 0.5f);
+            cardContainer.setPivotY(cardContainer.getHeight() * 0.5f);
+        }
+        cardContainer.animate()
+                .alpha(1f)
+                .scaleX(1f)
+                .scaleY(1f)
+                .translationY(0f)
+                .setDuration(300L)
+                .setInterpolator(easeOut)
+                .withLayer()
+                .start();
+
+        for (int i = 0; i < summaryRow.getChildCount(); i++) {
+            View child = summaryRow.getChildAt(i);
+            child.animate()
+                    .alpha(1f)
+                    .translationY(0f)
+                    .setStartDelay(70L + i * 28L)
+                    .setDuration(260L)
+                    .setInterpolator(easeOut)
+                    .start();
+        }
+
+        cancelChartAnimators();
+        for (int i = 0; i < panels.length; i++) {
+            long panelDelay = 120L + i * 50L;
+            panels[i].animate()
+                    .alpha(1f)
+                    .translationY(0f)
+                    .setStartDelay(panelDelay)
+                    .setDuration(280L)
+                    .setInterpolator(easeOut)
+                    .start();
+
+            final MetricChartView chart = charts[i];
+            ValueAnimator chartAnim = ValueAnimator.ofFloat(0f, 1f);
+            chartAnim.setStartDelay(panelDelay + 60L);
+            chartAnim.setDuration(760L);
+            chartAnim.setInterpolator(easeOut);
+            chartAnim.addUpdateListener(anim -> chart.setDrawProgress((float) anim.getAnimatedValue()));
+            activeChartAnimators.add(chartAnim);
+            chartAnim.start();
+        }
     }
 
     private void shareSummary() {

@@ -160,7 +160,6 @@
         android:layout_marginBottom="24dp"
         android:layout_marginEnd="24dp"
         android:contentDescription="@string/profile_manager_choose_profile"
-        android:layout_margin="16dp"
         app:backgroundTint="#38253044"
         app:strokeColor="#52FFFFFF"
         app:strokeWidth="1dp"

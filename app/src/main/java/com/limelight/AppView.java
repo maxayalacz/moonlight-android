@@ -183,6 +183,11 @@ public class AppView extends AppCompatActivity implements AdapterFragmentCallbac
         if (appGridAdapter != null) {
             // Update the app grid adapter to create grid items with the correct layout
             appGridAdapter.updateLayoutWithPreferences(this, this.prefConfig);
+            lastCenteredCount = -1;
+            lastCenteredW = -1;
+            lastCenteredH = -1;
+            lastCenteredRowH = -1;
+            lastAppliedNumColumns = Integer.MIN_VALUE;
 
             try {
                 // Reinflate the app grid itself to pick up the layout change
@@ -420,6 +425,14 @@ public class AppView extends AppCompatActivity implements AdapterFragmentCallbac
 
         inForeground = true;
         startComputerUpdates();
+
+        if (appGridView != null && appGridAdapter != null && appGridAdapter.getCount() > 0) {
+            if (appGridView.getChildCount() == 0) {
+                appGridAdapter.notifyDataSetChanged();
+                appGridView.requestLayout();
+            }
+            scheduleCenterAppGrid();
+        }
 
         ExtendedFloatingActionButton profilesButton = findViewById(R.id.profilesButton);
         // User report Samsung and Xiaomi devices have this problem
@@ -833,9 +846,7 @@ public class AppView extends AppCompatActivity implements AdapterFragmentCallbac
 
                 if (updated) {
                     appGridAdapter.notifyDataSetChanged();
-                    if (appGridView != null) {
-                        appGridView.post(AppView.this::centerAppGrid);
-                    }
+                    scheduleCenterAppGrid();
                 }
             }
         });
@@ -845,51 +856,74 @@ public class AppView extends AppCompatActivity implements AdapterFragmentCallbac
     private int lastCenteredCount = -1;
     private int lastCenteredW = -1;
     private int lastCenteredH = -1;
+    private int lastCenteredRowH = -1;
+    private int lastCenteredBottomInset = -1;
+    private int lastAppliedNumColumns = Integer.MIN_VALUE;
+    private int gridBottomInset = 0;
+    private final Runnable centerAppGridRunnable = this::centerAppGrid;
 
-    private void centerAppGrid() {
-        if (appGridView == null || appGridAdapter == null) {
-            return;
+    private void scheduleCenterAppGrid() {
+        if (appGridView != null) {
+            appGridView.removeCallbacks(centerAppGridRunnable);
+            appGridView.post(centerAppGridRunnable);
+        }
+    }
+
+    private boolean centerAppGrid() {
+        if (appGridView == null || appGridAdapter == null || !appGridView.isAttachedToWindow()) {
+            return false;
         }
         int gridW = appGridView.getWidth();
         int gridH = appGridView.getHeight();
         int count = appGridAdapter.getCount();
         if (gridW <= 0 || gridH <= 0 || count <= 0) {
-            return;
+            return false;
         }
-        if (count == lastCenteredCount && gridW == lastCenteredW && gridH == lastCenteredH) {
-            return;
-        }
-        lastCenteredCount = count;
-        lastCenteredW = gridW;
-        lastCenteredH = gridH;
 
         int colWidth = getResources().getDimensionPixelSize(
                 prefConfig != null && prefConfig.smallIconMode
                         ? R.dimen.app_grid_small_column_width
                         : R.dimen.app_grid_column_width);
+        int actualChildH = (appGridView.getChildCount() > 0 && appGridView.getChildAt(0).getHeight() > 0)
+                ? appGridView.getChildAt(0).getHeight()
+                : -1;
+        int rowHeight = actualChildH > 0 ? actualChildH : Math.round(colWidth * 1.30f);
+
+        if (count == lastCenteredCount
+                && gridW == lastCenteredW
+                && gridH == lastCenteredH
+                && gridBottomInset == lastCenteredBottomInset
+                && Math.abs(rowHeight - lastCenteredRowH) <= 4
+                && appGridView.getChildCount() > 0) {
+            return false;
+        }
+        lastCenteredCount = count;
+        lastCenteredW = gridW;
+        lastCenteredH = gridH;
+        lastCenteredRowH = rowHeight;
+        lastCenteredBottomInset = gridBottomInset;
+
         int baseHorizPad = getResources().getDimensionPixelSize(R.dimen.activity_horizontal_margin);
         int availW = Math.max(colWidth, gridW - baseHorizPad * 2);
         int maxCols = Math.max(1, availW / colWidth);
         int effectiveCols;
+        int targetCols;
         int horizPad;
         if (count < maxCols) {
             effectiveCols = count;
-            appGridView.setNumColumns(count);
+            targetCols = count;
             int totalItemsW = count * colWidth;
             horizPad = Math.max(baseHorizPad, (gridW - totalItemsW) / 2);
         } else {
             effectiveCols = maxCols;
-            appGridView.setNumColumns(android.widget.GridView.AUTO_FIT);
+            targetCols = android.widget.GridView.AUTO_FIT;
             horizPad = baseHorizPad;
         }
 
         int baseTopPad = getResources().getDimensionPixelSize(R.dimen.oneui_reachability_top_margin)
                 + (int) UiHelper.dpToPx(this, 68f);
-        int baseBottomPad = (int) UiHelper.dpToPx(this, 24f);
+        int baseBottomPad = Math.max((int) UiHelper.dpToPx(this, 24f), gridBottomInset);
         int rows = (int) Math.ceil(count / (double) effectiveCols);
-        int rowHeight = (appGridView.getChildCount() > 0 && appGridView.getChildAt(0).getHeight() > 0)
-                ? appGridView.getChildAt(0).getHeight()
-                : Math.round(colWidth * 1.38f);
         int vSpacing = appGridView.getVerticalSpacing();
         int totalContentH = rows * rowHeight + Math.max(0, rows - 1) * vSpacing;
         int availH = gridH - baseTopPad - baseBottomPad;
@@ -898,7 +932,24 @@ public class AppView extends AppCompatActivity implements AdapterFragmentCallbac
             topPad = baseTopPad + Math.max(0, (availH - totalContentH) / 2);
         }
 
-        appGridView.setPadding(horizPad, topPad, horizPad, baseBottomPad);
+        boolean needsLayout = false;
+        if (targetCols != lastAppliedNumColumns) {
+            lastAppliedNumColumns = targetCols;
+            appGridView.setNumColumns(targetCols);
+            needsLayout = true;
+        }
+        if (appGridView.getPaddingLeft() != horizPad
+                || appGridView.getPaddingTop() != topPad
+                || appGridView.getPaddingRight() != horizPad
+                || appGridView.getPaddingBottom() != baseBottomPad) {
+            appGridView.setPadding(horizPad, topPad, horizPad, baseBottomPad);
+            needsLayout = true;
+        }
+        if (needsLayout || appGridView.getChildCount() == 0) {
+            appGridView.requestLayout();
+            return true;
+        }
+        return false;
     }
 
     @Override
@@ -940,21 +991,52 @@ public class AppView extends AppCompatActivity implements AdapterFragmentCallbac
         listView.setClipToPadding(false);
         int topPad = getResources().getDimensionPixelSize(R.dimen.oneui_reachability_top_margin)
                 + (int) UiHelper.dpToPx(this, 68f);
+        int bottomPad = Math.max((int) UiHelper.dpToPx(this, 24f), gridBottomInset);
         listView.setPadding(
                 listView.getPaddingLeft(),
                 topPad,
                 listView.getPaddingRight(),
-                listView.getPaddingBottom());
-        UiHelper.applyStatusBarPadding(listView);
+                bottomPad);
         if (listView instanceof android.widget.GridView) {
             appGridView = (android.widget.GridView) listView;
             lastCenteredCount = -1;
-            appGridView.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
-                if ((r - l) != (or - ol) || (b - t) != (ob - ot)) {
-                    centerAppGrid();
+            lastCenteredW = -1;
+            lastCenteredH = -1;
+            lastCenteredRowH = -1;
+            lastCenteredBottomInset = -1;
+            lastAppliedNumColumns = Integer.MIN_VALUE;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                appGridView.setOnApplyWindowInsetsListener((v, windowInsets) -> {
+                    int newBottom = windowInsets.getTappableElementInsets().bottom;
+                    if (newBottom != gridBottomInset) {
+                        gridBottomInset = newBottom;
+                        scheduleCenterAppGrid();
+                    }
+                    return windowInsets;
+                });
+                appGridView.requestApplyInsets();
+            }
+            // Center right after the first layout finishes (when View.layout() is done so
+            // requestLayout() is never stripped) and before the first frame paints so cards
+            // never flash uncentered or disappear.
+            final android.widget.GridView gv = appGridView;
+            gv.getViewTreeObserver().addOnPreDrawListener(new android.view.ViewTreeObserver.OnPreDrawListener() {
+                @Override
+                public boolean onPreDraw() {
+                    if (gv.getViewTreeObserver().isAlive()) {
+                        gv.getViewTreeObserver().removeOnPreDrawListener(this);
+                    }
+                    return !centerAppGrid();
                 }
             });
-            appGridView.post(this::centerAppGrid);
+            appGridView.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
+                if ((r - l) != (or - ol) || (b - t) != (ob - ot)) {
+                    scheduleCenterAppGrid();
+                }
+            });
+            scheduleCenterAppGrid();
+        } else {
+            UiHelper.applyStatusBarPadding(listView);
         }
         listView.setOnItemLongClickListener((parent, view, position, id) -> {
             openAppContextMenu(view, position);

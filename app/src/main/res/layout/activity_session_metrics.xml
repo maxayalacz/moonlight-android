@@ -2,14 +2,8 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/metricsRootBackdrop"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
-
-    <com.limelight.ui.FlowingAuroraView
-        android:id="@+id/metricsAuroraBackdrop"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:alpha="0.22"
-        android:tag="oneui_flowing_aurora" />
+    android:layout_height="match_parent"
+    android:background="#88060A14">
 
     <LinearLayout
         android:id="@+id/metricsCardContainer"

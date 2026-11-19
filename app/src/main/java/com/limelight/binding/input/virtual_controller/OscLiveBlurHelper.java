@@ -11,6 +11,7 @@ import android.graphics.RectF;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.view.PixelCopy;
 import android.view.SurfaceView;
 import android.view.View;
@@ -27,6 +28,7 @@ import java.util.List;
 public class OscLiveBlurHelper {
     private static final int CAPTURE_LONG_EDGE = 160;
     private static final long CAPTURE_INTERVAL_MS = 50L; // ~20 FPS
+    private static final long PREF_REFRESH_INTERVAL_MS = 1000L;
 
     private final VirtualController controller;
     private final Context context;
@@ -48,6 +50,8 @@ public class OscLiveBlurHelper {
 
     private boolean running = false;
     private boolean inFlight = false;
+    private int cachedBlurRadius = 4;
+    private long lastPrefRefreshMs = 0L;
 
     private final Runnable captureTick = new Runnable() {
         @Override
@@ -65,6 +69,19 @@ public class OscLiveBlurHelper {
         this.context = context;
     }
 
+    private void refreshBlurPreferenceIfNeeded(boolean force) {
+        long now = SystemClock.uptimeMillis();
+        if (!force && now - lastPrefRefreshMs < PREF_REFRESH_INTERVAL_MS) {
+            return;
+        }
+        lastPrefRefreshMs = now;
+        int blurPct = com.limelight.profiles.ProfilesManager.getInstance()
+                .getOverlayingSharedPreferences(context)
+                .getInt(com.limelight.preferences.PreferenceConfiguration.OSC_BLUR_AMOUNT_PREF_STRING,
+                        com.limelight.preferences.PreferenceConfiguration.DEFAULT_OSC_BLUR_AMOUNT);
+        cachedBlurRadius = Math.max(0, Math.min(10, Math.round(4f * (blurPct / 100f))));
+    }
+
     public void start() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
             return;
@@ -73,6 +90,7 @@ public class OscLiveBlurHelper {
             return;
         }
         running = true;
+        refreshBlurPreferenceIfNeeded(true);
         handler.removeCallbacks(captureTick);
         handler.post(captureTick);
     }
@@ -129,13 +147,10 @@ public class OscLiveBlurHelper {
                 if (!running || copyResult != PixelCopy.SUCCESS) {
                     return;
                 }
-                int blurPct = com.limelight.profiles.ProfilesManager.getInstance()
-                        .getOverlayingSharedPreferences(context)
-                        .getInt(com.limelight.preferences.PreferenceConfiguration.OSC_BLUR_AMOUNT_PREF_STRING,
-                                com.limelight.preferences.PreferenceConfiguration.DEFAULT_OSC_BLUR_AMOUNT);
-                int blurRadius = Math.round(4f * (blurPct / 100f));
+                refreshBlurPreferenceIfNeeded(false);
+                int blurRadius = cachedBlurRadius;
                 if (blurRadius > 0) {
-                    UiHelper.fastBoxBlur(target, Math.min(10, blurRadius));
+                    UiHelper.fastBoxBlur(target, blurRadius);
                 }
                 surfaceScreenLeft = sl;
                 surfaceScreenTop = st;

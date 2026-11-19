@@ -197,14 +197,12 @@ public class AddComputerManually extends AppCompatActivity {
                 public void run() {
                     Toast.makeText(AddComputerManually.this, getResources().getString(R.string.addpc_success), Toast.LENGTH_LONG).show();
 
-                    if (!isFinishing()) {
-                        // Close the activity
-                        AddComputerManually.this.finish();
-                    }
-
                     String pin = uri.getQueryParameter("pin");
                     String passphrase = uri.getQueryParameter("passphrase");
                     if (pin != null && passphrase != null) {
+                        if (!isFinishing()) {
+                            AddComputerManually.this.finish();
+                        }
                         Intent intent = new Intent(AddComputerManually.this, PcView.class);
                         intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK | Intent.FLAG_ACTIVITY_NEW_TASK);
                         intent.putExtra("hostname", uri.getHost());
@@ -213,6 +211,9 @@ public class AddComputerManually extends AppCompatActivity {
                         intent.putExtra("passphrase", passphrase);
 
                         startActivity(intent);
+                    } else if (!isFinishing()) {
+                        // Close the activity smoothly back to PcView
+                        UiHelper.finishMenuWithDepthTransition(AddComputerManually.this, AddComputerManually.this::finish);
                     }
 
                 }
@@ -256,6 +257,18 @@ public class AddComputerManually extends AppCompatActivity {
 
             addThread = null;
         }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        UiHelper.refreshBackdrop(this);
+        UiHelper.restoreMenuForegroundIfNeeded(this);
+    }
+
+    @Override
+    public void onBackPressed() {
+        UiHelper.finishMenuWithDepthTransition(this, super::onBackPressed);
     }
 
     @Override

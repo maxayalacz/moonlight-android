@@ -6,8 +6,6 @@ import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.os.AsyncTask;
 import android.view.View;
-import android.view.animation.Animation;
-import android.view.animation.AnimationUtils;
 import android.widget.ImageView;
 import android.widget.TextView;
 
@@ -207,10 +205,18 @@ public class CachedAppAssetLoader {
                 // will use the app image placeholder bitmap, rather than an empty bitmap.
                 LoaderTask task = new LoaderTask(imageView, glowView, textView, false);
                 AsyncDrawable asyncDrawable = new AsyncDrawable(imageView.getResources(), noAppImageBitmap, task);
+                imageView.animate().cancel();
+                imageView.clearAnimation();
                 imageView.setImageDrawable(asyncDrawable);
-                imageView.startAnimation(AnimationUtils.loadAnimation(imageView.getContext(), R.anim.boxart_fadein));
+                imageView.setAlpha(0f);
                 imageView.setVisibility(View.VISIBLE);
+                imageView.animate()
+                        .alpha(1f)
+                        .setDuration(200L)
+                        .setInterpolator(new android.view.animation.PathInterpolator(0.22f, 1f, 0.36f, 1f))
+                        .start();
                 if (glowView != null) {
+                    glowView.animate().cancel();
                     glowView.setVisibility(View.GONE);
                 }
                 textView.setVisibility(View.VISIBLE);
@@ -229,45 +235,57 @@ public class CachedAppAssetLoader {
             final ImageView glowView = glowViewRef.get();
             final TextView textView = textViewRef.get();
             if (getLoaderTask(imageView) == this) {
-                // Fade in the box art
+                // Fade in the box art smoothly
                 if (bitmap != null) {
                     boolean placeholder = isBitmapPlaceholder(bitmap);
                     // Show the text if it's a placeholder or alwaysShowText is enabled
                     textView.setVisibility((alwaysShowText || placeholder) ? View.VISIBLE : View.GONE);
 
+                    final float targetGlowAlpha = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S ? 0.75f : 0.38f;
                     if (glowView != null) {
+                        glowView.animate().cancel();
                         if (!placeholder) {
                             glowView.setImageBitmap(bitmap.bitmap);
+                            glowView.setAlpha(0f);
                             glowView.setVisibility(View.VISIBLE);
+                            glowView.animate()
+                                    .alpha(targetGlowAlpha)
+                                    .setDuration(260L)
+                                    .setInterpolator(new android.view.animation.PathInterpolator(0.22f, 1f, 0.36f, 1f))
+                                    .start();
                         } else {
                             glowView.setVisibility(View.GONE);
                         }
                     }
 
+                    imageView.animate().cancel();
+                    imageView.clearAnimation();
                     if (imageView.getVisibility() == View.VISIBLE) {
-                        // Fade out the placeholder first
-                        Animation fadeOutAnimation = AnimationUtils.loadAnimation(imageView.getContext(), R.anim.boxart_fadeout);
-                        fadeOutAnimation.setAnimationListener(new Animation.AnimationListener() {
-                            @Override
-                            public void onAnimationStart(Animation animation) {}
-
-                            @Override
-                            public void onAnimationEnd(Animation animation) {
-                                // Fade in the new box art
-                                imageView.setImageBitmap(bitmap.bitmap);
-                                imageView.startAnimation(AnimationUtils.loadAnimation(imageView.getContext(), R.anim.boxart_fadein));
-                            }
-
-                            @Override
-                            public void onAnimationRepeat(Animation animation) {}
-                        });
-                        imageView.startAnimation(fadeOutAnimation);
-                    }
-                    else {
-                        // View is invisible already, so just fade in the new art
+                        imageView.animate()
+                                .alpha(0f)
+                                .setDuration(90L)
+                                .setInterpolator(new android.view.animation.PathInterpolator(0.4f, 0f, 1f, 1f))
+                                .withEndAction(() -> {
+                                    if (getLoaderTask(imageView) != this) {
+                                        return;
+                                    }
+                                    imageView.setImageBitmap(bitmap.bitmap);
+                                    imageView.animate()
+                                            .alpha(1f)
+                                            .setDuration(200L)
+                                            .setInterpolator(new android.view.animation.PathInterpolator(0.22f, 1f, 0.36f, 1f))
+                                            .start();
+                                })
+                                .start();
+                    } else {
                         imageView.setImageBitmap(bitmap.bitmap);
-                        imageView.startAnimation(AnimationUtils.loadAnimation(imageView.getContext(), R.anim.boxart_fadein));
+                        imageView.setAlpha(0f);
                         imageView.setVisibility(View.VISIBLE);
+                        imageView.animate()
+                                .alpha(1f)
+                                .setDuration(220L)
+                                .setInterpolator(new android.view.animation.PathInterpolator(0.22f, 1f, 0.36f, 1f))
+                                .start();
                     }
                 }
             }
@@ -375,11 +393,16 @@ public class CachedAppAssetLoader {
         if (bmp != null) {
             boolean placeholder = isBitmapPlaceholder(bmp);
             // Show the bitmap immediately
+            imgView.animate().cancel();
+            imgView.clearAnimation();
+            imgView.setAlpha(1f);
             imgView.setVisibility(View.VISIBLE);
             imgView.setImageBitmap(bmp.bitmap);
 
             if (glowView != null) {
+                glowView.animate().cancel();
                 if (!placeholder) {
+                    glowView.setAlpha(android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S ? 0.75f : 0.38f);
                     glowView.setImageBitmap(bmp.bitmap);
                     glowView.setVisibility(View.VISIBLE);
                 } else {
@@ -398,8 +421,11 @@ public class CachedAppAssetLoader {
         final AsyncDrawable asyncDrawable = new AsyncDrawable(imgView.getResources(), placeholderBitmap, task);
         textView.setVisibility(alwaysShowText ? View.VISIBLE : View.INVISIBLE);
         if (glowView != null) {
+            glowView.animate().cancel();
             glowView.setVisibility(View.INVISIBLE);
         }
+        imgView.animate().cancel();
+        imgView.clearAnimation();
         imgView.setVisibility(View.INVISIBLE);
         imgView.setImageDrawable(asyncDrawable);
 

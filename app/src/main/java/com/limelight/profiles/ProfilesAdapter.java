@@ -20,7 +20,6 @@ import com.limelight.R;
 import com.limelight.utils.UiHelper;
 
 import java.util.List;
-import java.util.UUID;
 
 public class ProfilesAdapter extends RecyclerView.Adapter<ProfilesAdapter.ProfileViewHolder> {
     private final Context context;
@@ -35,10 +34,11 @@ public class ProfilesAdapter extends RecyclerView.Adapter<ProfilesAdapter.Profil
     @Override
     public ProfileViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
         View view = LayoutInflater.from(context).inflate(R.layout.row_profile, parent, false);
+        View cardSurface = view.findViewById(R.id.profileCardContent);
         UiHelper.applyFrostedCardBackground(
-                view,
+                cardSurface != null ? cardSurface : view,
                 com.limelight.ui.FlowingAuroraView.CornerMode.ALL,
-                24f,
+                28f,
                 0x52121826);
         return new ProfileViewHolder(view);
     }

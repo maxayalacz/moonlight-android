@@ -1,10 +1,12 @@
 package com.limelight.ui;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
-import android.content.res.Configuration;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.animation.PathInterpolator;
 import android.widget.ImageButton;
 import android.widget.TextView;
 
@@ -19,34 +21,108 @@ import com.limelight.utils.UiHelper;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Horizontal circular-ambience carousel adapter for Focus Mode on PcView.
  */
 public class FocusPcAdapter extends RecyclerView.Adapter<FocusPcAdapter.ViewHolder> {
 
+    private static final Object PAYLOAD_ACTIVE_PAGE = new Object();
+    private static final PathInterpolator PRESS_INTERPOLATOR = new PathInterpolator(0.22f, 1f, 0.36f, 1f);
+
     public interface Callbacks {
         void onPcClicked(int position);
         void onPcOptionsClicked(int position);
     }
 
+    private static final class Snapshot {
+        final String uuid;
+        final String name;
+        final String address;
+        final ComputerDetails.State state;
+        final PairingManager.PairState pairState;
+        final int runningGameId;
+
+        Snapshot(ComputerDetails d) {
+            this.uuid = d.uuid;
+            this.name = d.name;
+            this.address = extractAddress(d);
+            this.state = d.state;
+            this.pairState = d.pairState;
+            this.runningGameId = d.runningGameId;
+        }
+
+        boolean matches(Snapshot other) {
+            return Objects.equals(uuid, other.uuid)
+                    && Objects.equals(name, other.name)
+                    && Objects.equals(address, other.address)
+                    && state == other.state
+                    && pairState == other.pairState
+                    && runningGameId == other.runningGameId;
+        }
+    }
+
     private final List<PcView.ComputerObject> items = new ArrayList<>();
+    private final List<Snapshot> snapshots = new ArrayList<>();
     private final Callbacks callbacks;
     private int activePage = 0;
+    private String lastPaletteKey = "";
 
     public FocusPcAdapter(Callbacks callbacks) {
         this.callbacks = callbacks;
     }
 
-    public void submitComputers(List<PcView.ComputerObject> computers) {
-        items.clear();
-        if (computers != null) {
-            items.addAll(computers);
+    private static String extractAddress(ComputerDetails details) {
+        if (details.activeAddress != null && details.activeAddress.address != null) {
+            return details.activeAddress.address;
+        } else if (details.localAddress != null && details.localAddress.address != null) {
+            return details.localAddress.address;
+        } else if (details.manualAddress != null && details.manualAddress.address != null) {
+            return details.manualAddress.address;
         }
-        if (activePage >= items.size()) {
-            activePage = Math.max(0, items.size() - 1);
+        return "";
+    }
+
+    public void submitComputers(List<PcView.ComputerObject> computers, String paletteKey) {
+        String nextPalette = paletteKey != null ? paletteKey : "";
+        boolean paletteChanged = !nextPalette.equals(lastPaletteKey);
+        lastPaletteKey = nextPalette;
+
+        List<PcView.ComputerObject> incoming = computers != null ? computers : new ArrayList<>();
+        boolean structuralChange = paletteChanged || incoming.size() != snapshots.size();
+        if (!structuralChange) {
+            for (int i = 0; i < incoming.size(); i++) {
+                if (!Objects.equals(snapshots.get(i).uuid, incoming.get(i).details.uuid)) {
+                    structuralChange = true;
+                    break;
+                }
+            }
         }
-        notifyDataSetChanged();
+
+        if (structuralChange) {
+            items.clear();
+            snapshots.clear();
+            for (PcView.ComputerObject obj : incoming) {
+                items.add(obj);
+                snapshots.add(new Snapshot(obj.details));
+            }
+            if (activePage >= items.size()) {
+                activePage = Math.max(0, items.size() - 1);
+            }
+            notifyDataSetChanged();
+            return;
+        }
+
+        for (int i = 0; i < incoming.size(); i++) {
+            PcView.ComputerObject obj = incoming.get(i);
+            Snapshot next = new Snapshot(obj.details);
+            items.set(i, obj);
+            if (!snapshots.get(i).matches(next)) {
+                snapshots.set(i, next);
+                notifyItemChanged(i);
+            }
+        }
     }
 
     public void setActivePage(int page) {
@@ -56,8 +132,8 @@ public class FocusPcAdapter extends RecyclerView.Adapter<FocusPcAdapter.ViewHold
         if (this.activePage != page) {
             int old = this.activePage;
             this.activePage = page;
-            notifyItemChanged(old);
-            notifyItemChanged(page);
+            notifyItemChanged(old, PAYLOAD_ACTIVE_PAGE);
+            notifyItemChanged(page, PAYLOAD_ACTIVE_PAGE);
         }
     }
 
@@ -79,11 +155,26 @@ public class FocusPcAdapter extends RecyclerView.Adapter<FocusPcAdapter.ViewHold
     }
 
     @Override
+    public void onBindViewHolder(@NonNull ViewHolder holder, int position, @NonNull List<Object> payloads) {
+        if (!payloads.isEmpty() && payloads.contains(PAYLOAD_ACTIVE_PAGE)) {
+            PcView.ComputerObject computer = items.get(position);
+            holder.portal.bind(computer.details, position == activePage);
+            return;
+        }
+        onBindViewHolder(holder, position);
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         PcView.ComputerObject computer = items.get(position);
         ComputerDetails details = computer.details;
         Context context = holder.itemView.getContext();
         AppThemePalette palette = AppThemePalette.getCurrent(context);
+
+        holder.circleFrame.animate().cancel();
+        holder.circleFrame.setScaleX(1f);
+        holder.circleFrame.setScaleY(1f);
 
         // Adapt circle diameter so compact landscape heights never clip labels
         int screenH = context.getResources().getConfiguration().screenHeightDp;
@@ -100,14 +191,7 @@ public class FocusPcAdapter extends RecyclerView.Adapter<FocusPcAdapter.ViewHold
         holder.portal.bind(details, position == activePage);
         holder.nameText.setText(details.name);
 
-        String addressText = "";
-        if (details.activeAddress != null && details.activeAddress.address != null) {
-            addressText = details.activeAddress.address;
-        } else if (details.localAddress != null && details.localAddress.address != null) {
-            addressText = details.localAddress.address;
-        } else if (details.manualAddress != null && details.manualAddress.address != null) {
-            addressText = details.manualAddress.address;
-        }
+        String addressText = extractAddress(details);
         if (!addressText.isEmpty()) {
             holder.addressText.setVisibility(View.VISIBLE);
             holder.addressText.setText(addressText);
@@ -139,6 +223,28 @@ public class FocusPcAdapter extends RecyclerView.Adapter<FocusPcAdapter.ViewHold
             holder.statusText.setTextColor(AppThemePalette.withAlpha(palette.highlight, 0.92f));
             holder.hintText.setText(R.string.focus_mode_tap_open);
         }
+
+        holder.itemView.setOnTouchListener((v, event) -> {
+            int action = event.getActionMasked();
+            if (action == MotionEvent.ACTION_DOWN) {
+                holder.portal.setPressedOrFocused(true);
+                holder.circleFrame.animate()
+                        .scaleX(0.955f)
+                        .scaleY(0.955f)
+                        .setDuration(110L)
+                        .setInterpolator(PRESS_INTERPOLATOR)
+                        .start();
+            } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                holder.portal.setPressedOrFocused(v.isFocused());
+                holder.circleFrame.animate()
+                        .scaleX(1f)
+                        .scaleY(1f)
+                        .setDuration(180L)
+                        .setInterpolator(PRESS_INTERPOLATOR)
+                        .start();
+            }
+            return false;
+        });
 
         holder.itemView.setOnClickListener(v -> {
             int pos = holder.getBindingAdapterPosition();
