@@ -51,11 +51,19 @@
         <item name="shapeAppearanceLargeComponent">@style/ShapeAppearance.OneUI.Squircle.Large</item>
     </style>
 
+    <style name="NoSlideWindowAnimation" parent="@android:style/Animation.Activity">
+        <item name="android:activityOpenEnterAnimation">@null</item>
+        <item name="android:activityOpenExitAnimation">@null</item>
+        <item name="android:activityCloseEnterAnimation">@null</item>
+        <item name="android:activityCloseExitAnimation">@null</item>
+    </style>
+
     <!-- Application theme. -->
     <style name="AppTheme" parent="AppBaseTheme">
         <!-- All customizations that are NOT specific to a particular API-level can go here. -->
         <item name="android:windowActionBar">false</item>
         <item name="android:windowNoTitle">true</item>
+        <item name="android:windowAnimationStyle">@style/NoSlideWindowAnimation</item>
         <item name="android:statusBarColor">#080B12</item>
         <item name="android:navigationBarColor">#080B12</item>
         <item name="android:colorBackground">#0A0E17</item>

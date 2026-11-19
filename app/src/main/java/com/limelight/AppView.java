@@ -71,6 +71,8 @@ public class AppView extends AppCompatActivity implements AdapterFragmentCallbac
     private HashSet<Integer> hiddenAppIds = new HashSet<>();
 
     private PreferenceConfiguration prefConfig;
+    private com.limelight.ui.PortalConnectionOverlay launchPortalOverlay;
+    private boolean launchingStream = false;
 
     private final static int START_OR_RESUME_ID = 1;
     private final static int QUIT_ID = 2;
@@ -333,9 +335,20 @@ public class AppView extends AppCompatActivity implements AdapterFragmentCallbac
 
         UiHelper.notifyNewRootView(this);
 
+        android.view.ViewGroup contentRoot = findViewById(android.R.id.content);
+        if (contentRoot != null) {
+            launchPortalOverlay = new com.limelight.ui.PortalConnectionOverlay(this);
+            launchPortalOverlay.setTag("oneui_portal_overlay");
+            launchPortalOverlay.setVisibility(View.GONE);
+            launchPortalOverlay.setElevation(10000f);
+            contentRoot.addView(launchPortalOverlay, new android.view.ViewGroup.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT));
+        }
+
         // Setup the profiles button
         findViewById(R.id.profilesButton)
-            .setOnClickListener(v -> startActivity(new Intent(this, ProfilesActivity.class)));
+            .setOnClickListener(v -> UiHelper.startMenuActivityWithDepth(this, new Intent(this, ProfilesActivity.class)));
 
         showHiddenApps = getIntent().getBooleanExtra(SHOW_HIDDEN_APPS_EXTRA, false);
         uuidString = getIntent().getStringExtra(UUID_EXTRA);
@@ -397,9 +410,31 @@ public class AppView extends AppCompatActivity implements AdapterFragmentCallbac
                 getResources().getString(R.string.applist_refresh_msg), true);
     }
 
+    public void launchStreamWithPortalIris(final Intent intent) {
+        if (launchingStream || intent == null) {
+            return;
+        }
+        launchingStream = true;
+        if (launchPortalOverlay != null) {
+            launchPortalOverlay.startLaunchIrisClose(UiHelper.getMenuForegroundView(this), () -> {
+                if (!isFinishing()) {
+                    startActivity(intent);
+                    overridePendingTransition(0, 0);
+                }
+            });
+        } else {
+            startActivity(intent);
+            overridePendingTransition(0, 0);
+        }
+    }
+
     @Override
     protected void onDestroy() {
         super.onDestroy();
+
+        if (launchPortalOverlay != null) {
+            launchPortalOverlay.releaseAndHide();
+        }
 
         SpinnerDialog.closeDialogs(this);
         Dialog.closeDialogs();
@@ -412,7 +447,12 @@ public class AppView extends AppCompatActivity implements AdapterFragmentCallbac
     @Override
     protected void onResume() {
         super.onResume();
+        launchingStream = false;
+        if (launchPortalOverlay != null) {
+            launchPortalOverlay.releaseAndHide();
+        }
         UiHelper.refreshBackdrop(this);
+        UiHelper.restoreMenuForegroundIfNeeded(this);
 
         // Display a decoder crash notification if we've returned after a crash
         UiHelper.showDecoderCrashDialog(this);
@@ -441,6 +481,22 @@ public class AppView extends AppCompatActivity implements AdapterFragmentCallbac
 
         inForeground = false;
         stopComputerUpdates();
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        if (launchPortalOverlay != null) {
+            launchPortalOverlay.releaseAndHide();
+        }
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (launchingStream) {
+            return;
+        }
+        UiHelper.finishMenuWithDepthTransition(this, super::onBackPressed);
     }
 
     @Override

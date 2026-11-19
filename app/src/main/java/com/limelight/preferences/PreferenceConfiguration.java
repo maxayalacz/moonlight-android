@@ -80,12 +80,26 @@ public class PreferenceConfiguration {
     public static final String PORTAL_EXPAND_MS_PREF_STRING = "seekbar_portal_expand_ms";
     public static final String PORTAL_SWIRL_SPEED_PREF_STRING = "seekbar_portal_swirl_speed";
     public static final String PORTAL_DISCONNECT_MS_PREF_STRING = "seekbar_portal_disconnect_ms";
+    public static final String PORTAL_LAUNCH_CLOSE_MS_PREF_STRING = "seekbar_portal_launch_close_ms";
+    public static final String PORTAL_WINDOW_SCALE_PREF_STRING = "seekbar_portal_window_scale";
+    public static final String PORTAL_GLOW_INTENSITY_PREF_STRING = "seekbar_portal_glow_intensity";
+    public static final String PORTAL_PARTICLE_BRIGHTNESS_PREF_STRING = "seekbar_portal_particle_brightness";
+    public static final String PORTAL_SONAR_SPEED_PREF_STRING = "seekbar_portal_sonar_speed";
+    public static final String BLUR_AMOUNT_PREF_STRING = "seekbar_blur_amount";
+    public static final String OSC_OUTLINE_THICKNESS_PREF_STRING = "seekbar_osc_outline_thickness";
     public static final int DEFAULT_PORTAL_READY_MS = 600;
     public static final int DEFAULT_PORTAL_PREVIEW_FADE_MS = 800;
     public static final int DEFAULT_PORTAL_PREVIEW_HOLD_MS = 1800;
     public static final int DEFAULT_PORTAL_EXPAND_MS = 1100;
     public static final int DEFAULT_PORTAL_SWIRL_SPEED = 35;
     public static final int DEFAULT_PORTAL_DISCONNECT_MS = 1200;
+    public static final int DEFAULT_PORTAL_LAUNCH_CLOSE_MS = 650;
+    public static final int DEFAULT_PORTAL_WINDOW_SCALE = 100;
+    public static final int DEFAULT_PORTAL_GLOW_INTENSITY = 100;
+    public static final int DEFAULT_PORTAL_PARTICLE_BRIGHTNESS = 100;
+    public static final int DEFAULT_PORTAL_SONAR_SPEED = 100;
+    public static final int DEFAULT_BLUR_AMOUNT = 100;
+    public static final int DEFAULT_OSC_OUTLINE_THICKNESS = 100;
     private static final String BIND_ALL_USB_STRING = "checkbox_usb_bind_all";
     private static final String MOUSE_EMULATION_STRING = "checkbox_mouse_emulation";
     private static final String REMEMBER_MOUSE_MODE_PREF_STRING = "checkbox_remember_mouse_mode";
@@ -298,6 +312,13 @@ public class PreferenceConfiguration {
     public int portalExpandMs;
     public int portalSwirlSpeedPercent;
     public int portalDisconnectMs;
+    public int portalLaunchCloseMs;
+    public int portalWindowScalePercent;
+    public int portalGlowIntensityPercent;
+    public int portalParticleBrightnessPercent;
+    public int portalSonarSpeedPercent;
+    public int blurAmountPercent;
+    public int oscOutlineThicknessPercent;
     //简化版性能信息
     public boolean enablePerfOverlayLite;
 
@@ -957,6 +978,13 @@ private static int getFramePacingValue(Context context) {
         config.portalExpandMs = prefs.getInt(PORTAL_EXPAND_MS_PREF_STRING, DEFAULT_PORTAL_EXPAND_MS);
         config.portalSwirlSpeedPercent = prefs.getInt(PORTAL_SWIRL_SPEED_PREF_STRING, DEFAULT_PORTAL_SWIRL_SPEED);
         config.portalDisconnectMs = prefs.getInt(PORTAL_DISCONNECT_MS_PREF_STRING, DEFAULT_PORTAL_DISCONNECT_MS);
+        config.portalLaunchCloseMs = prefs.getInt(PORTAL_LAUNCH_CLOSE_MS_PREF_STRING, DEFAULT_PORTAL_LAUNCH_CLOSE_MS);
+        config.portalWindowScalePercent = prefs.getInt(PORTAL_WINDOW_SCALE_PREF_STRING, DEFAULT_PORTAL_WINDOW_SCALE);
+        config.portalGlowIntensityPercent = prefs.getInt(PORTAL_GLOW_INTENSITY_PREF_STRING, DEFAULT_PORTAL_GLOW_INTENSITY);
+        config.portalParticleBrightnessPercent = prefs.getInt(PORTAL_PARTICLE_BRIGHTNESS_PREF_STRING, DEFAULT_PORTAL_PARTICLE_BRIGHTNESS);
+        config.portalSonarSpeedPercent = prefs.getInt(PORTAL_SONAR_SPEED_PREF_STRING, DEFAULT_PORTAL_SONAR_SPEED);
+        config.blurAmountPercent = prefs.getInt(BLUR_AMOUNT_PREF_STRING, DEFAULT_BLUR_AMOUNT);
+        config.oscOutlineThicknessPercent = prefs.getInt(OSC_OUTLINE_THICKNESS_PREF_STRING, DEFAULT_OSC_OUTLINE_THICKNESS);
         config.enablePerfOverlayLite = prefs.getBoolean("checkbox_enable_perf_overlay_lite",DEFAULT_ENABLE_PERF_OVERLAY);
         config.enablePerfOverlayBottom = prefs.getBoolean("checkbox_enable_perf_overlay_bottom",DEFAULT_PERF_OVERLAY_BOTTOM);
         config.bindAllUsb = prefs.getBoolean(BIND_ALL_USB_STRING, DEFAULT_BIND_ALL_USB);

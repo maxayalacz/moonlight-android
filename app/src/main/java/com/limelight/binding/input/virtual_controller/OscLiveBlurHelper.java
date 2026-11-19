@@ -129,7 +129,14 @@ public class OscLiveBlurHelper {
                 if (!running || copyResult != PixelCopy.SUCCESS) {
                     return;
                 }
-                UiHelper.fastBoxBlur(target, 4);
+                int blurPct = com.limelight.profiles.ProfilesManager.getInstance()
+                        .getOverlayingSharedPreferences(context)
+                        .getInt(com.limelight.preferences.PreferenceConfiguration.BLUR_AMOUNT_PREF_STRING,
+                                com.limelight.preferences.PreferenceConfiguration.DEFAULT_BLUR_AMOUNT);
+                int blurRadius = Math.round(4f * (blurPct / 100f));
+                if (blurRadius > 0) {
+                    UiHelper.fastBoxBlur(target, Math.min(10, blurRadius));
+                }
                 surfaceScreenLeft = sl;
                 surfaceScreenTop = st;
                 surfaceWidth = sw;

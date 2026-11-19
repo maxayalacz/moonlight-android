@@ -180,10 +180,11 @@ public class DigitalButton extends VirtualControllerElement {
         float h = getHeight();
         if (opacityFactor > 0.005f) {
             float minDim = Math.min(w, h);
-            float strokeW = Math.max(2f, minDim * 0.042f);
+            float outlineScale = getOutlineScaleFactor();
+            float strokeW = outlineScale <= 0.01f ? 0f : Math.max(1f, minDim * 0.042f * outlineScale);
             if (elementId == EID_LT || elementId == EID_RT || elementId == EID_LB || elementId == EID_RB
                     || elementId == EID_BACK || elementId == EID_START || elementId == EID_GDB) {
-                strokeW = Math.max(2f, minDim * 0.055f);
+                strokeW = outlineScale <= 0.01f ? 0f : Math.max(1f, minDim * 0.055f * outlineScale);
             }
 
             int baseRgb = resolveVectorButtonColor();
@@ -245,15 +246,17 @@ public class DigitalButton extends VirtualControllerElement {
                 canvas.drawCircle(cx, cy, r, paint);
                 paint.setShader(null);
 
-                // Inner frosted specular rim
-                paint.setStyle(Paint.Style.STROKE);
-                paint.setStrokeWidth(Math.max(1f, strokeW * 0.55f));
-                paint.setColor(withAlpha(0xFFFFFFFF, 0.22f * opacityFactor));
-                canvas.drawCircle(cx, cy, Math.max(2f, r - strokeW * 0.8f), paint);
+                if (strokeW > 0.1f) {
+                    // Inner frosted specular rim
+                    paint.setStyle(Paint.Style.STROKE);
+                    paint.setStrokeWidth(Math.max(1f, strokeW * 0.55f));
+                    paint.setColor(withAlpha(0xFFFFFFFF, 0.22f * opacityFactor));
+                    canvas.drawCircle(cx, cy, Math.max(2f, r - strokeW * 0.8f), paint);
 
-                paint.setStrokeWidth(strokeW);
-                paint.setColor(withAlpha(baseRgb, borderAlpha));
-                canvas.drawCircle(cx, cy, r, paint);
+                    paint.setStrokeWidth(strokeW);
+                    paint.setColor(withAlpha(baseRgb, borderAlpha));
+                    canvas.drawCircle(cx, cy, r, paint);
+                }
             } else {
                 paint.setStyle(Paint.Style.FILL);
                 paint.setShader(glassBaseShader);
@@ -262,15 +265,17 @@ public class DigitalButton extends VirtualControllerElement {
                 canvas.drawRoundRect(rect, cornerR, cornerR, paint);
                 paint.setShader(null);
 
-                // Inner frosted specular rim
-                paint.setStyle(Paint.Style.STROKE);
-                paint.setStrokeWidth(Math.max(1f, strokeW * 0.55f));
-                paint.setColor(withAlpha(0xFFFFFFFF, 0.22f * opacityFactor));
-                canvas.drawRoundRect(rect, cornerR, cornerR, paint);
+                if (strokeW > 0.1f) {
+                    // Inner frosted specular rim
+                    paint.setStyle(Paint.Style.STROKE);
+                    paint.setStrokeWidth(Math.max(1f, strokeW * 0.55f));
+                    paint.setColor(withAlpha(0xFFFFFFFF, 0.22f * opacityFactor));
+                    canvas.drawRoundRect(rect, cornerR, cornerR, paint);
 
-                paint.setStrokeWidth(strokeW);
-                paint.setColor(withAlpha(baseRgb, borderAlpha));
-                canvas.drawRoundRect(rect, cornerR, cornerR, paint);
+                    paint.setStrokeWidth(strokeW);
+                    paint.setColor(withAlpha(baseRgb, borderAlpha));
+                    canvas.drawRoundRect(rect, cornerR, cornerR, paint);
+                }
             }
 
             // Vector glyph / label

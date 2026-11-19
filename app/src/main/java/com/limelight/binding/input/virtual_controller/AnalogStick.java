@@ -235,7 +235,8 @@ public class AnalogStick extends VirtualControllerElement {
             }
             float cx = getWidth() * 0.5f;
             float cy = getHeight() * 0.5f;
-            float strokeW = Math.max(2f, getDefaultStrokeWidth());
+            float outlineScale = getOutlineScaleFactor();
+            float strokeW = outlineScale <= 0.01f ? 0f : Math.max(1f, getDefaultStrokeWidth() * outlineScale);
 
             // Live blurred stream frosted glass base disc + specular sheen + outer border ring
             android.graphics.Path baseClip = new android.graphics.Path();

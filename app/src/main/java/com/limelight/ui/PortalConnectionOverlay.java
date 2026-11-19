@@ -72,6 +72,11 @@ public class PortalConnectionOverlay extends FrameLayout implements TextureView.
             "uniform float u_previewMix;\n" +
             "uniform float u_expandProgress;\n" +
             "uniform float u_swirlSpeed;\n" +
+            "uniform float u_portalScale;\n" +
+            "uniform float u_glowIntensity;\n" +
+            "uniform float u_particleBrightness;\n" +
+            "uniform float u_sonarSpeed;\n" +
+            "uniform float u_cutoutOnly;\n" +
             "\n" +
             "const float PI  = 3.14159265359;\n" +
             "const float TAU = 6.28318530718;\n" +
@@ -150,8 +155,9 @@ public class PortalConnectionOverlay extends FrameLayout implements TextureView.
             "\n" +
             "    float halfDiag = length(0.5 * u_resolution / u_resolution.y);\n" +
             "    float maxRadius = halfDiag + 0.18;\n" +
+            "    float baseRadius = 0.25 * clamp(u_portalScale, 0.5, 1.6);\n" +
             "    float expandEase = easeInOutCubic(clamp(u_expandProgress, 0.0, 1.0));\n" +
-            "    float radius = mix(0.25, maxRadius, expandEase);\n" +
+            "    float radius = mix(baseRadius, maxRadius, expandEase);\n" +
             "\n" +
             "    float aa = 2.0 / u_resolution.y;\n" +
             "    float outsideMask = smoothstep(radius - aa, radius + aa, d);\n" +
@@ -164,21 +170,21 @@ public class PortalConnectionOverlay extends FrameLayout implements TextureView.
             "    vec3 innerBg    = vec3(0.045, 0.055, 0.110);\n" +
             "\n" +
             "    float smoothPreview = easeInOutCubic(clamp(u_previewMix, 0.0, 1.0));\n" +
-            "    float innerAlpha = 1.0 - smoothPreview;\n" +
+            "    float innerAlpha = (1.0 - smoothPreview) * (1.0 - clamp(u_cutoutOnly, 0.0, 1.0));\n" +
             "    float bgAlpha    = mix(innerAlpha, 1.0, outsideMask);\n" +
             "    vec3  bgColor    = mix(innerBg, outerBg, outsideMask);\n" +
             "\n" +
             "    float particleVis = insideMask * innerAlpha * smoothstep(radius, radius - 0.04, d);\n" +
             "    vec3 particles = vec3(0.0);\n" +
-            "    if (particleVis > 0.001) {\n" +
-            "        particles = sampleParticles(uv, u_time) * particleVis;\n" +
+            "    if (particleVis > 0.001 && u_particleBrightness > 0.001) {\n" +
+            "        particles = sampleParticles(uv, u_time) * particleVis * u_particleBrightness;\n" +
             "    }\n" +
             "\n" +
             "    vec3 sonar = vec3(0.0);\n" +
-            "    float sonarVis = (1.0 - u_readyMix) * (1.0 - u_expandProgress);\n" +
+            "    float sonarVis = (1.0 - u_readyMix) * (1.0 - u_expandProgress) * (1.0 - clamp(u_cutoutOnly, 0.0, 1.0));\n" +
             "    if (sonarVis > 0.001 && d > radius) {\n" +
             "        for (int i = 0; i < 2; i++) {\n" +
-            "            float phase = fract(u_time * 0.42 + float(i) * 0.5);\n" +
+            "            float phase = fract(u_time * 0.42 * u_sonarSpeed + float(i) * 0.5);\n" +
             "            float rSonar = radius + phase * 0.22;\n" +
             "            float ring = exp(-abs(d - rSonar) * 65.0);\n" +
             "            float fade = sin(phase * PI) * (1.0 - phase);\n" +
@@ -238,7 +244,8 @@ public class PortalConnectionOverlay extends FrameLayout implements TextureView.
             "    }\n" +
             "\n" +
             "    float globalRingFade = 1.0 - smoothstep(0.82, 1.0, u_expandProgress);\n" +
-            "    vec3 additiveGlow = (particles + sonar + mainRing + arcs + swirl + shockwaves) * globalRingFade;\n" +
+            "    vec3 ringEnergy = (sonar + mainRing + arcs + swirl + shockwaves) * u_glowIntensity;\n" +
+            "    vec3 additiveGlow = (particles + ringEnergy) * globalRingFade;\n" +
             "\n" +
             "    fragColor = vec4(bgColor * bgAlpha + additiveGlow, bgAlpha);\n" +
             "}\n";
@@ -262,6 +269,7 @@ public class PortalConnectionOverlay extends FrameLayout implements TextureView.
     private long phase4ExpandMs = com.limelight.preferences.PreferenceConfiguration.DEFAULT_PORTAL_EXPAND_MS;
     private long disconnectIrisCloseMs = Math.round(com.limelight.preferences.PreferenceConfiguration.DEFAULT_PORTAL_DISCONNECT_MS * 0.60f);
     private long disconnectEclipseCloseMs = Math.round(com.limelight.preferences.PreferenceConfiguration.DEFAULT_PORTAL_DISCONNECT_MS * 0.40f);
+    private long launchCloseMs = com.limelight.preferences.PreferenceConfiguration.DEFAULT_PORTAL_LAUNCH_CLOSE_MS;
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private TextureView glTextureView;
@@ -280,6 +288,11 @@ public class PortalConnectionOverlay extends FrameLayout implements TextureView.
     private volatile float uPreviewMix = 0f;
     private volatile float uExpandProgress = 0f;
     private volatile float uSwirlSpeed = com.limelight.preferences.PreferenceConfiguration.DEFAULT_PORTAL_SWIRL_SPEED / 100f;
+    private volatile float uPortalScale = 1.0f;
+    private volatile float uGlowIntensity = 1.0f;
+    private volatile float uParticleBrightness = 1.0f;
+    private volatile float uSonarSpeed = 1.0f;
+    private volatile float uCutoutOnly = 0f;
 
     private void loadTimingPreferences() {
         com.limelight.preferences.PreferenceConfiguration cfg =
@@ -289,6 +302,11 @@ public class PortalConnectionOverlay extends FrameLayout implements TextureView.
         phase3HoldMs = Math.max(0L, cfg.portalPreviewHoldMs);
         phase4ExpandMs = Math.max(200L, cfg.portalExpandMs);
         uSwirlSpeed = Math.max(0.05f, cfg.portalSwirlSpeedPercent / 100f);
+        uPortalScale = Math.max(0.6f, Math.min(1.5f, cfg.portalWindowScalePercent / 100f));
+        uGlowIntensity = Math.max(0.2f, Math.min(2.0f, cfg.portalGlowIntensityPercent / 100f));
+        uParticleBrightness = Math.max(0.0f, Math.min(2.0f, cfg.portalParticleBrightnessPercent / 100f));
+        uSonarSpeed = Math.max(0.2f, Math.min(2.5f, cfg.portalSonarSpeedPercent / 100f));
+        launchCloseMs = Math.max(150L, cfg.portalLaunchCloseMs);
         long totalDisconnect = Math.max(200L, cfg.portalDisconnectMs);
         disconnectIrisCloseMs = Math.max(100L, Math.round(totalDisconnect * 0.60f));
         disconnectEclipseCloseMs = Math.max(100L, totalDisconnect - disconnectIrisCloseMs);
@@ -457,6 +475,7 @@ public class PortalConnectionOverlay extends FrameLayout implements TextureView.
         this.uReadyMix = 0f;
         this.uPreviewMix = 0f;
         this.uExpandProgress = 0f;
+        this.uCutoutOnly = 0f;
 
         String titleText = (hostName != null && !hostName.trim().isEmpty())
                 ? "Connecting to \"" + hostName.trim() + "\""
@@ -670,6 +689,7 @@ public class PortalConnectionOverlay extends FrameLayout implements TextureView.
             this.uReadyMix = 1f;
             this.uPreviewMix = 1f;
             this.uExpandProgress = 1f;
+            this.uCutoutOnly = 0f;
 
             topHudContainer.setVisibility(GONE);
             cancelButton.setVisibility(GONE);
@@ -728,6 +748,77 @@ public class PortalConnectionOverlay extends FrameLayout implements TextureView.
                         }
                     });
                     activeAnimator.start();
+                }
+            });
+            activeAnimator.start();
+        });
+    }
+
+    /**
+     * Reverse iris-close transition played over AppView when launching a stream:
+     * Closes the portal iris (u_expandProgress 1 -> 0) WITHOUT activating ready or stream-fade
+     * animations (u_readyMix = 0, u_previewMix = 0, u_cutoutOnly = 1) while fading out the
+     * underlying app cards so Game seamlessly picks up at the closed portal circle in Phase 1.
+     */
+    public void startLaunchIrisClose(@Nullable final View contentToFadeOut, @Nullable final Runnable onComplete) {
+        mainHandler.post(() -> {
+            cancelAnimatorsAndCallbacks();
+            stopRenderThread();
+            loadTimingPreferences();
+
+            this.active = true;
+            this.disconnecting = false;
+            this.phase2Started = false;
+            this.phase2Completed = false;
+            this.firstFrameReceived = false;
+            this.phase3Started = false;
+
+            this.uReadyMix = 0f;
+            this.uPreviewMix = 0f;
+            this.uExpandProgress = 1f;
+            this.uCutoutOnly = 1f;
+
+            topHudContainer.setVisibility(GONE);
+            cancelButton.setVisibility(GONE);
+            setClickable(true);
+            setFocusable(true);
+            setVisibility(VISIBLE);
+            bringToFront();
+
+            ensureRenderThreadRunning();
+
+            if (contentToFadeOut != null) {
+                contentToFadeOut.animate().cancel();
+                contentToFadeOut.animate()
+                        .alpha(0f)
+                        .scaleX(0.95f)
+                        .scaleY(0.95f)
+                        .setDuration(Math.max(150L, Math.round(launchCloseMs * 0.85f)))
+                        .setInterpolator(new android.view.animation.AccelerateDecelerateInterpolator())
+                        .start();
+            }
+
+            activeAnimator = ValueAnimator.ofFloat(1f, 0f);
+            activeAnimator.setDuration(launchCloseMs);
+            activeAnimator.setInterpolator(new LinearInterpolator());
+            activeAnimator.addUpdateListener(anim -> uExpandProgress = (float) anim.getAnimatedValue());
+            activeAnimator.addListener(new AnimatorListenerAdapter() {
+                private boolean canceled = false;
+
+                @Override
+                public void onAnimationCancel(Animator animation) {
+                    canceled = true;
+                }
+
+                @Override
+                public void onAnimationEnd(Animator animation) {
+                    if (canceled || !active) {
+                        return;
+                    }
+                    uExpandProgress = 0f;
+                    if (onComplete != null) {
+                        onComplete.run();
+                    }
                 }
             });
             activeAnimator.start();
@@ -885,6 +976,11 @@ public class PortalConnectionOverlay extends FrameLayout implements TextureView.
         private int uPreviewMixLoc = -1;
         private int uExpandProgressLoc = -1;
         private int uSwirlSpeedLoc = -1;
+        private int uPortalScaleLoc = -1;
+        private int uGlowIntensityLoc = -1;
+        private int uParticleBrightnessLoc = -1;
+        private int uSonarSpeedLoc = -1;
+        private int uCutoutOnlyLoc = -1;
         private FloatBuffer quadBuffer;
 
         PortalGlThread(SurfaceTexture surfaceTexture, int width, int height) {
@@ -941,6 +1037,11 @@ public class PortalConnectionOverlay extends FrameLayout implements TextureView.
                 GLES30.glUniform1f(uPreviewMixLoc, uPreviewMix);
                 GLES30.glUniform1f(uExpandProgressLoc, uExpandProgress);
                 GLES30.glUniform1f(uSwirlSpeedLoc, uSwirlSpeed);
+                GLES30.glUniform1f(uPortalScaleLoc, uPortalScale);
+                GLES30.glUniform1f(uGlowIntensityLoc, uGlowIntensity);
+                GLES30.glUniform1f(uParticleBrightnessLoc, uParticleBrightness);
+                GLES30.glUniform1f(uSonarSpeedLoc, uSonarSpeed);
+                GLES30.glUniform1f(uCutoutOnlyLoc, uCutoutOnly);
 
                 quadBuffer.position(0);
                 GLES30.glEnableVertexAttribArray(aPosLoc);
@@ -1062,6 +1163,11 @@ public class PortalConnectionOverlay extends FrameLayout implements TextureView.
             uPreviewMixLoc = GLES30.glGetUniformLocation(program, "u_previewMix");
             uExpandProgressLoc = GLES30.glGetUniformLocation(program, "u_expandProgress");
             uSwirlSpeedLoc = GLES30.glGetUniformLocation(program, "u_swirlSpeed");
+            uPortalScaleLoc = GLES30.glGetUniformLocation(program, "u_portalScale");
+            uGlowIntensityLoc = GLES30.glGetUniformLocation(program, "u_glowIntensity");
+            uParticleBrightnessLoc = GLES30.glGetUniformLocation(program, "u_particleBrightness");
+            uSonarSpeedLoc = GLES30.glGetUniformLocation(program, "u_sonarSpeed");
+            uCutoutOnlyLoc = GLES30.glGetUniformLocation(program, "u_cutoutOnly");
 
             quadBuffer = ByteBuffer.allocateDirect(FULLSCREEN_QUAD.length * 4)
                     .order(ByteOrder.nativeOrder())

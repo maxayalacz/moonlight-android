@@ -187,14 +187,14 @@ public class PcView extends AppCompatActivity implements AdapterFragmentCallback
         settingsButton.setOnClickListener(new OnClickListener() {
             @Override
             public void onClick(View v) {
-                startActivity(new Intent(PcView.this, StreamSettings.class));
+                UiHelper.startMenuActivityWithDepth(PcView.this, new Intent(PcView.this, StreamSettings.class));
             }
         });
         addComputerButton.setOnClickListener(new OnClickListener() {
             @Override
             public void onClick(View v) {
                 Intent i = new Intent(PcView.this, AddComputerManually.class);
-                startActivity(i);
+                UiHelper.startMenuActivityWithDepth(PcView.this, i);
             }
         });
         helpButton.setOnClickListener(new OnClickListener() {
@@ -206,7 +206,7 @@ public class PcView extends AppCompatActivity implements AdapterFragmentCallback
         profilesButton.setOnClickListener(new OnClickListener() {
             @Override
             public void onClick(View v) {
-                startActivity(new Intent(PcView.this, ProfilesActivity.class));
+                UiHelper.startMenuActivityWithDepth(PcView.this, new Intent(PcView.this, ProfilesActivity.class));
             }
         });
 
@@ -1000,7 +1000,7 @@ public class PcView extends AppCompatActivity implements AdapterFragmentCallback
         i.putExtra(AppView.UUID_EXTRA, computer.uuid);
         i.putExtra(AppView.NEW_PAIR_EXTRA, newlyPaired);
         i.putExtra(AppView.SHOW_HIDDEN_APPS_EXTRA, showHiddenGames);
-        startActivity(i);
+        UiHelper.startMenuActivityWithDepth(this, i);
     }
 
     @Override

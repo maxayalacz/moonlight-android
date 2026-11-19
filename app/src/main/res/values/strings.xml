@@ -810,6 +810,20 @@
     <string name="summary_portal_swirl_speed">Rotation speed of the glowing energy swirl around the portal rim</string>
     <string name="title_portal_disconnect_ms">Disconnect Duration</string>
     <string name="summary_portal_disconnect_ms">Total duration of the reversed portal closing animation when disconnecting</string>
+    <string name="title_portal_launch_close_ms">App Launch Iris Close</string>
+    <string name="summary_portal_launch_close_ms">Duration of the reverse iris closing over the app list when launching a stream</string>
+    <string name="title_portal_window_scale">Portal Window Size</string>
+    <string name="summary_portal_window_scale">Size of the central circular portal window</string>
+    <string name="title_portal_glow_intensity">Ring Glow Intensity</string>
+    <string name="summary_portal_glow_intensity">Brightness of the eclipse halo, rim core, and energy arcs</string>
+    <string name="title_portal_particle_brightness">Particle Brightness</string>
+    <string name="summary_portal_particle_brightness">Brightness of the floating dust motes inside the portal window</string>
+    <string name="title_portal_sonar_speed">Sonar Pulse Speed</string>
+    <string name="summary_portal_sonar_speed">Speed of the expanding sonar rings while waiting for the host</string>
+    <string name="title_blur_amount">Live Blur Amount</string>
+    <string name="summary_blur_amount">Strength of the live frosted glass blur across menus and on-screen controls</string>
+    <string name="title_osc_outline_thickness">Button Outline Thickness</string>
+    <string name="summary_osc_outline_thickness">Thickness of the glowing border around on-screen controller buttons (0% hides outlines)</string>
 
     <string name="title_post_session_metrics">Post-Session Metrics</string>
     <string name="summary_post_session_metrics">Show a telemetry summary dialog with FPS, decode latency, bitrate, and drop charts after ending a stream</string>

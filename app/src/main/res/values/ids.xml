@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <item name="oneui_dialog_blur_tag" type="id" />
+    <item name="oneui_immersive_listener_tag" type="id" />
 </resources>

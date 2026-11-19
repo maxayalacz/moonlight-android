@@ -946,6 +946,140 @@ public class UiHelper {
         }
     }
 
+    public static void applyMenuImmersiveMode(final Activity activity) {
+        if (activity == null || activity.getWindow() == null) {
+            return;
+        }
+        if (activity instanceof Game || activity instanceof ExternalDisplayControlActivity) {
+            return;
+        }
+        android.view.Window window = activity.getWindow();
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            window.getAttributes().layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS;
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            window.getAttributes().layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+        }
+
+        View decorView = window.getDecorView();
+        androidx.core.view.WindowInsetsControllerCompat controller =
+                androidx.core.view.WindowCompat.getInsetsController(window, decorView);
+        if (controller != null) {
+            controller.setSystemBarsBehavior(
+                    androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+            controller.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars());
+        }
+        decorView.setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                        | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_FULLSCREEN);
+    }
+
+    public static View getMenuForegroundView(Activity activity) {
+        if (activity == null) {
+            return null;
+        }
+        View rootView = activity.findViewById(android.R.id.content);
+        if (!(rootView instanceof android.widget.FrameLayout)) {
+            return null;
+        }
+        android.widget.FrameLayout contentFrame = (android.widget.FrameLayout) rootView;
+        for (int i = 0; i < contentFrame.getChildCount(); i++) {
+            View child = contentFrame.getChildAt(i);
+            if (child != null
+                    && !"oneui_flowing_aurora".equals(child.getTag())
+                    && !"oneui_portal_overlay".equals(child.getTag())) {
+                return child;
+            }
+        }
+        return null;
+    }
+
+    public static void animateMenuForegroundEnter(Activity activity, boolean returningFromDeeper) {
+        final View fg = getMenuForegroundView(activity);
+        if (fg == null) {
+            return;
+        }
+        fg.animate().cancel();
+        float startScale = returningFromDeeper ? 1.05f : 0.93f;
+        fg.setAlpha(0f);
+        fg.setScaleX(startScale);
+        fg.setScaleY(startScale);
+        fg.animate()
+                .alpha(1f)
+                .scaleX(1f)
+                .scaleY(1f)
+                .setDuration(260L)
+                .setInterpolator(new android.view.animation.DecelerateInterpolator(2.0f))
+                .start();
+    }
+
+    public static void restoreMenuForegroundIfNeeded(Activity activity) {
+        final View fg = getMenuForegroundView(activity);
+        if (fg == null) {
+            return;
+        }
+        if (fg.getAlpha() < 0.99f || Math.abs(fg.getScaleX() - 1f) > 0.005f) {
+            animateMenuForegroundEnter(activity, true);
+        }
+    }
+
+    public static void startMenuActivityWithDepth(final Activity from, final Intent intent) {
+        if (from == null || intent == null) {
+            return;
+        }
+        final View fg = getMenuForegroundView(from);
+        if (fg == null) {
+            from.startActivity(intent);
+            from.overridePendingTransition(0, 0);
+            return;
+        }
+        fg.animate().cancel();
+        fg.animate()
+                .alpha(0f)
+                .scaleX(1.06f)
+                .scaleY(1.06f)
+                .setDuration(150L)
+                .setInterpolator(new android.view.animation.AccelerateInterpolator(1.5f))
+                .withEndAction(() -> {
+                    if (!from.isFinishing()) {
+                        from.startActivity(intent);
+                        from.overridePendingTransition(0, 0);
+                    }
+                })
+                .start();
+    }
+
+    public static void finishMenuWithDepthTransition(final Activity activity, final Runnable superFinish) {
+        if (activity == null) {
+            return;
+        }
+        final View fg = getMenuForegroundView(activity);
+        if (fg == null) {
+            superFinish.run();
+            activity.overridePendingTransition(0, 0);
+            return;
+        }
+        fg.animate().cancel();
+        fg.animate()
+                .alpha(0f)
+                .scaleX(0.92f)
+                .scaleY(0.92f)
+                .setDuration(160L)
+                .setInterpolator(new android.view.animation.AccelerateInterpolator(1.5f))
+                .withEndAction(() -> {
+                    superFinish.run();
+                    activity.overridePendingTransition(0, 0);
+                })
+                .start();
+    }
+
     public static void notifyNewRootView(final Activity activity)
     {
         View rootView = activity.findViewById(android.R.id.content);
@@ -956,15 +1090,25 @@ public class UiHelper {
 
         attachFlowingAuroraBackground(activity, rootView);
         applyReachabilitySpacing(activity);
+        applyMenuImmersiveMode(activity);
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            // Allow this non-streaming activity to layout under notches.
-            //
-            // We should NOT do this for the Game activity unless
-            // the user specifically opts in, because it can obscure
-            // parts of the streaming surface.
-            activity.getWindow().getAttributes().layoutInDisplayCutoutMode =
-                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+        // Re-apply sticky immersive mode whenever this menu regains window focus
+        if (!(activity instanceof Game || activity instanceof ExternalDisplayControlActivity)
+                && activity.getWindow() != null) {
+            final View decorView = activity.getWindow().getDecorView();
+            if (decorView.getTag(R.id.oneui_immersive_listener_tag) == null) {
+                decorView.setTag(R.id.oneui_immersive_listener_tag, Boolean.TRUE);
+                decorView.getViewTreeObserver().addOnWindowFocusChangeListener(hasFocus -> {
+                    if (hasFocus) {
+                        applyMenuImmersiveMode(activity);
+                        restoreMenuForegroundIfNeeded(activity);
+                    }
+                });
+            }
+            // Depth-plane zoom/fade enter animation for menu foreground (keeping shared background still)
+            if (!(activity instanceof PcView)) {
+                animateMenuForegroundEnter(activity, false);
+            }
         }
 
         if (modeMgr.getCurrentModeType() == Configuration.UI_MODE_TYPE_TELEVISION) {
@@ -975,34 +1119,6 @@ public class UiHelper {
 
             rootView.setPadding(horizontalPaddingPixels, verticalPaddingPixels,
                     horizontalPaddingPixels, verticalPaddingPixels);
-        }
-        else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            // Draw under the status bar on Android Q devices
-
-            // Using getDecorView() here breaks the translucent status/navigation bar when gestures are disabled
-            activity.findViewById(android.R.id.content).setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
-                @Override
-                public WindowInsets onApplyWindowInsets(View view, WindowInsets windowInsets) {
-                    // Use the tappable insets so we can draw under the status bar in gesture mode
-                    Insets tappableInsets = windowInsets.getTappableElementInsets();
-                    view.setPadding(tappableInsets.left,
-                            tappableInsets.top,
-                            tappableInsets.right,
-                            tappableInsets.bottom);
-
-                    // Show a translucent navigation bar if we can't tap there
-                    if (tappableInsets.bottom != 0) {
-                        activity.getWindow().addFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION);
-                    }
-                    else {
-                        activity.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION);
-                    }
-
-                    return windowInsets;
-                }
-            });
-
-            activity.getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
         }
     }
 

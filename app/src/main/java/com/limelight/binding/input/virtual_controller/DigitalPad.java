@@ -76,7 +76,8 @@ public class DigitalPad extends VirtualControllerElement {
             float cx = w * 0.5f;
             float cy = h * 0.5f;
             float minDim = Math.min(w, h);
-            float strokeW = Math.max(2f, minDim * 0.018f);
+            float outlineScale = getOutlineScaleFactor();
+            float strokeW = outlineScale <= 0.01f ? 0f : Math.max(1f, minDim * 0.018f * outlineScale);
 
             drawConnectedCrossDpad(canvas, cx, cy, minDim, opacityFactor, strokeW);
 
@@ -272,11 +273,13 @@ public class DigitalPad extends VirtualControllerElement {
         canvas.drawPath(dpadPath, paint);
         paint.setShader(null);
 
-        paint.setStyle(Paint.Style.STROKE);
-        paint.setStrokeWidth(strokeW);
-        paint.setStrokeJoin(Paint.Join.ROUND);
-        paint.setColor(dpadWithAlpha(0xFFFFFFFF, 0.58f * opacityFactor));
-        canvas.drawPath(dpadPath, paint);
+        if (strokeW > 0.1f) {
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(strokeW);
+            paint.setStrokeJoin(Paint.Join.ROUND);
+            paint.setColor(dpadWithAlpha(0xFFFFFFFF, 0.58f * opacityFactor));
+            canvas.drawPath(dpadPath, paint);
+        }
 
         boolean leftOn = (direction & DIGITAL_PAD_DIRECTION_LEFT) != 0;
         boolean upOn = (direction & DIGITAL_PAD_DIRECTION_UP) != 0;

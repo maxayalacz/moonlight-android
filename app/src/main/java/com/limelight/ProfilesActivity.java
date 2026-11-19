@@ -41,7 +41,7 @@ public class ProfilesActivity extends AppCompatActivity implements ProfilesManag
         FloatingActionButton fab = findViewById(R.id.addProfileFab);
         fab.setOnClickListener(v -> {
             Intent intent = new Intent(this, EditProfileActivity.class);
-            startActivity(intent);
+            UiHelper.startMenuActivityWithDepth(this, intent);
         });
 
         // Register for profile changes
@@ -55,6 +55,13 @@ public class ProfilesActivity extends AppCompatActivity implements ProfilesManag
     @Override
     protected void onResume() {
         super.onResume();
+        UiHelper.refreshBackdrop(this);
+        UiHelper.restoreMenuForegroundIfNeeded(this);
+    }
+
+    @Override
+    public void onBackPressed() {
+        UiHelper.finishMenuWithDepthTransition(this, super::onBackPressed);
     }
 
     @Override

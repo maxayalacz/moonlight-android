@@ -184,6 +184,14 @@ public abstract class VirtualControllerElement extends View {
         return (int)(screen.heightPixels*0.004f);
     }
 
+    protected float getOutlineScaleFactor() {
+        int pct = com.limelight.profiles.ProfilesManager.getInstance()
+                .getOverlayingSharedPreferences(getContext())
+                .getInt(com.limelight.preferences.PreferenceConfiguration.OSC_OUTLINE_THICKNESS_PREF_STRING,
+                        com.limelight.preferences.PreferenceConfiguration.DEFAULT_OSC_OUTLINE_THICKNESS);
+        return Math.max(0f, Math.min(2.5f, pct / 100f));
+    }
+
     protected void showConfigurationDialog() {
         AlertDialog.Builder alertBuilder = new AlertDialog.Builder(getContext());
 

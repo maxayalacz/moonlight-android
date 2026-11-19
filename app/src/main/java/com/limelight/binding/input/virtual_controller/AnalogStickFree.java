@@ -268,7 +268,8 @@ public class AnalogStickFree extends VirtualControllerElement {
             if (!cfg.enableOnScreenStyleOfficial && !isEditMode && opacityFactor > 0.005f) {
                 float cx = getWidth() * 0.5f;
                 float cy = getHeight() * 0.5f;
-                float strokeW = Math.max(2f, getDefaultStrokeWidth());
+                float outlineScale = getOutlineScaleFactor();
+                float strokeW = outlineScale <= 0.01f ? 0f : Math.max(1f, getDefaultStrokeWidth() * outlineScale);
 
                 // Subtle live blurred frosted glass idle zone + dashed boundary ring + center dot
                 android.graphics.Path idleClip = new android.graphics.Path();
