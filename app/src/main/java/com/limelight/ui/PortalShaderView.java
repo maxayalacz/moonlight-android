@@ -31,26 +31,46 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Shared OpenGL ES 3.0 TextureView rendering the PS Portal cosmic starfield and bidirectional
- * circular iris shader. Used both as the continuous starfield background behind menu activities
- * (0.65x internal buffer scale + 60 FPS cap + mediump particle math for smooth SD 865+ performance)
- * and at full native resolution as the transparent overlay above the video SurfaceView in Game.
+ * circular iris shader.
  *
- * Also maintains a live downscaled (~108x192 @ 30 FPS) stack-blurred refraction buffer for
- * in-app frosted cards, toolbars, pills, and FocusCirclePortalView.
+ * - Menu background mode: renders full highp starfield into a 0.70x offscreen GL FBO and blits
+ *   fullscreen with GL_LINEAR filtering (100% centered, identical star density, ~50% lower GPU
+ *   fragment cost on Snapdragon 865+, pure vsync without manual sleeps).
+ * - Game overlay mode: renders at full native resolution directly onto the transparent surface.
+ * - Live frosted glass refraction: performs a tiny 64x112 FBO readback & box blur on the GL
+ *   thread at ~15 FPS (0 ms UI-thread stall) for in-app cards, toolbars, and FocusCirclePortalView.
  */
 public class PortalShaderView extends TextureView implements TextureView.SurfaceTextureListener {
 
-    private static final float BG_RESOLUTION_SCALE = 0.65f;
-    private static final long BG_FRAME_INTERVAL_MS = 16L; // 60 FPS cap for menu starfield
-    private static final int BLUR_SHORT_EDGE = 108;
-    private static final int BLUR_LONG_EDGE = 192;
-    private static final long BLUR_INTERVAL_MS = 33L; // ~30 FPS live frosted glass refraction
+    private static final float BG_FBO_SCALE = 0.70f;
+    private static final int BLUR_SHORT_EDGE = 64;
+    private static final int BLUR_LONG_EDGE = 112;
+    private static final long BLUR_INTERVAL_MS = 66L; // ~15 FPS off-UI-thread refraction updates
 
     private static final String VERTEX_SHADER_SRC =
             "#version 300 es\n" +
             "in vec2 a_pos;\n" +
             "void main() {\n" +
             "    gl_Position = vec4(a_pos, 0.0, 1.0);\n" +
+            "}\n";
+
+    private static final String BLIT_VERTEX_SHADER_SRC =
+            "#version 300 es\n" +
+            "in vec2 a_pos;\n" +
+            "out vec2 v_uv;\n" +
+            "void main() {\n" +
+            "    v_uv = a_pos * 0.5 + 0.5;\n" +
+            "    gl_Position = vec4(a_pos, 0.0, 1.0);\n" +
+            "}\n";
+
+    private static final String BLIT_FRAGMENT_SHADER_SRC =
+            "#version 300 es\n" +
+            "precision mediump float;\n" +
+            "in vec2 v_uv;\n" +
+            "uniform sampler2D u_tex;\n" +
+            "out vec4 fragColor;\n" +
+            "void main() {\n" +
+            "    fragColor = texture(u_tex, v_uv);\n" +
             "}\n";
 
     private static final String FRAGMENT_SHADER_SRC =
@@ -72,14 +92,14 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "const float PI  = 3.14159265359;\n" +
             "const float TAU = 6.28318530718;\n" +
             "\n" +
-            "mediump vec2 hash22(mediump vec2 p) {\n" +
-            "    mediump vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));\n" +
+            "vec2 hash22(vec2 p) {\n" +
+            "    vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));\n" +
             "    p3 += dot(p3, p3.yzx + 33.33);\n" +
             "    return fract((p3.xx + p3.yz) * p3.zy);\n" +
             "}\n" +
             "\n" +
-            "mediump mat2 rot2d(mediump float a) {\n" +
-            "    mediump float s = sin(a), c = cos(a);\n" +
+            "mat2 rot2d(float a) {\n" +
+            "    float s = sin(a), c = cos(a);\n" +
             "    return mat2(c, -s, s, c);\n" +
             "}\n" +
             "\n" +
@@ -87,42 +107,42 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "    return t < 0.5 ? 4.0 * t * t * t : 1.0 - pow(-2.0 * t + 2.0, 3.0) * 0.5;\n" +
             "}\n" +
             "\n" +
-            "mediump vec3 sampleParticles(mediump vec2 uv, mediump float time) {\n" +
-            "    mediump vec3 col = vec3(0.0);\n" +
+            "vec3 sampleParticles(vec2 uv, float time) {\n" +
+            "    vec3 col = vec3(0.0);\n" +
             "\n" +
             "    for (int layer = 0; layer < 3; layer++) {\n" +
-            "        mediump float fl = float(layer);\n" +
-            "        mediump float scale = 14.0 + fl * 9.0;\n" +
-            "        mediump float rotSpeed = (0.04 + fl * 0.018) * (layer == 1 ? -1.0 : 1.0);\n" +
+            "        float fl = float(layer);\n" +
+            "        float scale = 14.0 + fl * 9.0;\n" +
+            "        float rotSpeed = (0.04 + fl * 0.018) * (layer == 1 ? -1.0 : 1.0);\n" +
             "\n" +
-            "        mediump vec2 p = rot2d(time * rotSpeed + fl * 1.7) * uv;\n" +
+            "        vec2 p = rot2d(time * rotSpeed + fl * 1.7) * uv;\n" +
             "        p += vec2(sin(time * 0.15 + fl), cos(time * 0.12 + fl)) * 0.04;\n" +
             "        p *= scale;\n" +
             "\n" +
-            "        mediump vec2 id = floor(p);\n" +
-            "        mediump vec2 gv = fract(p) - 0.5;\n" +
+            "        vec2 id = floor(p);\n" +
+            "        vec2 gv = fract(p) - 0.5;\n" +
             "\n" +
             "        for (int y = -1; y <= 1; y++) {\n" +
             "            for (int x = -1; x <= 1; x++) {\n" +
-            "                mediump vec2 offs = vec2(float(x), float(y));\n" +
-            "                mediump vec2 cellId = id + offs;\n" +
-            "                mediump vec2 rnd = hash22(cellId + fl * 37.0);\n" +
+            "                vec2 offs = vec2(float(x), float(y));\n" +
+            "                vec2 cellId = id + offs;\n" +
+            "                vec2 rnd = hash22(cellId + fl * 37.0);\n" +
             "\n" +
             "                if (rnd.x < 0.55) continue;\n" +
             "\n" +
-            "                mediump vec2 drift = vec2(\n" +
+            "                vec2 drift = vec2(\n" +
             "                    sin(time * (0.4 + rnd.y * 0.5) + rnd.x * TAU),\n" +
             "                    cos(time * (0.35 + rnd.x * 0.5) + rnd.y * TAU)\n" +
             "                ) * 0.22;\n" +
             "\n" +
-            "                mediump vec2 pos = offs + (rnd - 0.5) * 0.55 + drift;\n" +
-            "                mediump float dist = length(gv - pos);\n" +
+            "                vec2 pos = offs + (rnd - 0.5) * 0.55 + drift;\n" +
+            "                float dist = length(gv - pos);\n" +
             "\n" +
-            "                mediump float radius = mix(0.035, 0.11, fract(rnd.x * 13.7));\n" +
-            "                mediump float bokeh = smoothstep(radius, radius * 0.15, dist);\n" +
-            "                mediump float twinkle = 0.55 + 0.45 * sin(time * (1.8 + rnd.y * 3.0) + rnd.x * TAU);\n" +
+            "                float radius = mix(0.035, 0.11, fract(rnd.x * 13.7));\n" +
+            "                float bokeh = smoothstep(radius, radius * 0.15, dist);\n" +
+            "                float twinkle = 0.55 + 0.45 * sin(time * (1.8 + rnd.y * 3.0) + rnd.x * TAU);\n" +
             "\n" +
-            "                mediump vec3 pCol = mix(vec3(0.369, 0.420, 1.0), vec3(0.780, 0.847, 1.0), rnd.y);\n" +
+            "                vec3 pCol = mix(vec3(0.369, 0.420, 1.0), vec3(0.780, 0.847, 1.0), rnd.y);\n" +
             "                col += pCol * bokeh * twinkle * (0.45 - fl * 0.08);\n" +
             "            }\n" +
             "        }\n" +
@@ -255,6 +275,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
     private volatile float uGlowIntensity = 1f;
     private volatile float uParticleBrightness = 1f;
     private volatile float uSonarSpeed = 1f;
+    private volatile int blurRadius = 4;
     private volatile boolean backgroundMode = false;
     private volatile boolean renderingDesired = false;
 
@@ -263,26 +284,23 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
     private int activeWidth = 0;
     private int activeHeight = 0;
 
-    // Live downscaled blurred refraction buffer (~108x192 @ 30 FPS) for in-app frosted glass
+    // Off-UI-thread blurred refraction bitmap (~64x112 @ ~15 FPS)
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final CopyOnWriteArrayList<WeakReference<Drawable>> frostedDrawables = new CopyOnWriteArrayList<>();
-    private Bitmap blurredBitmap;
-    private int blurBufW = 0;
-    private int blurBufH = 0;
-    private int[] blurPixelsA;
-    private int[] blurPixelsB;
-    private int blurRadius = 5;
-    private boolean blurLoopRunning = false;
+    private volatile Bitmap publishedBlurBitmap;
 
-    private final Runnable blurTickRunnable = new Runnable() {
-        @Override
-        public void run() {
-            if (!blurLoopRunning || !renderingDesired || !isAttachedToWindow()) {
-                blurLoopRunning = false;
-                return;
+    private final Runnable invalidateFrostedRunnable = () -> {
+        if (frostedDrawables.isEmpty()) {
+            return;
+        }
+        Iterator<WeakReference<Drawable>> it = frostedDrawables.iterator();
+        while (it.hasNext()) {
+            Drawable d = it.next().get();
+            if (d == null) {
+                frostedDrawables.remove(it);
+            } else {
+                d.invalidateSelf();
             }
-            updateBlurredRefractionBuffer();
-            mainHandler.postDelayed(this, BLUR_INTERVAL_MS);
         }
     };
 
@@ -314,12 +332,12 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
         uParticleBrightness = Math.max(0.0f, Math.min(2.0f, cfg.portalParticleBrightnessPercent / 100f));
         uSonarSpeed = Math.max(0.2f, Math.min(2.5f, cfg.portalSonarSpeedPercent / 100f));
         int blurPct = Math.max(0, Math.min(200, cfg.blurAmountPercent));
-        blurRadius = blurPct == 0 ? 0 : Math.max(1, Math.min(12, Math.round(5f * (blurPct / 100f))));
+        blurRadius = blurPct == 0 ? 0 : Math.max(1, Math.min(10, Math.round(4f * (blurPct / 100f))));
     }
 
     /**
      * Configures this view to render the full-screen cosmic starfield background
-     * (0.65x internal buffer scale + 60 FPS cap + live blurred refraction buffer).
+     * via a 0.70x offscreen GL FBO + fullscreen linear blit.
      */
     public void configureStarfieldBackgroundMode() {
         backgroundMode = true;
@@ -361,78 +379,104 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
 
     public void registerFrostedDrawable(@NonNull Drawable drawable) {
         frostedDrawables.add(new WeakReference<>(drawable));
-        if (backgroundMode && renderingDesired && !blurLoopRunning) {
-            startBlurLoop();
-        }
     }
 
     @Nullable
     public Bitmap getBlurredBitmap() {
-        return blurredBitmap;
+        return publishedBlurBitmap;
     }
 
-    private void startBlurLoop() {
-        if (!backgroundMode || blurLoopRunning) {
+    public void startRendering() {
+        renderingDesired = true;
+        if (renderThread != null && renderThread.isRunning()) {
             return;
         }
-        blurLoopRunning = true;
-        mainHandler.removeCallbacks(blurTickRunnable);
-        mainHandler.post(blurTickRunnable);
+        SurfaceTexture st = activeSurfaceTexture;
+        if (st == null && isAvailable()) {
+            st = getSurfaceTexture();
+            activeSurfaceTexture = st;
+            activeWidth = getWidth();
+            activeHeight = getHeight();
+        }
+        if (st != null && activeWidth > 0 && activeHeight > 0) {
+            renderThread = new PortalGlThread(st, activeWidth, activeHeight);
+            renderThread.start();
+        }
     }
 
-    private void stopBlurLoop() {
-        blurLoopRunning = false;
-        mainHandler.removeCallbacks(blurTickRunnable);
-    }
-
-    private void updateBlurredRefractionBuffer() {
-        if (!isAvailable() || getWidth() <= 0 || getHeight() <= 0) {
-            return;
-        }
-        boolean landscape = getWidth() >= getHeight();
-        int targetW = landscape ? BLUR_LONG_EDGE : BLUR_SHORT_EDGE;
-        int targetH = landscape ? BLUR_SHORT_EDGE : BLUR_LONG_EDGE;
-
-        if (blurredBitmap == null || blurBufW != targetW || blurBufH != targetH) {
-            blurBufW = targetW;
-            blurBufH = targetH;
-            blurredBitmap = Bitmap.createBitmap(targetW, targetH, Bitmap.Config.ARGB_8888);
-            blurPixelsA = new int[targetW * targetH];
-            blurPixelsB = new int[targetW * targetH];
-        }
-
-        try {
-            getBitmap(blurredBitmap);
-        } catch (Throwable ignored) {
-            return;
-        }
-
-        int r = blurRadius;
-        if (r > 0) {
-            fastBoxBlur(blurredBitmap, blurBufW, blurBufH, r, blurPixelsA, blurPixelsB);
-        }
-
-        if (!frostedDrawables.isEmpty()) {
-            Iterator<WeakReference<Drawable>> it = frostedDrawables.iterator();
-            while (it.hasNext()) {
-                Drawable d = it.next().get();
-                if (d == null) {
-                    frostedDrawables.remove(it);
-                } else {
-                    d.invalidateSelf();
-                }
+    public void stopRendering() {
+        renderingDesired = false;
+        PortalGlThread t = renderThread;
+        renderThread = null;
+        if (t != null) {
+            t.requestStop();
+            try {
+                t.join(450L);
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
             }
         }
     }
 
-    private static void fastBoxBlur(Bitmap bmp, int w, int h, int radius, int[] src, int[] dst) {
-        bmp.getPixels(src, 0, w, 0, 0, w, h);
-        // 2-pass separable box blur approximates Gaussian very smoothly at ~108x192
-        for (int pass = 0; pass < 2; pass++) {
-            boxBlurHorizontal(src, dst, w, h, radius);
-            boxBlurVertical(dst, src, w, h, radius);
+    @Override
+    public void onSurfaceTextureAvailable(@NonNull SurfaceTexture surface, int width, int height) {
+        activeSurfaceTexture = surface;
+        activeWidth = width;
+        activeHeight = height;
+        if (renderingDesired) {
+            PortalGlThread old = renderThread;
+            renderThread = null;
+            if (old != null) {
+                old.requestStop();
+                try {
+                    old.join(450L);
+                } catch (InterruptedException ignored) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+            renderThread = new PortalGlThread(surface, width, height);
+            renderThread.start();
         }
-        bmp.setPixels(src, 0, w, 0, 0, w, h);
+    }
+
+    @Override
+    public void onSurfaceTextureSizeChanged(@NonNull SurfaceTexture surface, int width, int height) {
+        activeSurfaceTexture = surface;
+        activeWidth = width;
+        activeHeight = height;
+        PortalGlThread t = renderThread;
+        if (t != null) {
+            t.updateSize(width, height);
+        }
+    }
+
+    @Override
+    public boolean onSurfaceTextureDestroyed(@NonNull SurfaceTexture surface) {
+        PortalGlThread t = renderThread;
+        renderThread = null;
+        if (t != null) {
+            t.requestStop();
+            try {
+                t.join(450L);
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        activeSurfaceTexture = null;
+        activeWidth = 0;
+        activeHeight = 0;
+        return true;
+    }
+
+    @Override
+    public void onSurfaceTextureUpdated(@NonNull SurfaceTexture surface) {
+        // No-op
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        stopRendering();
+        super.onDetachedFromWindow();
     }
 
     private static void boxBlurHorizontal(int[] src, int[] dst, int w, int h, int r) {
@@ -478,124 +522,6 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
         }
     }
 
-    private int computeRenderWidth(int viewW) {
-        return backgroundMode ? Math.max(1, Math.round(viewW * BG_RESOLUTION_SCALE)) : viewW;
-    }
-
-    private int computeRenderHeight(int viewH) {
-        return backgroundMode ? Math.max(1, Math.round(viewH * BG_RESOLUTION_SCALE)) : viewH;
-    }
-
-    public void startRendering() {
-        renderingDesired = true;
-        if (backgroundMode) {
-            startBlurLoop();
-        }
-        if (renderThread != null && renderThread.isRunning()) {
-            return;
-        }
-        SurfaceTexture st = activeSurfaceTexture;
-        if (st == null && isAvailable()) {
-            st = getSurfaceTexture();
-            activeSurfaceTexture = st;
-            activeWidth = getWidth();
-            activeHeight = getHeight();
-        }
-        if (st != null && activeWidth > 0 && activeHeight > 0) {
-            int rw = computeRenderWidth(activeWidth);
-            int rh = computeRenderHeight(activeHeight);
-            st.setDefaultBufferSize(rw, rh);
-            renderThread = new PortalGlThread(st, rw, rh);
-            renderThread.start();
-        }
-    }
-
-    public void stopRendering() {
-        renderingDesired = false;
-        stopBlurLoop();
-        PortalGlThread t = renderThread;
-        renderThread = null;
-        if (t != null) {
-            t.requestStop();
-            try {
-                t.join(450L);
-            } catch (InterruptedException ignored) {
-                Thread.currentThread().interrupt();
-            }
-        }
-    }
-
-    @Override
-    public void onSurfaceTextureAvailable(@NonNull SurfaceTexture surface, int width, int height) {
-        activeSurfaceTexture = surface;
-        activeWidth = width;
-        activeHeight = height;
-        if (renderingDesired) {
-            PortalGlThread old = renderThread;
-            renderThread = null;
-            if (old != null) {
-                old.requestStop();
-                try {
-                    old.join(450L);
-                } catch (InterruptedException ignored) {
-                    Thread.currentThread().interrupt();
-                }
-            }
-            int rw = computeRenderWidth(width);
-            int rh = computeRenderHeight(height);
-            surface.setDefaultBufferSize(rw, rh);
-            renderThread = new PortalGlThread(surface, rw, rh);
-            renderThread.start();
-            if (backgroundMode) {
-                startBlurLoop();
-            }
-        }
-    }
-
-    @Override
-    public void onSurfaceTextureSizeChanged(@NonNull SurfaceTexture surface, int width, int height) {
-        activeSurfaceTexture = surface;
-        activeWidth = width;
-        activeHeight = height;
-        int rw = computeRenderWidth(width);
-        int rh = computeRenderHeight(height);
-        surface.setDefaultBufferSize(rw, rh);
-        PortalGlThread t = renderThread;
-        if (t != null) {
-            t.updateSize(rw, rh);
-        }
-    }
-
-    @Override
-    public boolean onSurfaceTextureDestroyed(@NonNull SurfaceTexture surface) {
-        stopBlurLoop();
-        PortalGlThread t = renderThread;
-        renderThread = null;
-        if (t != null) {
-            t.requestStop();
-            try {
-                t.join(450L);
-            } catch (InterruptedException ignored) {
-                Thread.currentThread().interrupt();
-            }
-        }
-        activeSurfaceTexture = null;
-        activeWidth = 0;
-        activeHeight = 0;
-        return true;
-    }
-
-    @Override
-    public void onSurfaceTextureUpdated(@NonNull SurfaceTexture surface) {
-        // No-op
-    }
-
-    @Override
-    protected void onDetachedFromWindow() {
-        stopRendering();
-        super.onDetachedFromWindow();
-    }
-
     private final class PortalGlThread extends Thread {
         private static final int EGL_OPENGL_ES3_BIT_KHR = 0x0040;
 
@@ -608,6 +534,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
         private EGLContext eglContext = EGL14.EGL_NO_CONTEXT;
         private EGLSurface eglSurface = EGL14.EGL_NO_SURFACE;
 
+        // Primary portal shader program
         private int program = 0;
         private int aPosLoc = -1;
         private int uResolutionLoc = -1;
@@ -619,6 +546,32 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
         private int uGlowIntensityLoc = -1;
         private int uParticleBrightnessLoc = -1;
         private int uSonarSpeedLoc = -1;
+
+        // Fullscreen linear blit program for 0.70x background FBO
+        private int blitProgram = 0;
+        private int blitPosLoc = -1;
+        private int blitTexLoc = -1;
+
+        // Offscreen scaled background FBO
+        private int bgFbo = 0;
+        private int bgFboTex = 0;
+        private int bgFboW = 0;
+        private int bgFboH = 0;
+
+        // Tiny offscreen blur readback FBO (~64x112)
+        private int blurFbo = 0;
+        private int blurFboTex = 0;
+        private int blurW = 0;
+        private int blurH = 0;
+        private ByteBuffer readbackBuf;
+        private byte[] readbackBytes;
+        private int[] blurPixelsA;
+        private int[] blurPixelsB;
+        private Bitmap blurBitmapWorkA;
+        private Bitmap blurBitmapWorkB;
+        private boolean useWorkA = true;
+        private long lastBlurUpdateMs = 0L;
+
         private FloatBuffer quadBuffer;
 
         PortalGlThread(SurfaceTexture surfaceTexture, int width, int height) {
@@ -654,7 +607,6 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             }
 
             while (running) {
-                long frameStartMs = SystemClock.uptimeMillis();
                 int w = width;
                 int h = height;
                 if (w <= 0 || h <= 0) {
@@ -664,25 +616,36 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
 
                 float sharedTime = getSharedTimeSec();
 
-                GLES30.glViewport(0, 0, w, h);
-                GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT);
+                if (backgroundMode) {
+                    int fboW = Math.max(1, Math.round(w * BG_FBO_SCALE));
+                    int fboH = Math.max(1, Math.round(h * BG_FBO_SCALE));
+                    ensureBgFbo(fboW, fboH);
 
-                GLES30.glUseProgram(program);
-                GLES30.glUniform2f(uResolutionLoc, (float) w, (float) h);
-                GLES30.glUniform1f(uTimeLoc, sharedTime);
-                GLES30.glUniform1f(uReadyMixLoc, uReadyMix);
-                GLES30.glUniform1f(uPreviewMixLoc, uPreviewMix);
-                GLES30.glUniform1f(uExpandProgressLoc, uExpandProgress);
-                GLES30.glUniform1f(uPortalScaleLoc, uPortalScale);
-                GLES30.glUniform1f(uGlowIntensityLoc, uGlowIntensity);
-                GLES30.glUniform1f(uParticleBrightnessLoc, uParticleBrightness);
-                GLES30.glUniform1f(uSonarSpeedLoc, uSonarSpeed);
+                    // 1. Render full highp starfield into 0.70x offscreen FBO (centered, full aspect)
+                    GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, bgFbo);
+                    GLES30.glViewport(0, 0, fboW, fboH);
+                    GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT);
+                    drawPortalShader(fboW, fboH, sharedTime);
 
-                quadBuffer.position(0);
-                GLES30.glEnableVertexAttribArray(aPosLoc);
-                GLES30.glVertexAttribPointer(aPosLoc, 2, GLES30.GL_FLOAT, false, 0, quadBuffer);
-                GLES30.glDrawArrays(GLES30.GL_TRIANGLES, 0, 6);
-                GLES30.glDisableVertexAttribArray(aPosLoc);
+                    // 2. Blit 0.70x FBO fullscreen with GL_LINEAR filtering onto native EGL surface
+                    GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0);
+                    GLES30.glViewport(0, 0, w, h);
+                    GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT);
+                    drawBlitTexture(bgFboTex);
+
+                    // 3. Periodically update tiny blurred refraction bitmap on GL thread (~15 FPS)
+                    long nowMs = SystemClock.uptimeMillis();
+                    if (!frostedDrawables.isEmpty() && (nowMs - lastBlurUpdateMs) >= BLUR_INTERVAL_MS) {
+                        lastBlurUpdateMs = nowMs;
+                        updateBlurBitmapOnGlThread(w >= h);
+                    }
+                } else {
+                    // Game overlay mode: full native resolution directly on transparent EGL surface
+                    GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0);
+                    GLES30.glViewport(0, 0, w, h);
+                    GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT);
+                    drawPortalShader(w, h, sharedTime);
+                }
 
                 if (!EGL14.eglSwapBuffers(eglDisplay, eglSurface)) {
                     int err = EGL14.eglGetError();
@@ -690,18 +653,176 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
                         break;
                     }
                 }
-
-                if (backgroundMode) {
-                    long elapsed = SystemClock.uptimeMillis() - frameStartMs;
-                    long remaining = BG_FRAME_INTERVAL_MS - elapsed;
-                    if (remaining > 1L) {
-                        SystemClock.sleep(remaining);
-                    }
-                }
             }
 
             releaseGl();
             releaseEgl();
+        }
+
+        private void drawPortalShader(int w, int h, float sharedTime) {
+            GLES30.glUseProgram(program);
+            GLES30.glUniform2f(uResolutionLoc, (float) w, (float) h);
+            GLES30.glUniform1f(uTimeLoc, sharedTime);
+            GLES30.glUniform1f(uReadyMixLoc, uReadyMix);
+            GLES30.glUniform1f(uPreviewMixLoc, uPreviewMix);
+            GLES30.glUniform1f(uExpandProgressLoc, uExpandProgress);
+            GLES30.glUniform1f(uPortalScaleLoc, uPortalScale);
+            GLES30.glUniform1f(uGlowIntensityLoc, uGlowIntensity);
+            GLES30.glUniform1f(uParticleBrightnessLoc, uParticleBrightness);
+            GLES30.glUniform1f(uSonarSpeedLoc, uSonarSpeed);
+
+            quadBuffer.position(0);
+            GLES30.glEnableVertexAttribArray(aPosLoc);
+            GLES30.glVertexAttribPointer(aPosLoc, 2, GLES30.GL_FLOAT, false, 0, quadBuffer);
+            GLES30.glDrawArrays(GLES30.GL_TRIANGLES, 0, 6);
+            GLES30.glDisableVertexAttribArray(aPosLoc);
+        }
+
+        private void drawBlitTexture(int texId) {
+            GLES30.glUseProgram(blitProgram);
+            GLES30.glActiveTexture(GLES30.GL_TEXTURE0);
+            GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, texId);
+            GLES30.glUniform1i(blitTexLoc, 0);
+
+            quadBuffer.position(0);
+            GLES30.glEnableVertexAttribArray(blitPosLoc);
+            GLES30.glVertexAttribPointer(blitPosLoc, 2, GLES30.GL_FLOAT, false, 0, quadBuffer);
+            GLES30.glDrawArrays(GLES30.GL_TRIANGLES, 0, 6);
+            GLES30.glDisableVertexAttribArray(blitPosLoc);
+        }
+
+        private void ensureBgFbo(int w, int h) {
+            if (bgFbo != 0 && bgFboW == w && bgFboH == h) {
+                return;
+            }
+            releaseBgFbo();
+            bgFboW = w;
+            bgFboH = h;
+
+            int[] tex = new int[1];
+            GLES30.glGenTextures(1, tex, 0);
+            bgFboTex = tex[0];
+            GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, bgFboTex);
+            GLES30.glTexImage2D(GLES30.GL_TEXTURE_2D, 0, GLES30.GL_RGBA, w, h, 0,
+                    GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, null);
+            GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_LINEAR);
+            GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_LINEAR);
+            GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_WRAP_S, GLES30.GL_CLAMP_TO_EDGE);
+            GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_WRAP_T, GLES30.GL_CLAMP_TO_EDGE);
+
+            int[] fbo = new int[1];
+            GLES30.glGenFramebuffers(1, fbo, 0);
+            bgFbo = fbo[0];
+            GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, bgFbo);
+            GLES30.glFramebufferTexture2D(GLES30.GL_FRAMEBUFFER, GLES30.GL_COLOR_ATTACHMENT0,
+                    GLES30.GL_TEXTURE_2D, bgFboTex, 0);
+            GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0);
+        }
+
+        private void ensureBlurFbo(int w, int h) {
+            if (blurFbo != 0 && blurW == w && blurH == h) {
+                return;
+            }
+            releaseBlurFbo();
+            blurW = w;
+            blurH = h;
+
+            int[] tex = new int[1];
+            GLES30.glGenTextures(1, tex, 0);
+            blurFboTex = tex[0];
+            GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, blurFboTex);
+            GLES30.glTexImage2D(GLES30.GL_TEXTURE_2D, 0, GLES30.GL_RGBA, w, h, 0,
+                    GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, null);
+            GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_LINEAR);
+            GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_LINEAR);
+            GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_WRAP_S, GLES30.GL_CLAMP_TO_EDGE);
+            GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_WRAP_T, GLES30.GL_CLAMP_TO_EDGE);
+
+            int[] fbo = new int[1];
+            GLES30.glGenFramebuffers(1, fbo, 0);
+            blurFbo = fbo[0];
+            GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, blurFbo);
+            GLES30.glFramebufferTexture2D(GLES30.GL_FRAMEBUFFER, GLES30.GL_COLOR_ATTACHMENT0,
+                    GLES30.GL_TEXTURE_2D, blurFboTex, 0);
+            GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0);
+
+            readbackBuf = ByteBuffer.allocateDirect(w * h * 4).order(ByteOrder.nativeOrder());
+            readbackBytes = new byte[w * h * 4];
+            blurPixelsA = new int[w * h];
+            blurPixelsB = new int[w * h];
+            blurBitmapWorkA = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+            blurBitmapWorkB = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+        }
+
+        private void updateBlurBitmapOnGlThread(boolean landscape) {
+            int tw = landscape ? BLUR_LONG_EDGE : BLUR_SHORT_EDGE;
+            int th = landscape ? BLUR_SHORT_EDGE : BLUR_LONG_EDGE;
+            ensureBlurFbo(tw, th);
+
+            // Downsample bgFboTex into tiny 64x112 FBO and read back off the UI thread
+            GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, blurFbo);
+            GLES30.glViewport(0, 0, tw, th);
+            drawBlitTexture(bgFboTex);
+
+            readbackBuf.position(0);
+            GLES30.glReadPixels(0, 0, tw, th, GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, readbackBuf);
+            GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0);
+
+            readbackBuf.position(0);
+            readbackBuf.get(readbackBytes);
+
+            // Flip Y (GL bottom-left -> Android top-left) & pack RGBA -> ARGB
+            for (int y = 0; y < th; y++) {
+                int srcRow = (th - 1 - y) * tw * 4;
+                int dstRow = y * tw;
+                for (int x = 0; x < tw; x++) {
+                    int idx = srcRow + x * 4;
+                    int r = readbackBytes[idx] & 0xFF;
+                    int g = readbackBytes[idx + 1] & 0xFF;
+                    int b = readbackBytes[idx + 2] & 0xFF;
+                    blurPixelsA[dstRow + x] = 0xFF000000 | (r << 16) | (g << 8) | b;
+                }
+            }
+
+            int r = blurRadius;
+            if (r > 0) {
+                for (int pass = 0; pass < 2; pass++) {
+                    boxBlurHorizontal(blurPixelsA, blurPixelsB, tw, th, r);
+                    boxBlurVertical(blurPixelsB, blurPixelsA, tw, th, r);
+                }
+            }
+
+            Bitmap target = useWorkA ? blurBitmapWorkA : blurBitmapWorkB;
+            useWorkA = !useWorkA;
+            target.setPixels(blurPixelsA, 0, tw, 0, 0, tw, th);
+            publishedBlurBitmap = target;
+            mainHandler.post(invalidateFrostedRunnable);
+        }
+
+        private void releaseBgFbo() {
+            if (bgFbo != 0) {
+                GLES30.glDeleteFramebuffers(1, new int[]{bgFbo}, 0);
+                bgFbo = 0;
+            }
+            if (bgFboTex != 0) {
+                GLES30.glDeleteTextures(1, new int[]{bgFboTex}, 0);
+                bgFboTex = 0;
+            }
+            bgFboW = 0;
+            bgFboH = 0;
+        }
+
+        private void releaseBlurFbo() {
+            if (blurFbo != 0) {
+                GLES30.glDeleteFramebuffers(1, new int[]{blurFbo}, 0);
+                blurFbo = 0;
+            }
+            if (blurFboTex != 0) {
+                GLES30.glDeleteTextures(1, new int[]{blurFboTex}, 0);
+                blurFboTex = 0;
+            }
+            blurW = 0;
+            blurH = 0;
         }
 
         private boolean initEgl() {
@@ -772,30 +893,12 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
         }
 
         private boolean initGl() {
-            int vs = compileShader(GLES30.GL_VERTEX_SHADER, VERTEX_SHADER_SRC);
-            if (vs == 0) {
+            program = linkProgram(VERTEX_SHADER_SRC, FRAGMENT_SHADER_SRC);
+            if (program == 0) {
                 return false;
             }
-            int fs = compileShader(GLES30.GL_FRAGMENT_SHADER, FRAGMENT_SHADER_SRC);
-            if (fs == 0) {
-                GLES30.glDeleteShader(vs);
-                return false;
-            }
-
-            program = GLES30.glCreateProgram();
-            GLES30.glAttachShader(program, vs);
-            GLES30.glAttachShader(program, fs);
-            GLES30.glLinkProgram(program);
-
-            GLES30.glDeleteShader(vs);
-            GLES30.glDeleteShader(fs);
-
-            int[] linked = new int[1];
-            GLES30.glGetProgramiv(program, GLES30.GL_LINK_STATUS, linked, 0);
-            if (linked[0] == 0) {
-                LimeLog.severe("PortalShaderView program link failed: " + GLES30.glGetProgramInfoLog(program));
-                GLES30.glDeleteProgram(program);
-                program = 0;
+            blitProgram = linkProgram(BLIT_VERTEX_SHADER_SRC, BLIT_FRAGMENT_SHADER_SRC);
+            if (blitProgram == 0) {
                 return false;
             }
 
@@ -810,6 +913,9 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             uParticleBrightnessLoc = GLES30.glGetUniformLocation(program, "u_particleBrightness");
             uSonarSpeedLoc = GLES30.glGetUniformLocation(program, "u_sonarSpeed");
 
+            blitPosLoc = GLES30.glGetAttribLocation(blitProgram, "a_pos");
+            blitTexLoc = GLES30.glGetUniformLocation(blitProgram, "u_tex");
+
             quadBuffer = ByteBuffer.allocateDirect(FULLSCREEN_QUAD.length * 4)
                     .order(ByteOrder.nativeOrder())
                     .asFloatBuffer();
@@ -819,6 +925,33 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             GLES30.glBlendFunc(GLES30.GL_ONE, GLES30.GL_ONE_MINUS_SRC_ALPHA);
             GLES30.glClearColor(0f, 0f, 0f, 0f);
             return true;
+        }
+
+        private int linkProgram(String vsSrc, String fsSrc) {
+            int vs = compileShader(GLES30.GL_VERTEX_SHADER, vsSrc);
+            if (vs == 0) {
+                return 0;
+            }
+            int fs = compileShader(GLES30.GL_FRAGMENT_SHADER, fsSrc);
+            if (fs == 0) {
+                GLES30.glDeleteShader(vs);
+                return 0;
+            }
+            int prog = GLES30.glCreateProgram();
+            GLES30.glAttachShader(prog, vs);
+            GLES30.glAttachShader(prog, fs);
+            GLES30.glLinkProgram(prog);
+            GLES30.glDeleteShader(vs);
+            GLES30.glDeleteShader(fs);
+
+            int[] linked = new int[1];
+            GLES30.glGetProgramiv(prog, GLES30.GL_LINK_STATUS, linked, 0);
+            if (linked[0] == 0) {
+                LimeLog.severe("PortalShaderView program link failed: " + GLES30.glGetProgramInfoLog(prog));
+                GLES30.glDeleteProgram(prog);
+                return 0;
+            }
+            return prog;
         }
 
         private int compileShader(int type, String src) {
@@ -836,9 +969,15 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
         }
 
         private void releaseGl() {
+            releaseBgFbo();
+            releaseBlurFbo();
             if (program != 0) {
                 GLES30.glDeleteProgram(program);
                 program = 0;
+            }
+            if (blitProgram != 0) {
+                GLES30.glDeleteProgram(blitProgram);
+                blitProgram = 0;
             }
         }
 

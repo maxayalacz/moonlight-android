@@ -1108,9 +1108,20 @@ public class UiHelper {
                 .start();
     }
 
+    private static volatile boolean returningFromStream = false;
+
+    public static void markReturningFromStream() {
+        returningFromStream = true;
+    }
+
     public static void restoreMenuForegroundIfNeeded(Activity activity) {
         final View fg = getMenuForegroundView(activity);
         if (fg == null) {
+            return;
+        }
+        if (returningFromStream) {
+            returningFromStream = false;
+            animateMenuForegroundEnter(activity, true);
             return;
         }
         if (fg.getAlpha() < 0.99f || Math.abs(fg.getScaleX() - 1f) > 0.005f) {

@@ -404,6 +404,7 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
                     getResources().getString(R.string.conn_establishing_msg),
                     () -> {
                         if (!isFinishing()) {
+                            UiHelper.markReturningFromStream();
                             finish();
                             UiHelper.disableActivityTransition(this, true);
                         }
@@ -1818,10 +1819,6 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
 
             // Ungrab input to prevent further input device notifications
             setInputGrabState(false);
-
-            if (portalOverlay != null) {
-                portalOverlay.releaseAndHide();
-            }
         }
 
         super.onPause();
@@ -4088,8 +4085,7 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
     @Override
     public void onBackPressed() {
         if (portalOverlay != null && portalOverlay.isOverlayActive()) {
-            portalOverlay.releaseAndHide();
-            finish();
+            portalOverlay.cancelWithReopen();
             return;
         }
         if(prefConfig.enableBackMenu){
@@ -4355,12 +4351,14 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
         if (portalOverlay != null) {
             portalOverlay.startDisconnecting(() -> {
                 maybeLaunchSessionMetrics();
+                UiHelper.markReturningFromStream();
                 finish();
                 UiHelper.disableActivityTransition(this, true);
             });
         } else {
             SpinnerDialog.displayDisconnectPortal(this, () -> {
                 maybeLaunchSessionMetrics();
+                UiHelper.markReturningFromStream();
                 finish();
                 UiHelper.disableActivityTransition(this, true);
             });
