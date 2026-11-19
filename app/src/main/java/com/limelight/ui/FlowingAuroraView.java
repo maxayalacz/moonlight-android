@@ -495,7 +495,7 @@ public class FlowingAuroraView extends View {
         private final int[] auroraLoc = new int[2];
         private boolean isHighlighted = false;
 
-        public FrostedCardDrawable(View hostView, FlowingAuroraView auroraView,
+        public FrostedCardDrawable(View hostView, @Nullable FlowingAuroraView auroraView,
                                    CornerMode cornerMode, float cornerRadiusPx,
                                    int frostTintColor, float strokeWidthPx) {
             this.hostViewRef = new WeakReference<>(hostView);
@@ -507,7 +507,9 @@ public class FlowingAuroraView extends View {
             this.strokePaint.setStyle(Paint.Style.STROKE);
             this.strokePaint.setStrokeWidth(strokeWidthPx);
             this.strokePaint.setColor(0x42FFFFFF);
-            auroraView.registerFrostedDrawable(this);
+            if (auroraView != null) {
+                auroraView.registerFrostedDrawable(this);
+            }
         }
 
         @Override

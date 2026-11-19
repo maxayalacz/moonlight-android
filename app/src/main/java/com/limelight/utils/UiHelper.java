@@ -100,10 +100,9 @@ public class UiHelper {
             return false;
         }
         View auroraCandidate = content.findViewWithTag("oneui_flowing_aurora");
-        if (!(auroraCandidate instanceof com.limelight.ui.FlowingAuroraView)) {
-            return false;
-        }
-        com.limelight.ui.FlowingAuroraView aurora = (com.limelight.ui.FlowingAuroraView) auroraCandidate;
+        com.limelight.ui.FlowingAuroraView aurora = (auroraCandidate instanceof com.limelight.ui.FlowingAuroraView)
+                ? (com.limelight.ui.FlowingAuroraView) auroraCandidate
+                : null;
         view.setBackground(new com.limelight.ui.FlowingAuroraView.FrostedCardDrawable(
                 view,
                 aurora,
@@ -910,6 +909,63 @@ public class UiHelper {
         }
     }
 
+    private static volatile boolean portalLifecycleRegistered = false;
+
+    private static void ensurePortalBackdropLifecycleRegistered(Activity activity) {
+        if (portalLifecycleRegistered || activity == null || activity.getApplication() == null) {
+            return;
+        }
+        portalLifecycleRegistered = true;
+        activity.getApplication().registerActivityLifecycleCallbacks(new android.app.Application.ActivityLifecycleCallbacks() {
+            @Override
+            public void onActivityCreated(Activity a, android.os.Bundle savedInstanceState) {}
+
+            @Override
+            public void onActivityStarted(Activity a) {}
+
+            @Override
+            public void onActivityResumed(Activity a) {
+                setPortalBackdropRendering(a, true);
+            }
+
+            @Override
+            public void onActivityPaused(Activity a) {
+                setPortalBackdropRendering(a, false);
+            }
+
+            @Override
+            public void onActivityStopped(Activity a) {
+                setPortalBackdropRendering(a, false);
+            }
+
+            @Override
+            public void onActivitySaveInstanceState(Activity a, android.os.Bundle outState) {}
+
+            @Override
+            public void onActivityDestroyed(Activity a) {
+                setPortalBackdropRendering(a, false);
+            }
+        });
+    }
+
+    private static void setPortalBackdropRendering(Activity activity, boolean running) {
+        if (activity == null || activity instanceof Game || activity instanceof ExternalDisplayControlActivity) {
+            return;
+        }
+        View rootView = activity.findViewById(android.R.id.content);
+        if (rootView == null) {
+            return;
+        }
+        View bg = rootView.findViewWithTag("oneui_portal_starfield_bg");
+        if (bg instanceof com.limelight.ui.PortalShaderView) {
+            if (running) {
+                ((com.limelight.ui.PortalShaderView) bg).startRendering();
+            } else {
+                ((com.limelight.ui.PortalShaderView) bg).stopRendering();
+            }
+        }
+    }
+
     private static void attachFlowingAuroraBackground(Activity activity, View rootView) {
         if (activity instanceof Game || activity instanceof ExternalDisplayControlActivity) {
             return;
@@ -917,15 +973,18 @@ public class UiHelper {
         if (!(rootView instanceof android.widget.FrameLayout)) {
             return;
         }
+        ensurePortalBackdropLifecycleRegistered(activity);
         android.widget.FrameLayout contentFrame = (android.widget.FrameLayout) rootView;
-        if (contentFrame.findViewWithTag("oneui_flowing_aurora") != null) {
+        if (contentFrame.findViewWithTag("oneui_portal_starfield_bg") != null) {
             return;
         }
-        com.limelight.ui.FlowingAuroraView auroraView = new com.limelight.ui.FlowingAuroraView(activity);
-        auroraView.setTag("oneui_flowing_aurora");
-        contentFrame.addView(auroraView, 0, new android.widget.FrameLayout.LayoutParams(
+        com.limelight.ui.PortalShaderView starfieldView = new com.limelight.ui.PortalShaderView(activity);
+        starfieldView.setTag("oneui_portal_starfield_bg");
+        starfieldView.configureStarfieldBackgroundMode();
+        contentFrame.addView(starfieldView, 0, new android.widget.FrameLayout.LayoutParams(
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT,
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT));
+        starfieldView.startRendering();
         if (contentFrame.getChildCount() > 1) {
             View firstContent = contentFrame.getChildAt(1);
             if (firstContent != null) {
@@ -945,6 +1004,24 @@ public class UiHelper {
         View aurora = rootView.findViewWithTag("oneui_flowing_aurora");
         if (aurora instanceof com.limelight.ui.FlowingAuroraView) {
             ((com.limelight.ui.FlowingAuroraView) aurora).refreshFromPrefs();
+        }
+        View starfield = rootView.findViewWithTag("oneui_portal_starfield_bg");
+        if (starfield instanceof com.limelight.ui.PortalShaderView) {
+            ((com.limelight.ui.PortalShaderView) starfield).startRendering();
+        }
+    }
+
+    public static void disableActivityTransition(Activity activity, boolean isClose) {
+        if (activity == null) {
+            return;
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            activity.overrideActivityTransition(
+                    isClose ? Activity.OVERRIDE_TRANSITION_CLOSE : Activity.OVERRIDE_TRANSITION_OPEN,
+                    0,
+                    0);
+        } else {
+            activity.overridePendingTransition(0, 0);
         }
     }
 
@@ -996,6 +1073,7 @@ public class UiHelper {
             View child = contentFrame.getChildAt(i);
             if (child != null
                     && !"oneui_flowing_aurora".equals(child.getTag())
+                    && !"oneui_portal_starfield_bg".equals(child.getTag())
                     && !"oneui_portal_overlay".equals(child.getTag())) {
                 return child;
             }
@@ -1039,7 +1117,7 @@ public class UiHelper {
         final View fg = getMenuForegroundView(from);
         if (fg == null) {
             from.startActivity(intent);
-            from.overridePendingTransition(0, 0);
+            disableActivityTransition(from, false);
             return;
         }
         fg.animate().cancel();
@@ -1052,7 +1130,7 @@ public class UiHelper {
                 .withEndAction(() -> {
                     if (!from.isFinishing()) {
                         from.startActivity(intent);
-                        from.overridePendingTransition(0, 0);
+                        disableActivityTransition(from, false);
                     }
                 })
                 .start();
@@ -1065,7 +1143,7 @@ public class UiHelper {
         final View fg = getMenuForegroundView(activity);
         if (fg == null) {
             superFinish.run();
-            activity.overridePendingTransition(0, 0);
+            disableActivityTransition(activity, true);
             return;
         }
         fg.animate().cancel();
@@ -1077,7 +1155,7 @@ public class UiHelper {
                 .setInterpolator(new android.view.animation.AccelerateInterpolator(1.5f))
                 .withEndAction(() -> {
                     superFinish.run();
-                    activity.overridePendingTransition(0, 0);
+                    disableActivityTransition(activity, true);
                 })
                 .start();
     }

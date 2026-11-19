@@ -391,6 +391,8 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
 
         clipboardManager = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
 
+        UiHelper.disableActivityTransition(this, false);
+
         portalOverlay = findViewById(R.id.portalConnectionOverlay);
         if (portalOverlay != null) {
             String hostDisplayName = getIntent().getStringExtra(EXTRA_PC_NAME);
@@ -403,6 +405,7 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
                     () -> {
                         if (!isFinishing()) {
                             finish();
+                            UiHelper.disableActivityTransition(this, true);
                         }
                     },
                     () -> {
@@ -4353,11 +4356,13 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
             portalOverlay.startDisconnecting(() -> {
                 maybeLaunchSessionMetrics();
                 finish();
+                UiHelper.disableActivityTransition(this, true);
             });
         } else {
             SpinnerDialog.displayDisconnectPortal(this, () -> {
                 maybeLaunchSessionMetrics();
                 finish();
+                UiHelper.disableActivityTransition(this, true);
             });
         }
     }

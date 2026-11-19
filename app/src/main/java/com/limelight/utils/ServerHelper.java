@@ -151,12 +151,7 @@ public class ServerHelper {
         }
 
         Intent intent = createStartIntent(parent, app, computer, managerBinder, withVDisplay);
-        if (parent instanceof com.limelight.AppView) {
-            ((com.limelight.AppView) parent).launchStreamWithPortalIris(intent);
-        } else {
-            parent.startActivity(intent);
-            parent.overridePendingTransition(0, 0);
-        }
+        UiHelper.startMenuActivityWithDepth(parent, intent);
     }
 
     public static void doNetworkTest(final Activity parent) {
