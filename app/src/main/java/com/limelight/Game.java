@@ -392,8 +392,7 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
         clipboardManager = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
 
         portalOverlay = findViewById(R.id.portalConnectionOverlay);
-        boolean usePortalOverlay = portalOverlay != null && !"card".equals(prefConfig.connectingAnimationStyle);
-        if (usePortalOverlay) {
+        if (portalOverlay != null) {
             String hostDisplayName = getIntent().getStringExtra(EXTRA_PC_NAME);
             if (hostDisplayName == null || hostDisplayName.trim().isEmpty()) {
                 hostDisplayName = getIntent().getStringExtra(EXTRA_HOST);
@@ -4350,7 +4349,7 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
             return;
         }
         disconnectingWithPortal = true;
-        if (portalOverlay != null && !"card".equals(prefConfig.connectingAnimationStyle)) {
+        if (portalOverlay != null) {
             portalOverlay.startDisconnecting(() -> {
                 maybeLaunchSessionMetrics();
                 finish();

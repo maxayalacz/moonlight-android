@@ -74,6 +74,18 @@ public class PreferenceConfiguration {
     public static final String ENABLE_POST_SESSION_METRICS_PREF_STRING = "checkbox_post_session_metrics";
     public static final String CONNECTING_ANIMATION_STYLE_PREF_STRING = "list_connecting_animation_style";
     public static final String DEFAULT_CONNECTING_ANIMATION_STYLE = "fullscreen";
+    public static final String PORTAL_READY_MS_PREF_STRING = "seekbar_portal_ready_ms";
+    public static final String PORTAL_PREVIEW_FADE_MS_PREF_STRING = "seekbar_portal_preview_fade_ms";
+    public static final String PORTAL_PREVIEW_HOLD_MS_PREF_STRING = "seekbar_portal_preview_hold_ms";
+    public static final String PORTAL_EXPAND_MS_PREF_STRING = "seekbar_portal_expand_ms";
+    public static final String PORTAL_SWIRL_SPEED_PREF_STRING = "seekbar_portal_swirl_speed";
+    public static final String PORTAL_DISCONNECT_MS_PREF_STRING = "seekbar_portal_disconnect_ms";
+    public static final int DEFAULT_PORTAL_READY_MS = 600;
+    public static final int DEFAULT_PORTAL_PREVIEW_FADE_MS = 800;
+    public static final int DEFAULT_PORTAL_PREVIEW_HOLD_MS = 1800;
+    public static final int DEFAULT_PORTAL_EXPAND_MS = 1100;
+    public static final int DEFAULT_PORTAL_SWIRL_SPEED = 35;
+    public static final int DEFAULT_PORTAL_DISCONNECT_MS = 1200;
     private static final String BIND_ALL_USB_STRING = "checkbox_usb_bind_all";
     private static final String MOUSE_EMULATION_STRING = "checkbox_mouse_emulation";
     private static final String REMEMBER_MOUSE_MODE_PREF_STRING = "checkbox_remember_mouse_mode";
@@ -280,6 +292,12 @@ public class PreferenceConfiguration {
     public boolean enablePerfLogging;
     public boolean enablePostSessionMetrics;
     public String connectingAnimationStyle;
+    public int portalReadyMs;
+    public int portalPreviewFadeMs;
+    public int portalPreviewHoldMs;
+    public int portalExpandMs;
+    public int portalSwirlSpeedPercent;
+    public int portalDisconnectMs;
     //简化版性能信息
     public boolean enablePerfOverlayLite;
 
@@ -932,7 +950,13 @@ private static int getFramePacingValue(Context context) {
         config.enablePerfOverlay = prefs.getBoolean(ENABLE_PERF_OVERLAY_STRING, DEFAULT_ENABLE_PERF_OVERLAY);
         config.enablePerfLogging = prefs.getBoolean(ENABLE_PERF_LOGGING, DEFAULT_ENABLE_PERF_LOGGING);
         config.enablePostSessionMetrics = prefs.getBoolean(ENABLE_POST_SESSION_METRICS_PREF_STRING, DEFAULT_ENABLE_POST_SESSION_METRICS);
-        config.connectingAnimationStyle = prefs.getString(CONNECTING_ANIMATION_STYLE_PREF_STRING, DEFAULT_CONNECTING_ANIMATION_STYLE);
+        config.connectingAnimationStyle = DEFAULT_CONNECTING_ANIMATION_STYLE;
+        config.portalReadyMs = prefs.getInt(PORTAL_READY_MS_PREF_STRING, DEFAULT_PORTAL_READY_MS);
+        config.portalPreviewFadeMs = prefs.getInt(PORTAL_PREVIEW_FADE_MS_PREF_STRING, DEFAULT_PORTAL_PREVIEW_FADE_MS);
+        config.portalPreviewHoldMs = prefs.getInt(PORTAL_PREVIEW_HOLD_MS_PREF_STRING, DEFAULT_PORTAL_PREVIEW_HOLD_MS);
+        config.portalExpandMs = prefs.getInt(PORTAL_EXPAND_MS_PREF_STRING, DEFAULT_PORTAL_EXPAND_MS);
+        config.portalSwirlSpeedPercent = prefs.getInt(PORTAL_SWIRL_SPEED_PREF_STRING, DEFAULT_PORTAL_SWIRL_SPEED);
+        config.portalDisconnectMs = prefs.getInt(PORTAL_DISCONNECT_MS_PREF_STRING, DEFAULT_PORTAL_DISCONNECT_MS);
         config.enablePerfOverlayLite = prefs.getBoolean("checkbox_enable_perf_overlay_lite",DEFAULT_ENABLE_PERF_OVERLAY);
         config.enablePerfOverlayBottom = prefs.getBoolean("checkbox_enable_perf_overlay_bottom",DEFAULT_PERF_OVERLAY_BOTTOM);
         config.bindAllUsb = prefs.getBoolean(BIND_ALL_USB_STRING, DEFAULT_BIND_ALL_USB);

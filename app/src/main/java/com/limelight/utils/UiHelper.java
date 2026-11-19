@@ -70,8 +70,8 @@ public class UiHelper {
             }
         } else {
             if (!applyFrostedCardBackground(view, com.limelight.ui.FlowingAuroraView.CornerMode.ALL,
-                    ONEUI_SQUIRCLE_RADIUS_DP, 0x26FFFFFF)) {
-                view.setBackgroundResource(R.drawable.bg_oneui_liquid_glass);
+                    ONEUI_SQUIRCLE_RADIUS_DP, 0x52121826)) {
+                view.setBackgroundResource(R.drawable.bg_oneui_liquid_glass_dark);
             }
         }
 

@@ -71,6 +71,7 @@ public class PortalConnectionOverlay extends FrameLayout implements TextureView.
             "uniform float u_readyMix;\n" +
             "uniform float u_previewMix;\n" +
             "uniform float u_expandProgress;\n" +
+            "uniform float u_swirlSpeed;\n" +
             "\n" +
             "const float PI  = 3.14159265359;\n" +
             "const float TAU = 6.28318530718;\n" +
@@ -133,11 +134,11 @@ public class PortalConnectionOverlay extends FrameLayout implements TextureView.
             "    return col;\n" +
             "}\n" +
             "\n" +
-            "vec3 samplePortalSwirl(float d, float angle, float radius, float time) {\n" +
+            "vec3 samplePortalSwirl(float d, float angle, float radius, float time, float swirlSpeed) {\n" +
             "    float radialOut = max(0.0, d - radius);\n" +
-            "    float swirlAngle = angle - radialOut * 11.5 + time * 3.2;\n" +
+            "    float swirlAngle = angle - radialOut * 11.5 + time * 3.2 * swirlSpeed;\n" +
             "    float wisp1 = pow(0.5 + 0.5 * sin(swirlAngle * 14.0 + sin(swirlAngle * 5.0)), 4.0);\n" +
-            "    float wisp2 = pow(0.5 + 0.5 * sin(swirlAngle * 23.0 + time * 4.5), 5.0);\n" +
+            "    float wisp2 = pow(0.5 + 0.5 * sin(swirlAngle * 23.0 + time * 4.5 * swirlSpeed), 5.0);\n" +
             "    float rimFade = exp(-radialOut * 24.0) * smoothstep(radius - 0.008, radius + 0.006, d);\n" +
             "    return vec3(0.22, 0.68, 1.0) * (wisp1 * 0.45 + wisp2 * 0.35) * rimFade;\n" +
             "}\n" +
@@ -162,7 +163,8 @@ public class PortalConnectionOverlay extends FrameLayout implements TextureView.
             "    vec3 outerBg    = mix(edgeNavy, centerGlow, bgGrad);\n" +
             "    vec3 innerBg    = vec3(0.045, 0.055, 0.110);\n" +
             "\n" +
-            "    float innerAlpha = 1.0 - clamp(u_previewMix, 0.0, 1.0);\n" +
+            "    float smoothPreview = easeInOutCubic(clamp(u_previewMix, 0.0, 1.0));\n" +
+            "    float innerAlpha = 1.0 - smoothPreview;\n" +
             "    float bgAlpha    = mix(innerAlpha, 1.0, outsideMask);\n" +
             "    vec3  bgColor    = mix(innerBg, outerBg, outsideMask);\n" +
             "\n" +
@@ -193,11 +195,11 @@ public class PortalConnectionOverlay extends FrameLayout implements TextureView.
             "    vec3 colCore   = vec3(0.95, 0.97, 1.00);\n" +
             "\n" +
             "    vec3 haloColor = mix(colIdle, colReady, u_readyMix);\n" +
-            "    haloColor      = mix(haloColor, colCharge, u_previewMix);\n" +
+            "    haloColor      = mix(haloColor, colCharge, smoothPreview);\n" +
             "\n" +
-            "    float haloFalloff = mix(15.0, 30.0, u_previewMix);\n" +
+            "    float haloFalloff = mix(15.0, 30.0, smoothPreview);\n" +
             "    float idleGlow    = exp(-ringDist * 26.0) * 0.65;\n" +
-            "    float readyHalo   = exp(-ringDist * haloFalloff) * mix(0.95, 0.75, u_previewMix) * breathe;\n" +
+            "    float readyHalo   = exp(-ringDist * haloFalloff) * mix(0.95, 0.75, smoothPreview) * breathe;\n" +
             "    float readyCore   = exp(-ringDist * 185.0) * 1.35 * breathe;\n" +
             "\n" +
             "    vec3 mainRing = mix(\n" +
@@ -206,20 +208,20 @@ public class PortalConnectionOverlay extends FrameLayout implements TextureView.
             "        u_readyMix\n" +
             "    );\n" +
             "\n" +
-            "    float chargeVis = u_previewMix * (1.0 - smoothstep(0.6, 1.0, u_expandProgress));\n" +
+            "    float chargeVis = smoothPreview * (1.0 - smoothstep(0.6, 1.0, u_expandProgress));\n" +
             "    vec3 arcs = vec3(0.0);\n" +
             "    if (chargeVis > 0.001) {\n" +
-            "        float a1 = 0.5 + 0.5 * sin(angle * 2.0 + u_time * 3.4);\n" +
-            "        float a2 = 0.5 + 0.5 * sin(angle * 3.0 - u_time * 2.1 + 1.2);\n" +
+            "        float a1 = 0.5 + 0.5 * sin(angle * 2.0 + u_time * 3.4 * u_swirlSpeed);\n" +
+            "        float a2 = 0.5 + 0.5 * sin(angle * 3.0 - u_time * 2.1 * u_swirlSpeed + 1.2);\n" +
             "        float arcMask = pow(a1, 5.0) + 0.6 * pow(a2, 6.0);\n" +
             "        float rimBand = exp(-ringDist * 75.0);\n" +
             "        arcs = mix(colCharge, colCore, 0.45) * rimBand * arcMask * 1.0 * chargeVis;\n" +
             "    }\n" +
             "\n" +
             "    vec3 swirl = vec3(0.0);\n" +
-            "    float swirlVis = smoothstep(0.25, 1.0, u_previewMix) * (1.0 - smoothstep(0.35, 0.90, u_expandProgress));\n" +
+            "    float swirlVis = smoothstep(0.20, 1.0, smoothPreview) * (1.0 - smoothstep(0.35, 0.90, u_expandProgress));\n" +
             "    if (swirlVis > 0.001 && d > radius - 0.015 && d < radius + 0.22) {\n" +
-            "        swirl = samplePortalSwirl(d, angle, radius, u_time) * swirlVis;\n" +
+            "        swirl = samplePortalSwirl(d, angle, radius, u_time, u_swirlSpeed) * swirlVis;\n" +
             "    }\n" +
             "\n" +
             "    vec3 shockwaves = vec3(0.0);\n" +
@@ -250,16 +252,16 @@ public class PortalConnectionOverlay extends FrameLayout implements TextureView.
              1f,  1f
     };
 
-    private static final long PHASE2_READY_MS = 300L;
-    private static final long PHASE3_HUD_FADE_MS = 250L;
-    private static final long PHASE3_PREVIEW_FADE_MS = 400L;
-    private static final long PHASE3_HOLD_MS = 900L;
-    private static final long PHASE4_EXPAND_MS = 550L;
+    private static final long PHASE3_HUD_FADE_MS = 350L;
     private static final long FIRST_FRAME_FALLBACK_MS = 700L;
 
-    // Faster reversed disconnecting durations
-    private static final long DISCONNECT_IRIS_CLOSE_MS = 360L;
-    private static final long DISCONNECT_ECLIPSE_CLOSE_MS = 240L;
+    // Configurable durations loaded from UI Settings -> Portal Animation
+    private long phase2ReadyMs = com.limelight.preferences.PreferenceConfiguration.DEFAULT_PORTAL_READY_MS;
+    private long phase3PreviewFadeMs = com.limelight.preferences.PreferenceConfiguration.DEFAULT_PORTAL_PREVIEW_FADE_MS;
+    private long phase3HoldMs = com.limelight.preferences.PreferenceConfiguration.DEFAULT_PORTAL_PREVIEW_HOLD_MS;
+    private long phase4ExpandMs = com.limelight.preferences.PreferenceConfiguration.DEFAULT_PORTAL_EXPAND_MS;
+    private long disconnectIrisCloseMs = Math.round(com.limelight.preferences.PreferenceConfiguration.DEFAULT_PORTAL_DISCONNECT_MS * 0.60f);
+    private long disconnectEclipseCloseMs = Math.round(com.limelight.preferences.PreferenceConfiguration.DEFAULT_PORTAL_DISCONNECT_MS * 0.40f);
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private TextureView glTextureView;
@@ -277,6 +279,20 @@ public class PortalConnectionOverlay extends FrameLayout implements TextureView.
     private volatile float uReadyMix = 0f;
     private volatile float uPreviewMix = 0f;
     private volatile float uExpandProgress = 0f;
+    private volatile float uSwirlSpeed = com.limelight.preferences.PreferenceConfiguration.DEFAULT_PORTAL_SWIRL_SPEED / 100f;
+
+    private void loadTimingPreferences() {
+        com.limelight.preferences.PreferenceConfiguration cfg =
+                com.limelight.preferences.PreferenceConfiguration.readPreferences(getContext());
+        phase2ReadyMs = Math.max(100L, cfg.portalReadyMs);
+        phase3PreviewFadeMs = Math.max(100L, cfg.portalPreviewFadeMs);
+        phase3HoldMs = Math.max(0L, cfg.portalPreviewHoldMs);
+        phase4ExpandMs = Math.max(200L, cfg.portalExpandMs);
+        uSwirlSpeed = Math.max(0.05f, cfg.portalSwirlSpeedPercent / 100f);
+        long totalDisconnect = Math.max(200L, cfg.portalDisconnectMs);
+        disconnectIrisCloseMs = Math.max(100L, Math.round(totalDisconnect * 0.60f));
+        disconnectEclipseCloseMs = Math.max(100L, totalDisconnect - disconnectIrisCloseMs);
+    }
 
     private boolean active = false;
     private boolean disconnecting = false;
@@ -427,6 +443,7 @@ public class PortalConnectionOverlay extends FrameLayout implements TextureView.
             @Nullable Runnable onRevealComplete) {
         cancelAnimatorsAndCallbacks();
         stopRenderThread();
+        loadTimingPreferences();
 
         this.active = true;
         this.disconnecting = false;
@@ -502,8 +519,8 @@ public class PortalConnectionOverlay extends FrameLayout implements TextureView.
 
             cancelActiveAnimator();
             activeAnimator = ValueAnimator.ofFloat(uReadyMix, 1f);
-            activeAnimator.setDuration(PHASE2_READY_MS);
-            activeAnimator.setInterpolator(new DecelerateInterpolator(1.6f));
+            activeAnimator.setDuration(phase2ReadyMs);
+            activeAnimator.setInterpolator(new android.view.animation.AccelerateDecelerateInterpolator());
             activeAnimator.addUpdateListener(anim -> uReadyMix = (float) anim.getAnimatedValue());
             activeAnimator.addListener(new AnimatorListenerAdapter() {
                 private boolean canceled = false;
@@ -549,7 +566,7 @@ public class PortalConnectionOverlay extends FrameLayout implements TextureView.
     }
 
     /**
-     * Phase 3 — Live Stream Peephole & Outward Swirl (~1.3 s total: 400ms fade + 900ms hold).
+     * Phase 3 — Live Stream Peephole & Outward Swirl.
      */
     private void startPhase3() {
         if (!active || disconnecting || phase3Started) {
@@ -558,7 +575,7 @@ public class PortalConnectionOverlay extends FrameLayout implements TextureView.
         phase3Started = true;
         mainHandler.removeCallbacks(firstFrameFallbackRunnable);
 
-        // Fade all HUD elements to 0 alpha over 250 ms
+        // Fade all HUD elements to 0 alpha smoothly
         topHudContainer.animate().alpha(0f).setDuration(PHASE3_HUD_FADE_MS).start();
         cancelButton.animate().alpha(0f).setDuration(PHASE3_HUD_FADE_MS).withEndAction(() -> {
             cancelButton.setVisibility(GONE);
@@ -570,8 +587,9 @@ public class PortalConnectionOverlay extends FrameLayout implements TextureView.
 
         cancelActiveAnimator();
         activeAnimator = ValueAnimator.ofFloat(uPreviewMix, 1f);
-        activeAnimator.setDuration(PHASE3_PREVIEW_FADE_MS);
-        activeAnimator.setInterpolator(new DecelerateInterpolator(1.3f));
+        activeAnimator.setDuration(phase3PreviewFadeMs);
+        // Linear driver; smooth easeInOutCubic curve is applied inside the fragment shader
+        activeAnimator.setInterpolator(new LinearInterpolator());
         activeAnimator.addUpdateListener(anim -> uPreviewMix = (float) anim.getAnimatedValue());
         activeAnimator.addListener(new AnimatorListenerAdapter() {
             private boolean canceled = false;
@@ -587,14 +605,18 @@ public class PortalConnectionOverlay extends FrameLayout implements TextureView.
                     return;
                 }
                 uPreviewMix = 1f;
-                mainHandler.postDelayed(phase3HoldRunnable, PHASE3_HOLD_MS);
+                if (phase3HoldMs <= 0L) {
+                    startPhase4();
+                } else {
+                    mainHandler.postDelayed(phase3HoldRunnable, phase3HoldMs);
+                }
             }
         });
         activeAnimator.start();
     }
 
     /**
-     * Phase 4 — Iris Wipe Reveal (550 ms linear; cubic easing inside the shader).
+     * Phase 4 — Iris Wipe Reveal (linear; cubic easing inside the shader).
      */
     private void startPhase4() {
         if (!active || disconnecting) {
@@ -602,7 +624,7 @@ public class PortalConnectionOverlay extends FrameLayout implements TextureView.
         }
         cancelActiveAnimator();
         activeAnimator = ValueAnimator.ofFloat(uExpandProgress, 1f);
-        activeAnimator.setDuration(PHASE4_EXPAND_MS);
+        activeAnimator.setDuration(phase4ExpandMs);
         activeAnimator.setInterpolator(new LinearInterpolator());
         activeAnimator.addUpdateListener(anim -> uExpandProgress = (float) anim.getAnimatedValue());
         activeAnimator.addListener(new AnimatorListenerAdapter() {
@@ -630,7 +652,7 @@ public class PortalConnectionOverlay extends FrameLayout implements TextureView.
     }
 
     /**
-     * Faster reversed disconnecting portal animation (~600 ms total):
+     * Reversed disconnecting portal animation:
      * Iris closes from fullscreen (u_expandProgress 1 -> 0), then fades the stream peephole back
      * into the starry solar-eclipse void (u_previewMix & u_readyMix 1 -> 0) before invoking onComplete.
      */
@@ -641,6 +663,7 @@ public class PortalConnectionOverlay extends FrameLayout implements TextureView.
             }
             cancelAnimatorsAndCallbacks();
             stopRenderThread();
+            loadTimingPreferences();
 
             this.active = true;
             this.disconnecting = true;
@@ -657,9 +680,9 @@ public class PortalConnectionOverlay extends FrameLayout implements TextureView.
 
             ensureRenderThreadRunning();
 
-            // Step 1: Reverse iris close (1.0 -> 0.0 over 360ms)
+            // Step 1: Reverse iris close (1.0 -> 0.0)
             activeAnimator = ValueAnimator.ofFloat(1f, 0f);
-            activeAnimator.setDuration(DISCONNECT_IRIS_CLOSE_MS);
+            activeAnimator.setDuration(disconnectIrisCloseMs);
             activeAnimator.setInterpolator(new LinearInterpolator());
             activeAnimator.addUpdateListener(anim -> uExpandProgress = (float) anim.getAnimatedValue());
             activeAnimator.addListener(new AnimatorListenerAdapter() {
@@ -676,10 +699,10 @@ public class PortalConnectionOverlay extends FrameLayout implements TextureView.
                         return;
                     }
                     uExpandProgress = 0f;
-                    // Step 2: Fade live peephole back into dark eclipse void (1.0 -> 0.0 over 240ms)
+                    // Step 2: Fade live peephole back into dark eclipse void (1.0 -> 0.0)
                     activeAnimator = ValueAnimator.ofFloat(1f, 0f);
-                    activeAnimator.setDuration(DISCONNECT_ECLIPSE_CLOSE_MS);
-                    activeAnimator.setInterpolator(new DecelerateInterpolator(1.3f));
+                    activeAnimator.setDuration(disconnectEclipseCloseMs);
+                    activeAnimator.setInterpolator(new android.view.animation.AccelerateDecelerateInterpolator());
                     activeAnimator.addUpdateListener(a -> {
                         float v = (float) a.getAnimatedValue();
                         uPreviewMix = v;
@@ -861,6 +884,7 @@ public class PortalConnectionOverlay extends FrameLayout implements TextureView.
         private int uReadyMixLoc = -1;
         private int uPreviewMixLoc = -1;
         private int uExpandProgressLoc = -1;
+        private int uSwirlSpeedLoc = -1;
         private FloatBuffer quadBuffer;
 
         PortalGlThread(SurfaceTexture surfaceTexture, int width, int height) {
@@ -916,6 +940,7 @@ public class PortalConnectionOverlay extends FrameLayout implements TextureView.
                 GLES30.glUniform1f(uReadyMixLoc, uReadyMix);
                 GLES30.glUniform1f(uPreviewMixLoc, uPreviewMix);
                 GLES30.glUniform1f(uExpandProgressLoc, uExpandProgress);
+                GLES30.glUniform1f(uSwirlSpeedLoc, uSwirlSpeed);
 
                 quadBuffer.position(0);
                 GLES30.glEnableVertexAttribArray(aPosLoc);
@@ -1036,6 +1061,7 @@ public class PortalConnectionOverlay extends FrameLayout implements TextureView.
             uReadyMixLoc = GLES30.glGetUniformLocation(program, "u_readyMix");
             uPreviewMixLoc = GLES30.glGetUniformLocation(program, "u_previewMix");
             uExpandProgressLoc = GLES30.glGetUniformLocation(program, "u_expandProgress");
+            uSwirlSpeedLoc = GLES30.glGetUniformLocation(program, "u_swirlSpeed");
 
             quadBuffer = ByteBuffer.allocateDirect(FULLSCREEN_QUAD.length * 4)
                     .order(ByteOrder.nativeOrder())

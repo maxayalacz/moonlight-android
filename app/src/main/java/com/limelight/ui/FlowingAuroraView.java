@@ -1,8 +1,6 @@
 package com.limelight.ui;
 
-import android.animation.ValueAnimator;
 import android.content.Context;
-import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -11,18 +9,18 @@ import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.PixelFormat;
 import android.graphics.PorterDuff;
-import android.graphics.PorterDuffXfermode;
+import android.graphics.PorterDuffColorFilter;
+import android.graphics.RadialGradient;
 import android.graphics.Rect;
 import android.graphics.RectF;
+import android.graphics.Shader;
 import android.graphics.drawable.Drawable;
 import android.os.SystemClock;
 import android.util.AttributeSet;
 import android.view.View;
-import android.view.animation.LinearInterpolator;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.preference.PreferenceManager;
 
 import java.lang.ref.WeakReference;
 import java.util.Iterator;
@@ -30,20 +28,11 @@ import java.util.Random;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * Continuous real-time motion-graphics backdrop featuring organic merging/separating
- * gradient metaballs, a live 2D plexus particle network, and jujostream multi-ribbon
- * additive sine waves, tinted by the user's selected AppThemePalette.
+ * Real-time Midnight Blue bokeh particle void matching the interior of the
+ * PlayStation Portal connection window, plus a live downscaled blurred buffer
+ * for {@link FrostedCardDrawable} and {@link FocusCirclePortalView}.
  */
-public class FlowingAuroraView extends View implements SharedPreferences.OnSharedPreferenceChangeListener {
-    private static final String PREF_BACKDROP_STYLE = "list_backdrop_style";
-    private static final String PREF_METABALL_SHARPNESS = "list_metaball_sharpness";
-    private static final String PREF_PLEXUS_DENSITY = "list_plexus_density";
-    private static final int FIELD_W = 64;
-    private static final int FIELD_H = 128;
-    private static final int MAX_NODES = 80;
-    private static final int BLOB_COUNT = 5;
-    private static final int RIBBON_COUNT = 4;
-
+public class FlowingAuroraView extends View {
     public enum CornerMode {
         ALL,
         TOP,
@@ -51,609 +40,156 @@ public class FlowingAuroraView extends View implements SharedPreferences.OnShare
         BOTTOM
     }
 
-    public enum BackdropStyle {
-        BALANCED,
-        BOLD_PLEXUS,
-        PLEXUS_HERO,
-        WAVES
+    private static final int FIELD_W = 80;
+    private static final int FIELD_H = 128;
+    private static final int BLUR_RADIUS = 3;
+    private static final long BLUR_INTERVAL_MS = 33L; // ~30 FPS frosted refraction updates
+    private static final float TAU = (float) (Math.PI * 2.0);
+
+    // Exact colors from inside the PS Portal animation window
+    private static final int COLOR_CENTER_GLOW = 0xFF181E36;
+    private static final int COLOR_MID_VOID = 0xFF0E1224;
+    private static final int COLOR_EDGE_VOID = 0xFF0B0E1C;
+
+    // Bokeh particle colors: vec3(0.369, 0.420, 1.0) -> vec3(0.780, 0.847, 1.0)
+    private static final int PARTICLE_COL_A = 0xFF5E6BFF;
+    private static final int PARTICLE_COL_B = 0xFFC7D8FF;
+
+    private static final int[] LAYER_COUNTS = { 26, 38, 48 };
+    private static final float[] LAYER_ROT_SPEED = { 0.040f, -0.058f, 0.076f };
+    private static final float[] LAYER_OPACITY = { 0.50f, 0.38f, 0.28f };
+    private static final float[] LAYER_MIN_R_FRAC = { 0.011f, 0.0075f, 0.0048f };
+    private static final float[] LAYER_MAX_R_FRAC = { 0.028f, 0.019f, 0.012f };
+
+    private static final class BokehParticle {
+        final int layer;
+        final float baseX;       // normalized [-0.95..0.95]
+        final float baseY;       // normalized [-0.95..0.95]
+        final float driftAmpX;
+        final float driftAmpY;
+        final float driftFreqX;
+        final float driftFreqY;
+        final float driftPhaseX;
+        final float driftPhaseY;
+        final float radiusFrac;
+        final float twinkleFreq;
+        final float twinklePhase;
+        final int colorRgb;
+        final PorterDuffColorFilter tintFilter;
+
+        BokehParticle(int layer, Random rnd) {
+            this.layer = layer;
+            this.baseX = (rnd.nextFloat() * 2f - 1f) * 0.92f;
+            this.baseY = (rnd.nextFloat() * 2f - 1f) * 0.92f;
+            this.driftAmpX = 0.012f + rnd.nextFloat() * 0.018f;
+            this.driftAmpY = 0.012f + rnd.nextFloat() * 0.018f;
+            this.driftFreqX = 0.35f + rnd.nextFloat() * 0.50f;
+            this.driftFreqY = 0.35f + rnd.nextFloat() * 0.50f;
+            this.driftPhaseX = rnd.nextFloat() * TAU;
+            this.driftPhaseY = rnd.nextFloat() * TAU;
+            this.radiusFrac = LAYER_MIN_R_FRAC[layer]
+                    + rnd.nextFloat() * (LAYER_MAX_R_FRAC[layer] - LAYER_MIN_R_FRAC[layer]);
+            this.twinkleFreq = 1.6f + rnd.nextFloat() * 2.8f;
+            this.twinklePhase = rnd.nextFloat() * TAU;
+
+            float t = rnd.nextFloat();
+            this.colorRgb = blendRgb(PARTICLE_COL_A, PARTICLE_COL_B, t);
+            this.tintFilter = new PorterDuffColorFilter(this.colorRgb, PorterDuff.Mode.SRC_IN);
+        }
     }
 
-    public enum MetaballSharpness {
-        SOFT,
-        MEDIUM,
-        SHARP
-    }
+    private final AppThemePalette palette = AppThemePalette.MIDNIGHT;
+    private final BokehParticle[] particles;
+    private final Bitmap bokehSprite;
+    private final Paint bgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint spritePaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+    private final RectF drawRect = new RectF();
 
-    public enum PlexusDensity {
-        NORMAL,
-        HIGH,
-        ULTRA
-    }
+    // Live blurred offscreen buffer for FrostedCardDrawable & FocusCirclePortalView
+    private final Bitmap fieldBitmap;
+    private final Bitmap blurredBitmap;
+    private final Canvas fieldCanvas;
+    private final int[] blurPxA = new int[FIELD_W * FIELD_H];
+    private final int[] blurPxB = new int[FIELD_W * FIELD_H];
+    private final Paint fieldBgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
-    private static class Blob {
-        float x, y;     // normalized 0..1
-        float vx, vy;   // normalized units/sec
-        float radius;   // normalized
-        int r, g, b;
-    }
-
-    private static class Node {
-        float x, y;     // normalized 0..1
-        float vx, vy;   // normalized units/sec
-        float sizeDp;
-    }
-
-    private static class RibbonComponent {
-        float cycle;
-        float amp;
-        float speed;
-        float phase;
-        float phaseOffset;
-    }
-
-    private static class Ribbon {
-        float thickness;
-        float fillAlpha;
-        float strokeAlpha;
-        final RibbonComponent[] components = new RibbonComponent[4];
-    }
-
-    private final Blob[] blobs = new Blob[BLOB_COUNT];
-    private final Node[] nodes = new Node[MAX_NODES];
-    private final Ribbon[] ribbons = new Ribbon[RIBBON_COUNT];
-
-    private final Bitmap rawField = Bitmap.createBitmap(FIELD_W, FIELD_H, Bitmap.Config.ARGB_8888);
-    private final Bitmap blurredField = Bitmap.createBitmap(FIELD_W, FIELD_H, Bitmap.Config.ARGB_8888);
-    private final int[] rawPix = new int[FIELD_W * FIELD_H];
-    private final int[] blurPix = new int[FIELD_W * FIELD_H];
-    private final int[] blurTmp = new int[FIELD_W * FIELD_H];
-
-    private final Paint bitmapPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
-    private final Paint linePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint nodePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint nodeGlowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint waveFillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint waveStrokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Path wavePath = new Path();
-    private final RectF fullDst = new RectF();
-
-    private BackdropStyle style = BackdropStyle.BALANCED;
-    private MetaballSharpness sharpness = MetaballSharpness.SOFT;
-    private PlexusDensity plexusDensity = PlexusDensity.NORMAL;
-    private AppThemePalette palette = AppThemePalette.MIDNIGHT;
-    private boolean forceWaves = false;
-    private float waveElapsedSec = 0f;
-    private ValueAnimator ticker;
-    private long lastTickMs = 0L;
-    private boolean fieldDirty = true;
+    private long startTimeMs = 0L;
+    private long lastBlurMs = 0L;
+    private boolean animating = false;
+    private int cachedW = 0;
+    private int cachedH = 0;
 
     private final CopyOnWriteArrayList<WeakReference<Drawable>> frostedListeners = new CopyOnWriteArrayList<>();
 
     public FlowingAuroraView(Context context) {
-        super(context);
-        init(context);
+        this(context, null);
     }
 
-    public FlowingAuroraView(Context context, AttributeSet attrs) {
-        super(context, attrs);
-        init(context);
+    public FlowingAuroraView(Context context, @Nullable AttributeSet attrs) {
+        this(context, attrs, 0);
     }
 
-    private void init(Context context) {
+    public FlowingAuroraView(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+        setWillNotDraw(false);
         setClickable(false);
         setFocusable(false);
-        setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
 
-        linePaint.setStyle(Paint.Style.STROKE);
-        nodePaint.setStyle(Paint.Style.FILL);
-        nodeGlowPaint.setStyle(Paint.Style.FILL);
-
-        PorterDuffXfermode addMode = new PorterDuffXfermode(PorterDuff.Mode.ADD);
-        waveFillPaint.setStyle(Paint.Style.FILL);
-        waveFillPaint.setXfermode(addMode);
-        waveStrokePaint.setStyle(Paint.Style.STROKE);
-        waveStrokePaint.setXfermode(addMode);
-
-        float[][] initBlobs = {
-                {0.25f, 0.25f, 0.042f, 0.028f, 0.17f},
-                {0.75f, 0.35f, -0.036f, 0.034f, 0.16f},
-                {0.45f, 0.68f, 0.032f, -0.038f, 0.18f},
-                {0.22f, 0.78f, 0.045f, -0.026f, 0.14f},
-                {0.78f, 0.72f, -0.030f, -0.032f, 0.15f}
-        };
-        for (int i = 0; i < BLOB_COUNT; i++) {
-            Blob b = new Blob();
-            b.x = initBlobs[i][0];
-            b.y = initBlobs[i][1];
-            b.vx = initBlobs[i][2];
-            b.vy = initBlobs[i][3];
-            b.radius = initBlobs[i][4];
-            blobs[i] = b;
-        }
-
-        // Randomize starting positions and continuous velocities for plexus nodes on every launch
-        Random rng = new Random();
-        for (int i = 0; i < MAX_NODES; i++) {
-            Node n = new Node();
-            n.x = rng.nextFloat();
-            n.y = rng.nextFloat();
-            float angle = (float) (rng.nextFloat() * Math.PI * 2.0);
-            float speed = 0.016f + rng.nextFloat() * 0.022f;
-            n.vx = (float) Math.cos(angle) * speed;
-            n.vy = (float) Math.sin(angle) * speed;
-            n.sizeDp = 1.6f + rng.nextFloat() * 1.5f;
-            nodes[i] = n;
-        }
-
-        // Organic additive wave ribbons (matching jujostream _WaveOverlay / _WavePainter)
-        for (int i = 0; i < RIBBON_COUNT; i++) {
-            Ribbon r = new Ribbon();
-            r.thickness = rng.nextFloat() * 0.025f + 0.005f;
-            float decay = 1.0f - (i % 3) * 0.15f;
-            r.fillAlpha = 0.06f * decay;
-            r.strokeAlpha = 0.25f * decay;
-            for (int c = 0; c < r.components.length; c++) {
-                RibbonComponent rc = new RibbonComponent();
-                rc.cycle = (rng.nextFloat() * 1.5f + 0.2f) * (c * 0.6f + 1.0f);
-                rc.amp = (rng.nextFloat() * 0.25f + 0.05f) / (c * 0.4f + 1.0f);
-                rc.speed = rng.nextFloat() * 0.3f + 0.06f;
-                rc.phase = rng.nextFloat() * (float) (Math.PI * 2.0);
-                rc.phaseOffset = rng.nextFloat() * 0.6f + 0.1f;
-                r.components[c] = rc;
+        int total = LAYER_COUNTS[0] + LAYER_COUNTS[1] + LAYER_COUNTS[2];
+        particles = new BokehParticle[total];
+        Random rnd = new Random(SystemClock.elapsedRealtimeNanos() ^ System.identityHashCode(this));
+        int idx = 0;
+        for (int layer = 0; layer < 3; layer++) {
+            for (int i = 0; i < LAYER_COUNTS[layer]; i++) {
+                particles[idx++] = new BokehParticle(layer, rnd);
             }
-            ribbons[i] = r;
         }
 
-        loadStyleFromPrefs(context);
+        bokehSprite = createBokehSprite(64);
+        fieldBitmap = Bitmap.createBitmap(FIELD_W, FIELD_H, Bitmap.Config.ARGB_8888);
+        blurredBitmap = Bitmap.createBitmap(FIELD_W, FIELD_H, Bitmap.Config.ARGB_8888);
+        fieldCanvas = new Canvas(fieldBitmap);
+        fieldBgPaint.setShader(new RadialGradient(
+                FIELD_W * 0.5f, FIELD_H * 0.48f, Math.max(FIELD_W, FIELD_H) * 0.72f,
+                new int[]{ COLOR_CENTER_GLOW, COLOR_MID_VOID, COLOR_EDGE_VOID },
+                new float[]{ 0f, 0.48f, 1f },
+                Shader.TileMode.CLAMP));
+
+        startTimeMs = SystemClock.uptimeMillis();
+        renderBlurField(0f);
     }
 
-    private void applyPaletteToBlobs() {
-        int[] blobColors = {
-                palette.highlight,
-                palette.accentLight,
-                palette.accent,
-                palette.secondary,
-                palette.warm
-        };
-        for (int i = 0; i < BLOB_COUNT; i++) {
-            int c = blobColors[i];
-            blobs[i].r = Color.red(c);
-            blobs[i].g = Color.green(c);
-            blobs[i].b = Color.blue(c);
-        }
+    private static Bitmap createBokehSprite(int size) {
+        Bitmap bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        Canvas c = new Canvas(bmp);
+        float half = size * 0.5f;
+        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+        p.setShader(new RadialGradient(
+                half, half, half,
+                new int[]{ 0xFFFFFFFF, 0xE6FFFFFF, 0x55FFFFFF, 0x00FFFFFF },
+                new float[]{ 0f, 0.25f, 0.62f, 1f },
+                Shader.TileMode.CLAMP));
+        c.drawCircle(half, half, half, p);
+        return bmp;
     }
 
-    public void setForceWaves(boolean forceWaves) {
-        if (this.forceWaves != forceWaves) {
-            this.forceWaves = forceWaves;
-            invalidate();
-            notifyFrostedListeners();
-        }
+    private static int blendRgb(int c1, int c2, float t) {
+        int r = Math.round(Color.red(c1) + (Color.red(c2) - Color.red(c1)) * t);
+        int g = Math.round(Color.green(c1) + (Color.green(c2) - Color.green(c1)) * t);
+        int b = Math.round(Color.blue(c1) + (Color.blue(c2) - Color.blue(c1)) * t);
+        return Color.rgb(r, g, b);
     }
 
     public void refreshFromPrefs() {
-        loadStyleFromPrefs(getContext());
         invalidate();
-        notifyFrostedListeners();
     }
 
-    private void loadStyleFromPrefs(Context context) {
-        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
-        palette = AppThemePalette.getCurrent(context);
-        applyPaletteToBlobs();
-
-        String val = prefs.getString(PREF_BACKDROP_STYLE, "balanced");
-        if ("bold_plexus".equals(val)) {
-            style = BackdropStyle.BOLD_PLEXUS;
-        } else if ("plexus_hero".equals(val)) {
-            style = BackdropStyle.PLEXUS_HERO;
-        } else if ("waves".equals(val)) {
-            style = BackdropStyle.WAVES;
-        } else {
-            style = BackdropStyle.BALANCED;
-        }
-
-        String sharpVal = prefs.getString(PREF_METABALL_SHARPNESS, "soft");
-        if ("sharp".equals(sharpVal)) {
-            sharpness = MetaballSharpness.SHARP;
-        } else if ("medium".equals(sharpVal)) {
-            sharpness = MetaballSharpness.MEDIUM;
-        } else {
-            sharpness = MetaballSharpness.SOFT;
-        }
-
-        String densityVal = prefs.getString(PREF_PLEXUS_DENSITY, "normal");
-        if ("ultra".equals(densityVal)) {
-            plexusDensity = PlexusDensity.ULTRA;
-        } else if ("high".equals(densityVal)) {
-            plexusDensity = PlexusDensity.HIGH;
-        } else {
-            plexusDensity = PlexusDensity.NORMAL;
-        }
-
-        fieldDirty = true;
-    }
-
-    @Override
-    public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, @Nullable String key) {
-        if (PREF_BACKDROP_STYLE.equals(key)
-                || PREF_METABALL_SHARPNESS.equals(key)
-                || PREF_PLEXUS_DENSITY.equals(key)
-                || AppThemePalette.PREF_COLOR_SCHEME.equals(key)) {
-            loadStyleFromPrefs(getContext());
-            invalidate();
-            notifyFrostedListeners();
-        }
-    }
-
-    private void stepSimulation(float dt) {
-        if (dt <= 0f) {
-            return;
-        }
-        waveElapsedSec += dt;
-
-        // Step metaballs with soft boundary bounce
-        for (Blob b : blobs) {
-            b.x += b.vx * dt;
-            b.y += b.vy * dt;
-            if (b.x < 0.08f) {
-                b.x = 0.08f;
-                b.vx = Math.abs(b.vx);
-            } else if (b.x > 0.92f) {
-                b.x = 0.92f;
-                b.vx = -Math.abs(b.vx);
-            }
-            if (b.y < 0.08f) {
-                b.y = 0.08f;
-                b.vy = Math.abs(b.vy);
-            } else if (b.y > 0.92f) {
-                b.y = 0.92f;
-                b.vy = -Math.abs(b.vy);
-            }
-        }
-
-        // Step plexus nodes continuously when plexus is visible
-        if (!forceWaves && style != BackdropStyle.WAVES) {
-            int activeNodes = getActiveNodeCount();
-            for (int i = 0; i < activeNodes; i++) {
-                Node n = nodes[i];
-                n.x += n.vx * dt;
-                n.y += n.vy * dt;
-                if (n.x < 0f) {
-                    n.x = 0f;
-                    n.vx = Math.abs(n.vx);
-                } else if (n.x > 1f) {
-                    n.x = 1f;
-                    n.vx = -Math.abs(n.vx);
-                }
-                if (n.y < 0f) {
-                    n.y = 0f;
-                    n.vy = Math.abs(n.vy);
-                } else if (n.y > 1f) {
-                    n.y = 1f;
-                    n.vy = -Math.abs(n.vy);
-                }
-            }
-        }
-        fieldDirty = true;
-    }
-
-    private int getActiveNodeCount() {
-        int base;
-        switch (style) {
-            case BOLD_PLEXUS:
-                base = 38;
-                break;
-            case PLEXUS_HERO:
-                base = 34;
-                break;
-            case BALANCED:
-            default:
-                base = 26;
-                break;
-        }
-        if (plexusDensity == PlexusDensity.ULTRA) {
-            return Math.min(MAX_NODES, Math.round(base * 2.1f));
-        } else if (plexusDensity == PlexusDensity.HIGH) {
-            return Math.min(MAX_NODES, Math.round(base * 1.5f));
-        }
-        return base;
-    }
-
-    private void renderMetaballField() {
-        float blobStrength;
-        float blobSoftness;
-        if (forceWaves || style == BackdropStyle.WAVES) {
-            blobStrength = 0.42f;
-            blobSoftness = 1.20f;
-        } else if (style == BackdropStyle.PLEXUS_HERO) {
-            blobStrength = 0.42f;
-            blobSoftness = 0.85f;
-        } else if (style == BackdropStyle.BOLD_PLEXUS) {
-            blobStrength = 0.65f;
-            blobSoftness = 1.05f;
-        } else {
-            blobStrength = 1.0f;
-            blobSoftness = 1.0f;
-        }
-
-        float eps;
-        float threshLow;
-        float threshSpan;
-        float lowSlope;
-        if (sharpness == MetaballSharpness.SHARP && !forceWaves && style != BackdropStyle.WAVES) {
-            eps = 0.0006f;
-            threshLow = 0.78f;
-            threshSpan = 0.24f;
-            lowSlope = 0.04f;
-        } else if (sharpness == MetaballSharpness.MEDIUM && !forceWaves && style != BackdropStyle.WAVES) {
-            eps = 0.0012f;
-            threshLow = 0.56f;
-            threshSpan = 0.48f;
-            lowSlope = 0.12f;
-        } else {
-            eps = 0.0025f;
-            threshLow = 0.35f;
-            threshSpan = 0.95f;
-            lowSlope = 0.25f;
-        }
-
-        final float aspect = (float) getHeight() / Math.max(1f, (float) getWidth());
-        final int baseR = Color.red(palette.background);
-        final int baseG = Color.green(palette.background);
-        final int baseB = Color.blue(palette.background);
-
-        for (int py = 0; py < FIELD_H; py++) {
-            float ny = (py + 0.5f) / FIELD_H;
-            int row = py * FIELD_W;
-            for (int px = 0; px < FIELD_W; px++) {
-                float nx = (px + 0.5f) / FIELD_W;
-
-                float fieldSum = 0f;
-                float rAcc = 0f, gAcc = 0f, bAcc = 0f;
-
-                for (int i = 0; i < BLOB_COUNT; i++) {
-                    Blob b = blobs[i];
-                    float dx = nx - b.x;
-                    float dy = (ny - b.y) * Math.min(2.2f, Math.max(0.5f, aspect));
-                    float r = b.radius * blobSoftness;
-                    float distSq = dx * dx + dy * dy + eps;
-                    float contrib = (r * r) / distSq;
-                    fieldSum += contrib;
-                    rAcc += b.r * contrib;
-                    gAcc += b.g * contrib;
-                    bAcc += b.b * contrib;
-                }
-
-                // Smooth metaball threshold: merges blobs cleanly when fieldSum crosses ~1.0
-                float intensity;
-                if (fieldSum <= threshLow) {
-                    intensity = fieldSum * lowSlope;
-                } else {
-                    float baseInt = threshLow * lowSlope;
-                    float t = Math.min(1f, (fieldSum - threshLow) / threshSpan);
-                    // Smoothstep for organic metaball edge
-                    intensity = baseInt + (t * t * (3f - 2f * t)) * (1f - baseInt);
-                }
-                intensity = Math.min(1f, intensity * blobStrength);
-
-                float invSum = fieldSum > 0.0001f ? (1f / fieldSum) : 0f;
-                float cr = rAcc * invSum;
-                float cg = gAcc * invSum;
-                float cb = bAcc * invSum;
-
-                int outR = Math.min(255, (int) (baseR + (cr - baseR) * intensity));
-                int outG = Math.min(255, (int) (baseG + (cg - baseG) * intensity));
-                int outB = Math.min(255, (int) (baseB + (cb - baseB) * intensity));
-                rawPix[row + px] = 0xFF000000 | (outR << 16) | (outG << 8) | outB;
-            }
-        }
-        rawField.setPixels(rawPix, 0, FIELD_W, 0, 0, FIELD_W, FIELD_H);
-    }
-
-    private void updateBlurredField() {
-        if (!fieldDirty) {
-            return;
-        }
-        fieldDirty = false;
-        renderMetaballField();
-
-        // Box blur on 64x128 buffer -> silky frosted diffusion for FrostedCardDrawable and soft/medium backdrops
-        System.arraycopy(rawPix, 0, blurPix, 0, rawPix.length);
-        int radius = (sharpness == MetaballSharpness.MEDIUM) ? 2 : 5;
-        int passes = (sharpness == MetaballSharpness.MEDIUM) ? 1 : 2;
-        int div = radius * 2 + 1;
-        for (int pass = 0; pass < passes; pass++) {
-            for (int y = 0; y < FIELD_H; y++) {
-                int row = y * FIELD_W;
-                for (int x = 0; x < FIELD_W; x++) {
-                    int r = 0, g = 0, b = 0;
-                    for (int k = -radius; k <= radius; k++) {
-                        int sxIdx = Math.max(0, Math.min(FIELD_W - 1, x + k));
-                        int c = blurPix[row + sxIdx];
-                        r += (c >> 16) & 0xFF;
-                        g += (c >> 8) & 0xFF;
-                        b += c & 0xFF;
-                    }
-                    blurTmp[row + x] = 0xFF000000 | ((r / div) << 16) | ((g / div) << 8) | (b / div);
-                }
-            }
-            for (int x = 0; x < FIELD_W; x++) {
-                for (int y = 0; y < FIELD_H; y++) {
-                    int r = 0, g = 0, b = 0;
-                    for (int k = -radius; k <= radius; k++) {
-                        int syIdx = Math.max(0, Math.min(FIELD_H - 1, y + k));
-                        int c = blurTmp[syIdx * FIELD_W + x];
-                        r += (c >> 16) & 0xFF;
-                        g += (c >> 8) & 0xFF;
-                        b += c & 0xFF;
-                    }
-                    blurPix[y * FIELD_W + x] = 0xFF000000 | ((r / div) << 16) | ((g / div) << 8) | (b / div);
-                }
-            }
-        }
-        blurredField.setPixels(blurPix, 0, FIELD_W, 0, 0, FIELD_W, FIELD_H);
+    public void setForceWaves(boolean force) {
+        // Unified PS Portal particle void is now used everywhere.
     }
 
     public Bitmap getBlurredFieldBitmap() {
-        updateBlurredField();
-        return blurredField;
-    }
-
-    @Override
-    protected void onDraw(Canvas canvas) {
-        super.onDraw(canvas);
-        int w = getWidth();
-        int h = getHeight();
-        if (w <= 0 || h <= 0) {
-            return;
-        }
-
-        if (fieldDirty) {
-            updateBlurredField();
-        }
-
-        fullDst.set(0f, 0f, w, h);
-        boolean useSharp = sharpness == MetaballSharpness.SHARP && !forceWaves && style != BackdropStyle.WAVES;
-        canvas.drawBitmap(useSharp ? rawField : blurredField, null, fullDst, bitmapPaint);
-
-        if (forceWaves || style == BackdropStyle.WAVES) {
-            drawWaveRibbons(canvas, w, h);
-        } else {
-            // Draw real-time 2D plexus network on top
-            drawPlexusNetwork(canvas, w, h);
-        }
-    }
-
-    private void drawWaveRibbons(Canvas canvas, int w, int h) {
-        final float density = getResources().getDisplayMetrics().density;
-        final float baseY = 0.5f;
-        final float step = Math.max(4f, w / 120.0f);
-        final float time = waveElapsedSec;
-        final int waveBaseColor = palette.accentLight;
-        final int waveAltColor = palette.highlight;
-
-        // Keep wave ribbons proportional and fluid in portrait (where h >> w)
-        // instead of squishing horizontal cycles and over-stretching vertical amplitude.
-        final boolean isPortrait = h > w;
-        final float waveScaleH = isPortrait ? Math.min(h * 0.72f, w * 1.12f) : h;
-        final float cycleScale = isPortrait ? 0.58f : 1.0f;
-
-        waveStrokePaint.setStrokeWidth(2.0f * density);
-
-        for (int rIdx = 0; rIdx < RIBBON_COUNT; rIdx++) {
-            Ribbon ribbon = ribbons[rIdx];
-            int color = (rIdx % 2 == 0) ? waveBaseColor : waveAltColor;
-            waveFillPaint.setColor(AppThemePalette.withAlpha(color, ribbon.fillAlpha));
-            waveStrokePaint.setColor(AppThemePalette.withAlpha(color, ribbon.strokeAlpha));
-
-            wavePath.reset();
-            boolean first = true;
-            for (float x = 0f; x <= w + step; x += step) {
-                float nx = x / w;
-                float nodeDist = Math.abs(nx - 0.5f) * 2.0f;
-                float convergence = (float) Math.pow(nodeDist, 1.5) * 0.85f + 0.15f;
-
-                float y = h * baseY;
-                for (RibbonComponent comp : ribbon.components) {
-                    y += (float) Math.sin(nx * Math.PI * 2.0 * (comp.cycle * cycleScale) - time * comp.speed + comp.phase)
-                            * (waveScaleH * comp.amp * convergence);
-                }
-
-                if (first) {
-                    wavePath.moveTo(x, y);
-                    first = false;
-                } else {
-                    wavePath.lineTo(x, y);
-                }
-            }
-
-            for (float x = w + step; x >= -step; x -= step) {
-                float nx = x / w;
-                float nodeDist = Math.abs(nx - 0.5f) * 2.0f;
-                float convergence = (float) Math.pow(nodeDist, 1.5) * 0.85f + 0.15f;
-
-                float dynamicThickness = ribbon.thickness
-                        + (float) Math.sin(nx * Math.PI * 2.0 * cycleScale - time * 0.9f) * (ribbon.thickness * 0.2f);
-                float y = h * baseY + (waveScaleH * dynamicThickness);
-
-                for (RibbonComponent comp : ribbon.components) {
-                    y += (float) Math.sin(nx * Math.PI * 2.0 * (comp.cycle * cycleScale) - time * comp.speed
-                            + comp.phase + comp.phaseOffset)
-                            * (waveScaleH * comp.amp * convergence);
-                }
-                wavePath.lineTo(x, y);
-            }
-
-            wavePath.close();
-            canvas.drawPath(wavePath, waveFillPaint);
-            canvas.drawPath(wavePath, waveStrokePaint);
-        }
-    }
-
-    private void drawPlexusNetwork(Canvas canvas, int w, int h) {
-        int activeNodes = getActiveNodeCount();
-        float minDim = Math.min(w, h);
-        float maxDist = minDim * (style == BackdropStyle.BALANCED ? 0.28f : 0.33f);
-        float maxDistSq = maxDist * maxDist;
-        float density = getResources().getDisplayMetrics().density;
-
-        int maxLineAlpha;
-        int nodeAlpha;
-        float lineWidthPx;
-        if (style == BackdropStyle.BOLD_PLEXUS) {
-            maxLineAlpha = 165;
-            nodeAlpha = 225;
-            lineWidthPx = 1.4f * density;
-        } else if (style == BackdropStyle.PLEXUS_HERO) {
-            maxLineAlpha = 195;
-            nodeAlpha = 240;
-            lineWidthPx = 1.5f * density;
-        } else {
-            maxLineAlpha = 95;
-            nodeAlpha = 160;
-            lineWidthPx = 1.1f * density;
-        }
-        linePaint.setStrokeWidth(lineWidthPx);
-
-        int lineRgb = palette.highlight & 0x00FFFFFF;
-        int glowRgb = palette.accent & 0x00FFFFFF;
-        int coreRgb = blendToLight(palette.accentLight) & 0x00FFFFFF;
-
-        for (int i = 0; i < activeNodes; i++) {
-            float x1 = nodes[i].x * w;
-            float y1 = nodes[i].y * h;
-            for (int j = i + 1; j < activeNodes; j++) {
-                float x2 = nodes[j].x * w;
-                float y2 = nodes[j].y * h;
-                float dx = x2 - x1;
-                float dy = y2 - y1;
-                float distSq = dx * dx + dy * dy;
-                if (distSq < maxDistSq) {
-                    float t = 1f - (float) Math.sqrt(distSq) / maxDist;
-                    int alpha = Math.max(4, Math.round(maxLineAlpha * t * t));
-                    linePaint.setColor((alpha << 24) | lineRgb);
-                    canvas.drawLine(x1, y1, x2, y2, linePaint);
-                }
-            }
-        }
-
-        for (int i = 0; i < activeNodes; i++) {
-            float x = nodes[i].x * w;
-            float y = nodes[i].y * h;
-            float r = nodes[i].sizeDp * density;
-            nodeGlowPaint.setColor(((nodeAlpha / 4) << 24) | glowRgb);
-            canvas.drawCircle(x, y, r * 2.4f, nodeGlowPaint);
-            nodePaint.setColor((nodeAlpha << 24) | coreRgb);
-            canvas.drawCircle(x, y, r, nodePaint);
-        }
-    }
-
-    private static int blendToLight(int color) {
-        int r = (Color.red(color) * 2 + 255 * 3) / 5;
-        int g = (Color.green(color) * 2 + 255 * 3) / 5;
-        int b = (Color.blue(color) * 2 + 255 * 3) / 5;
-        return 0xFF000000 | (r << 16) | (g << 8) | b;
+        return blurredBitmap;
     }
 
     public void registerFrostedDrawable(Drawable drawable) {
@@ -663,10 +199,19 @@ public class FlowingAuroraView extends View implements SharedPreferences.OnShare
         frostedListeners.add(new WeakReference<>(drawable));
     }
 
-    private void notifyFrostedListeners() {
+    public void unregisterFrostedDrawable(Drawable drawable) {
         Iterator<WeakReference<Drawable>> it = frostedListeners.iterator();
         while (it.hasNext()) {
             WeakReference<Drawable> ref = it.next();
+            Drawable d = ref.get();
+            if (d == null || d == drawable) {
+                frostedListeners.remove(ref);
+            }
+        }
+    }
+
+    private void notifyFrostedListeners() {
+        for (WeakReference<Drawable> ref : frostedListeners) {
             Drawable d = ref.get();
             if (d == null) {
                 frostedListeners.remove(ref);
@@ -676,72 +221,181 @@ public class FlowingAuroraView extends View implements SharedPreferences.OnShare
         }
     }
 
-    private void startFlow() {
-        lastTickMs = SystemClock.uptimeMillis();
-        if (ticker == null) {
-            ticker = ValueAnimator.ofFloat(0f, 1f);
-            ticker.setDuration(1000L);
-            ticker.setRepeatCount(ValueAnimator.INFINITE);
-            ticker.setInterpolator(new LinearInterpolator());
-            ticker.addUpdateListener(anim -> {
-                long now = SystemClock.uptimeMillis();
-                float dt = Math.min(0.05f, Math.max(0f, (now - lastTickMs) / 1000f));
-                lastTickMs = now;
-                stepSimulation(dt);
-                invalidate();
-                notifyFrostedListeners();
-            });
-        }
-        if (!ticker.isStarted()) {
-            ticker.start();
-        } else if (ticker.isPaused()) {
-            ticker.resume();
-        }
-    }
-
-    private void pauseFlow() {
-        if (ticker != null && ticker.isRunning()) {
-            ticker.pause();
+    @Override
+    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+        super.onSizeChanged(w, h, oldw, oldh);
+        cachedW = w;
+        cachedH = h;
+        if (w > 0 && h > 0) {
+            float maxDim = (float) Math.hypot(w * 0.5f, h * 0.5f);
+            bgPaint.setShader(new RadialGradient(
+                    w * 0.5f, h * 0.48f, Math.max(1f, maxDim),
+                    new int[]{ COLOR_CENTER_GLOW, COLOR_MID_VOID, COLOR_EDGE_VOID },
+                    new float[]{ 0f, 0.52f, 1f },
+                    Shader.TileMode.CLAMP));
         }
     }
 
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
-        PreferenceManager.getDefaultSharedPreferences(getContext())
-                .registerOnSharedPreferenceChangeListener(this);
-        loadStyleFromPrefs(getContext());
-        if (getWindowVisibility() == VISIBLE) {
-            startFlow();
+        animating = true;
+        if (startTimeMs == 0L) {
+            startTimeMs = SystemClock.uptimeMillis();
         }
-    }
-
-    @Override
-    protected void onWindowVisibilityChanged(int visibility) {
-        super.onWindowVisibilityChanged(visibility);
-        if (visibility == VISIBLE && isAttachedToWindow()) {
-            loadStyleFromPrefs(getContext());
-            startFlow();
-        } else {
-            pauseFlow();
-        }
+        postInvalidateOnAnimation();
     }
 
     @Override
     protected void onDetachedFromWindow() {
-        PreferenceManager.getDefaultSharedPreferences(getContext())
-                .unregisterOnSharedPreferenceChangeListener(this);
-        if (ticker != null) {
-            ticker.cancel();
-            ticker = null;
-        }
+        animating = false;
         frostedListeners.clear();
         super.onDetachedFromWindow();
     }
 
+    @Override
+    protected void onVisibilityChanged(@NonNull View changedView, int visibility) {
+        super.onVisibilityChanged(changedView, visibility);
+        animating = (visibility == VISIBLE) && isAttachedToWindow();
+        if (animating) {
+            postInvalidateOnAnimation();
+        }
+    }
+
+    @Override
+    protected void onDraw(@NonNull Canvas canvas) {
+        int w = getWidth();
+        int h = getHeight();
+        if (w <= 0 || h <= 0) {
+            return;
+        }
+
+        long nowMs = SystemClock.uptimeMillis();
+        float timeSec = (nowMs - startTimeMs) * 0.001f;
+
+        // 1. Deep midnight radial void matching the PS Portal window interior
+        canvas.drawRect(0f, 0f, w, h, bgPaint);
+
+        // 2. 3 parallax rotating/drifting/twinkling bokeh layers
+        drawParticlesOnCanvas(canvas, w, h, timeSec, 1.0f);
+
+        // 3. Refresh blurred buffer for live frosted glass cards at ~30 FPS
+        if (nowMs - lastBlurMs >= BLUR_INTERVAL_MS) {
+            lastBlurMs = nowMs;
+            renderBlurField(timeSec);
+            notifyFrostedListeners();
+        }
+
+        if (animating) {
+            postInvalidateOnAnimation();
+        }
+    }
+
+    private void drawParticlesOnCanvas(Canvas canvas, float w, float h, float timeSec, float radiusBoost) {
+        float cx = w * 0.5f;
+        float cy = h * 0.5f;
+        float span = (float) Math.hypot(w, h) * 0.58f;
+        float minDim = Math.min(w, h);
+
+        float[] cosL = new float[3];
+        float[] sinL = new float[3];
+        float[] driftLayerX = new float[3];
+        float[] driftLayerY = new float[3];
+        for (int l = 0; l < 3; l++) {
+            float angle = timeSec * LAYER_ROT_SPEED[l] + l * 1.7f;
+            cosL[l] = (float) Math.cos(angle);
+            sinL[l] = (float) Math.sin(angle);
+            driftLayerX[l] = (float) Math.sin(timeSec * 0.15f + l) * 0.035f;
+            driftLayerY[l] = (float) Math.cos(timeSec * 0.12f + l) * 0.035f;
+        }
+
+        for (int i = 0; i < particles.length; i++) {
+            BokehParticle p = particles[i];
+            int l = p.layer;
+
+            float lx = p.baseX + (float) Math.sin(timeSec * p.driftFreqX + p.driftPhaseX) * p.driftAmpX + driftLayerX[l];
+            float ly = p.baseY + (float) Math.cos(timeSec * p.driftFreqY + p.driftPhaseY) * p.driftAmpY + driftLayerY[l];
+
+            float rx = lx * cosL[l] - ly * sinL[l];
+            float ry = lx * sinL[l] + ly * cosL[l];
+
+            float px = cx + rx * span;
+            float py = cy + ry * span;
+            float r = p.radiusFrac * minDim * radiusBoost;
+
+            if (px + r < 0f || px - r > w || py + r < 0f || py - r > h) {
+                continue;
+            }
+
+            float twinkle = 0.55f + 0.45f * (float) Math.sin(timeSec * p.twinkleFreq + p.twinklePhase);
+            int alpha = Math.max(0, Math.min(255, Math.round(twinkle * LAYER_OPACITY[l] * 255f)));
+            if (alpha <= 2) {
+                continue;
+            }
+
+            spritePaint.setColorFilter(p.tintFilter);
+            spritePaint.setAlpha(alpha);
+            drawRect.set(px - r, py - r, px + r, py + r);
+            canvas.drawBitmap(bokehSprite, null, drawRect, spritePaint);
+        }
+    }
+
+    private void renderBlurField(float timeSec) {
+        fieldCanvas.drawRect(0f, 0f, FIELD_W, FIELD_H, fieldBgPaint);
+        drawParticlesOnCanvas(fieldCanvas, FIELD_W, FIELD_H, timeSec, 1.35f);
+
+        fieldBitmap.getPixels(blurPxA, 0, FIELD_W, 0, 0, FIELD_W, FIELD_H);
+        boxBlurHorizontal(blurPxA, blurPxB, FIELD_W, FIELD_H, BLUR_RADIUS);
+        boxBlurVertical(blurPxB, blurPxA, FIELD_W, FIELD_H, BLUR_RADIUS);
+        blurredBitmap.setPixels(blurPxA, 0, FIELD_W, 0, 0, FIELD_W, FIELD_H);
+    }
+
+    private static void boxBlurHorizontal(int[] src, int[] dst, int w, int h, int r) {
+        int div = r * 2 + 1;
+        for (int y = 0; y < h; y++) {
+            int row = y * w;
+            int sr = 0, sg = 0, sb = 0;
+            for (int i = -r; i <= r; i++) {
+                int px = src[row + Math.max(0, Math.min(w - 1, i))];
+                sr += (px >> 16) & 0xFF;
+                sg += (px >> 8) & 0xFF;
+                sb += px & 0xFF;
+            }
+            for (int x = 0; x < w; x++) {
+                dst[row + x] = 0xFF000000 | ((sr / div) << 16) | ((sg / div) << 8) | (sb / div);
+                int outPx = src[row + Math.max(0, x - r)];
+                int inPx = src[row + Math.min(w - 1, x + r + 1)];
+                sr += ((inPx >> 16) & 0xFF) - ((outPx >> 16) & 0xFF);
+                sg += ((inPx >> 8) & 0xFF) - ((outPx >> 8) & 0xFF);
+                sb += (inPx & 0xFF) - (outPx & 0xFF);
+            }
+        }
+    }
+
+    private static void boxBlurVertical(int[] src, int[] dst, int w, int h, int r) {
+        int div = r * 2 + 1;
+        for (int x = 0; x < w; x++) {
+            int sr = 0, sg = 0, sb = 0;
+            for (int i = -r; i <= r; i++) {
+                int px = src[Math.max(0, Math.min(h - 1, i)) * w + x];
+                sr += (px >> 16) & 0xFF;
+                sg += (px >> 8) & 0xFF;
+                sb += px & 0xFF;
+            }
+            for (int y = 0; y < h; y++) {
+                dst[y * w + x] = 0xFF000000 | ((sr / div) << 16) | ((sg / div) << 8) | (sb / div);
+                int outPx = src[Math.max(0, y - r) * w + x];
+                int inPx = src[Math.min(h - 1, y + r + 1) * w + x];
+                sr += ((inPx >> 16) & 0xFF) - ((outPx >> 16) & 0xFF);
+                sg += ((inPx >> 8) & 0xFF) - ((outPx >> 8) & 0xFF);
+                sb += (inPx & 0xFF) - (outPx & 0xFF);
+            }
+        }
+    }
+
     /**
-     * Drawable that renders a real-time frosted glass slice of the underlying FlowingAuroraView
-     * at the target View's exact screen coordinates, with milky frost tint and specular rim.
+     * Drawable that renders a real-time dark frosted glass slice of the underlying
+     * {@link FlowingAuroraView} at the target View's exact screen coordinates.
      */
     public static class FrostedCardDrawable extends Drawable {
         private final WeakReference<View> hostViewRef;
@@ -770,7 +424,7 @@ public class FlowingAuroraView extends View implements SharedPreferences.OnShare
             this.tintPaint.setColor(frostTintColor);
             this.strokePaint.setStyle(Paint.Style.STROKE);
             this.strokePaint.setStrokeWidth(strokeWidthPx);
-            this.strokePaint.setColor(0x52FFFFFF);
+            this.strokePaint.setColor(0x42FFFFFF);
             auroraView.registerFrostedDrawable(this);
         }
 
@@ -795,11 +449,11 @@ public class FlowingAuroraView extends View implements SharedPreferences.OnShare
                 isHighlighted = active;
                 FlowingAuroraView aurora = auroraRef.get();
                 if (active && aurora != null) {
-                    tintPaint.setColor(AppThemePalette.withAlpha(aurora.palette.accent, 0.22f));
+                    tintPaint.setColor(AppThemePalette.withAlpha(aurora.palette.accent, 0.24f));
                     strokePaint.setColor(AppThemePalette.withAlpha(aurora.palette.accentLight, 0.90f));
                 } else {
-                    tintPaint.setColor(active ? 0x3DFFFFFF : frostTintColor);
-                    strokePaint.setColor(active ? 0xB3FFFFFF : 0x52FFFFFF);
+                    tintPaint.setColor(active ? 0x681A2438 : frostTintColor);
+                    strokePaint.setColor(active ? 0x9958A6FF : 0x42FFFFFF);
                 }
                 invalidateSelf();
                 return true;
@@ -853,20 +507,20 @@ public class FlowingAuroraView extends View implements SharedPreferences.OnShare
                         Math.min(FIELD_W, Math.round((relX + bounds.width()) * sx)),
                         Math.min(FIELD_H, Math.round((relY + bounds.height()) * sy)));
                 if (!srcRect.isEmpty()) {
-                    canvas.drawBitmap(aurora.getBlurredFieldBitmap(), srcRect, rectF, bitmapPaint);
+                    canvas.drawBitmap(aurora.blurredBitmap, srcRect, rectF, bitmapPaint);
                 }
             }
 
+            // Dark midnight glass tint overlay
             canvas.drawRect(rectF, tintPaint);
             canvas.restoreToCount(saveCount);
 
-            if (cornerMode != CornerMode.MIDDLE) {
-                float halfStroke = strokePaint.getStrokeWidth() * 0.5f;
-                rectF.inset(halfStroke, halfStroke);
-                clipPath.reset();
-                clipPath.addRoundRect(rectF, radii, Path.Direction.CW);
-                canvas.drawPath(clipPath, strokePaint);
-            }
+            // Crisp specular rim
+            float halfStroke = strokePaint.getStrokeWidth() * 0.5f;
+            rectF.inset(halfStroke, halfStroke);
+            clipPath.reset();
+            clipPath.addRoundRect(rectF, radii, Path.Direction.CW);
+            canvas.drawPath(clipPath, strokePaint);
         }
 
         @Override
@@ -874,11 +528,13 @@ public class FlowingAuroraView extends View implements SharedPreferences.OnShare
             bitmapPaint.setAlpha(alpha);
             tintPaint.setAlpha(alpha);
             strokePaint.setAlpha(alpha);
+            invalidateSelf();
         }
 
         @Override
         public void setColorFilter(@Nullable ColorFilter colorFilter) {
             bitmapPaint.setColorFilter(colorFilter);
+            invalidateSelf();
         }
 
         @Override

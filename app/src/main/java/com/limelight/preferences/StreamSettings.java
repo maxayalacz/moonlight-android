@@ -454,7 +454,7 @@ public class StreamSettings extends AppCompatActivity {
                         com.limelight.ui.FlowingAuroraView.CornerMode mode = hasChildren
                                 ? com.limelight.ui.FlowingAuroraView.CornerMode.TOP
                                 : com.limelight.ui.FlowingAuroraView.CornerMode.ALL;
-                        if (!UiHelper.applyFrostedCardBackground(itemView, mode, 28f, 0x26FFFFFF)) {
+                        if (!UiHelper.applyFrostedCardBackground(itemView, mode, 28f, 0x5C121826)) {
                             itemView.setBackgroundResource(hasChildren
                                     ? R.drawable.bg_oneui_glass_card_top
                                     : R.drawable.bg_oneui_squircle_card);
@@ -471,7 +471,7 @@ public class StreamSettings extends AppCompatActivity {
                         com.limelight.ui.FlowingAuroraView.CornerMode mode = isLastInCard
                                 ? com.limelight.ui.FlowingAuroraView.CornerMode.BOTTOM
                                 : com.limelight.ui.FlowingAuroraView.CornerMode.MIDDLE;
-                        if (!UiHelper.applyFrostedCardBackground(itemView, mode, 28f, 0x22FFFFFF)) {
+                        if (!UiHelper.applyFrostedCardBackground(itemView, mode, 28f, 0x52121826)) {
                             itemView.setBackgroundResource(isLastInCard
                                     ? R.drawable.bg_oneui_glass_card_bottom
                                     : R.drawable.bg_oneui_glass_card_middle);
@@ -1014,37 +1014,6 @@ public class StreamSettings extends AppCompatActivity {
                     return true;
                 }
             });
-
-            Preference colorSchemePref = findPreference(com.limelight.ui.AppThemePalette.PREF_COLOR_SCHEME);
-            if (colorSchemePref instanceof ListPreference) {
-                colorSchemePref.setSummaryProvider(ListPreference.SimpleSummaryProvider.getInstance());
-                colorSchemePref.setOnPreferenceChangeListener((preference, newValue) -> {
-                    final View root = getView();
-                    if (root != null) {
-                        root.post(() -> {
-                            UiHelper.refreshBackdrop(getActivity());
-                            androidx.recyclerview.widget.RecyclerView rv = getListView();
-                            if (rv != null && rv.getAdapter() != null) {
-                                rv.getAdapter().notifyDataSetChanged();
-                            }
-                        });
-                    }
-                    return true;
-                });
-            }
-            for (String key : new String[]{"list_backdrop_style", "list_metaball_sharpness", "list_plexus_density", "list_connecting_animation_style"}) {
-                Preference uiListPref = findPreference(key);
-                if (uiListPref instanceof ListPreference) {
-                    uiListPref.setSummaryProvider(ListPreference.SimpleSummaryProvider.getInstance());
-                    uiListPref.setOnPreferenceChangeListener((preference, newValue) -> {
-                        final View root = getView();
-                        if (root != null) {
-                            root.post(() -> UiHelper.refreshBackdrop(getActivity()));
-                        }
-                        return true;
-                    });
-                }
-            }
 
             Preference _pref;
             _pref = findPreference("import_keyboard_file");

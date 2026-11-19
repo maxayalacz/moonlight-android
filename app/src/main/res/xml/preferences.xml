@@ -535,51 +535,11 @@
         android:title="@string/category_ui_settings"
         app:initialExpandedChildrenCount="9"
         app:iconSpaceReserved="false">
-        <ListPreference
-            android:defaultValue="midnight"
-            android:entries="@array/color_scheme_names"
-            android:entryValues="@array/color_scheme_values"
-            android:key="list_color_scheme"
-            android:summary="@string/summary_color_scheme"
-            android:title="@string/title_color_scheme"
-            app:iconSpaceReserved="false" />
         <SwitchPreferenceCompat
             android:defaultValue="true"
             android:key="checkbox_focus_mode"
             android:summary="@string/summary_focus_mode"
             android:title="@string/title_focus_mode"
-            app:iconSpaceReserved="false" />
-        <ListPreference
-            android:defaultValue="balanced"
-            android:entries="@array/backdrop_style_names"
-            android:entryValues="@array/backdrop_style_values"
-            android:key="list_backdrop_style"
-            android:summary="@string/summary_backdrop_style"
-            android:title="@string/title_backdrop_style"
-            app:iconSpaceReserved="false" />
-        <ListPreference
-            android:defaultValue="soft"
-            android:entries="@array/metaball_sharpness_names"
-            android:entryValues="@array/metaball_sharpness_values"
-            android:key="list_metaball_sharpness"
-            android:summary="@string/summary_metaball_sharpness"
-            android:title="@string/title_metaball_sharpness"
-            app:iconSpaceReserved="false" />
-        <ListPreference
-            android:defaultValue="normal"
-            android:entries="@array/plexus_density_names"
-            android:entryValues="@array/plexus_density_values"
-            android:key="list_plexus_density"
-            android:summary="@string/summary_plexus_density"
-            android:title="@string/title_plexus_density"
-            app:iconSpaceReserved="false" />
-        <ListPreference
-            android:defaultValue="fullscreen"
-            android:entries="@array/connecting_animation_style_names"
-            android:entryValues="@array/connecting_animation_style_values"
-            android:key="list_connecting_animation_style"
-            android:summary="@string/summary_connecting_animation_style"
-            android:title="@string/title_connecting_animation_style"
             app:iconSpaceReserved="false" />
         <SwitchPreferenceCompat
             android:defaultValue="false"
@@ -695,6 +655,78 @@
             android:summary="@string/summary_checkbox_enable_pip"
             android:title="@string/title_checkbox_enable_pip"
             app:iconSpaceReserved="false" />
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:key="category_portal_animation"
+        android:title="@string/category_portal_animation"
+        app:iconSpaceReserved="false">
+        <com.limelight.preferences.SeekBarPreference
+            android:defaultValue="600"
+            android:dialogMessage="@string/summary_portal_ready_ms"
+            android:key="seekbar_portal_ready_ms"
+            android:max="2000"
+            android:summary="@string/summary_portal_ready_ms"
+            android:text=" ms"
+            android:title="@string/title_portal_ready_ms"
+            app:iconSpaceReserved="false"
+            seekbar:min="100"
+            seekbar:step="50" />
+        <com.limelight.preferences.SeekBarPreference
+            android:defaultValue="800"
+            android:dialogMessage="@string/summary_portal_preview_fade_ms"
+            android:key="seekbar_portal_preview_fade_ms"
+            android:max="2500"
+            android:summary="@string/summary_portal_preview_fade_ms"
+            android:text=" ms"
+            android:title="@string/title_portal_preview_fade_ms"
+            app:iconSpaceReserved="false"
+            seekbar:min="100"
+            seekbar:step="50" />
+        <com.limelight.preferences.SeekBarPreference
+            android:defaultValue="1800"
+            android:dialogMessage="@string/summary_portal_preview_hold_ms"
+            android:key="seekbar_portal_preview_hold_ms"
+            android:max="4000"
+            android:summary="@string/summary_portal_preview_hold_ms"
+            android:text=" ms"
+            android:title="@string/title_portal_preview_hold_ms"
+            app:iconSpaceReserved="false"
+            seekbar:min="0"
+            seekbar:step="100" />
+        <com.limelight.preferences.SeekBarPreference
+            android:defaultValue="1100"
+            android:dialogMessage="@string/summary_portal_expand_ms"
+            android:key="seekbar_portal_expand_ms"
+            android:max="3000"
+            android:summary="@string/summary_portal_expand_ms"
+            android:text=" ms"
+            android:title="@string/title_portal_expand_ms"
+            app:iconSpaceReserved="false"
+            seekbar:min="200"
+            seekbar:step="50" />
+        <com.limelight.preferences.SeekBarPreference
+            android:defaultValue="35"
+            android:dialogMessage="@string/summary_portal_swirl_speed"
+            android:key="seekbar_portal_swirl_speed"
+            android:max="150"
+            android:summary="@string/summary_portal_swirl_speed"
+            android:text="%"
+            android:title="@string/title_portal_swirl_speed"
+            app:iconSpaceReserved="false"
+            seekbar:min="5"
+            seekbar:step="5" />
+        <com.limelight.preferences.SeekBarPreference
+            android:defaultValue="1200"
+            android:dialogMessage="@string/summary_portal_disconnect_ms"
+            android:key="seekbar_portal_disconnect_ms"
+            android:max="3000"
+            android:summary="@string/summary_portal_disconnect_ms"
+            android:text=" ms"
+            android:title="@string/title_portal_disconnect_ms"
+            app:iconSpaceReserved="false"
+            seekbar:min="200"
+            seekbar:step="50" />
     </PreferenceCategory>
 
     <PreferenceCategory

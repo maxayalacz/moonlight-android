@@ -228,24 +228,12 @@ public final class AppThemePalette {
 
     @NonNull
     public static AppThemePalette fromKey(String key) {
-        if (key == null) {
-            return MIDNIGHT;
-        }
-        for (AppThemePalette palette : ALL) {
-            if (palette.key.equals(key)) {
-                return palette;
-            }
-        }
-        if ("light".equals(key)) {
-            return SLATE;
-        }
         return MIDNIGHT;
     }
 
     @NonNull
     public static AppThemePalette getCurrent(@NonNull Context context) {
-        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
-        return fromKey(prefs.getString(PREF_COLOR_SCHEME, DEFAULT_THEME_KEY));
+        return MIDNIGHT;
     }
 
     public int getNeonAccent() {

@@ -91,7 +91,6 @@ public class PcView extends AppCompatActivity implements AdapterFragmentCallback
     private View focusModeContainer;
     private RecyclerView focusPagerRecycler;
     private LinearLayout focusPageIndicator;
-    private ImageButton focusModeButton;
     private FocusPcAdapter focusPcAdapter;
     private PagerSnapHelper focusSnapHelper;
     private int currentFocusPage = 0;
@@ -183,7 +182,6 @@ public class PcView extends AppCompatActivity implements AdapterFragmentCallback
         ImageButton settingsButton = findViewById(R.id.settingsButton);
         ImageButton addComputerButton = findViewById(R.id.manuallyAddPc);
         ImageButton helpButton = findViewById(R.id.helpButton);
-        focusModeButton = findViewById(R.id.focusModeButton);
         ExtendedFloatingActionButton profilesButton = findViewById(R.id.profilesButton);
 
         settingsButton.setOnClickListener(new OnClickListener() {
@@ -205,18 +203,6 @@ public class PcView extends AppCompatActivity implements AdapterFragmentCallback
                 HelpLauncher.launchSetupGuide(PcView.this);
             }
         });
-        if (focusModeButton != null) {
-            focusModeButton.setOnClickListener(new OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    SharedPreferences prefs = com.limelight.profiles.ProfilesManager.getInstance()
-                            .getOverlayingSharedPreferences(PcView.this);
-                    boolean next = !prefs.getBoolean(PREF_FOCUS_MODE, true);
-                    prefs.edit().putBoolean(PREF_FOCUS_MODE, next).apply();
-                    updateFocusModeUi();
-                }
-            });
-        }
         profilesButton.setOnClickListener(new OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -494,20 +480,6 @@ public class PcView extends AppCompatActivity implements AdapterFragmentCallback
         boolean focusMode = com.limelight.profiles.ProfilesManager.getInstance()
                 .getOverlayingSharedPreferences(this)
                 .getBoolean(PREF_FOCUS_MODE, true);
-        AppThemePalette palette = AppThemePalette.getCurrent(this);
-
-        View rootView = findViewById(android.R.id.content);
-        if (rootView != null) {
-            View aurora = rootView.findViewWithTag("oneui_flowing_aurora");
-            if (aurora instanceof FlowingAuroraView) {
-                ((FlowingAuroraView) aurora).setForceWaves(focusMode);
-            }
-        }
-
-        if (focusModeButton != null) {
-            focusModeButton.setColorFilter(focusMode ? palette.accentLight : 0xFFFFFFFF);
-            focusModeButton.setAlpha(focusMode ? 1.0f : 0.85f);
-        }
 
         boolean hasComputers = pcGridAdapter != null && pcGridAdapter.getCount() > 0;
         if (focusMode && hasComputers) {
@@ -611,11 +583,6 @@ public class PcView extends AppCompatActivity implements AdapterFragmentCallback
             if ((code == KeyEvent.KEYCODE_BUTTON_X || code == KeyEvent.KEYCODE_MENU)
                     && currentFocusPage < focusPcAdapter.getItemCount()) {
                 openPcContextMenu(currentFocusPage);
-                return true;
-            }
-            if ((code == KeyEvent.KEYCODE_BUTTON_Y)
-                    && focusModeButton != null) {
-                focusModeButton.performClick();
                 return true;
             }
         }

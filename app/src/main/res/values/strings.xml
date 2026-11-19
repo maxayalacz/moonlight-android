@@ -785,7 +785,7 @@
     <string name="conn_cancel_hint">Press Back to cancel</string>
 
     <string name="title_focus_mode">Focus Mode Home Screen</string>
-    <string name="summary_focus_mode">Display a full-screen circular server carousel with wave ribbons on the main screen</string>
+    <string name="summary_focus_mode">Display a full-screen circular server carousel on the main screen</string>
     <string name="focus_mode_toggle_desc">Toggle Focus Mode</string>
     <string name="focus_mode_tap_hint">Tap to connect or pair  •  Hold or ⋮ for options</string>
     <string name="focus_mode_tap_open">Tap to open apps  •  Hold or ⋮ for options</string>
@@ -796,6 +796,20 @@
     <string name="focus_mode_status_offline">Offline</string>
     <string name="focus_mode_status_searching">Searching…</string>
     <string name="focus_mode_status_ingame">In-game</string>
+
+    <string name="category_portal_animation">Portal Animation</string>
+    <string name="title_portal_ready_ms">Ready Transition</string>
+    <string name="summary_portal_ready_ms">Duration of the ring charge-up when the stream handshake completes</string>
+    <string name="title_portal_preview_fade_ms">Stream Fade-In</string>
+    <string name="summary_portal_preview_fade_ms">Duration of the smooth fade-in revealing the live stream inside the portal</string>
+    <string name="title_portal_preview_hold_ms">Peephole Hold</string>
+    <string name="summary_portal_preview_hold_ms">How long the circular stream preview holds before expanding fullscreen</string>
+    <string name="title_portal_expand_ms">Iris Expand</string>
+    <string name="summary_portal_expand_ms">Duration of the circular iris wipe expanding to fullscreen</string>
+    <string name="title_portal_swirl_speed">Rim Swirl Speed</string>
+    <string name="summary_portal_swirl_speed">Rotation speed of the glowing energy swirl around the portal rim</string>
+    <string name="title_portal_disconnect_ms">Disconnect Duration</string>
+    <string name="summary_portal_disconnect_ms">Total duration of the reversed portal closing animation when disconnecting</string>
 
     <string name="title_post_session_metrics">Post-Session Metrics</string>
     <string name="summary_post_session_metrics">Show a telemetry summary dialog with FPS, decode latency, bitrate, and drop charts after ending a stream</string>
