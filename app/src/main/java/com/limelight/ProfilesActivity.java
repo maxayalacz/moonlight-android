@@ -24,6 +24,7 @@ public class ProfilesActivity extends AppCompatActivity implements ProfilesManag
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_profiles);
+        UiHelper.notifyNewRootView(this);
 
         // Setup RecyclerView
         recyclerView = findViewById(R.id.profilesRecyclerView);
@@ -48,8 +49,6 @@ public class ProfilesActivity extends AppCompatActivity implements ProfilesManag
         ProfilesManager.getInstance().addListener(this);
 
         updateUI();
-
-        UiHelper.notifyNewRootView(this);
     }
 
     @Override

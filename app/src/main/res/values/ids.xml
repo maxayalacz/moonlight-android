@@ -2,4 +2,5 @@
 <resources>
     <item name="oneui_dialog_blur_tag" type="id" />
     <item name="oneui_immersive_listener_tag" type="id" />
+    <item name="oneui_enter_anim_running_tag" type="id" />
 </resources>

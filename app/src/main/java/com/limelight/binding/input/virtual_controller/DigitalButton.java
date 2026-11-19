@@ -215,63 +215,29 @@ public class DigitalButton extends VirtualControllerElement {
             boolean drewLiveBlur = blurHelper != null
                     && blurHelper.drawLiveBlurForBounds(canvas, this, clipPath, blurBounds, opacityFactor);
 
-            float tintScale = drewLiveBlur ? 0.42f : 0.72f;
-            android.graphics.LinearGradient glassBaseShader = new android.graphics.LinearGradient(
-                    blurBounds.left, blurBounds.top, blurBounds.right, blurBounds.bottom,
-                    new int[]{
-                            withAlpha(0xFF222B40, (pressed ? 0.56f : tintScale) * opacityFactor),
-                            withAlpha(0xFF101624, (pressed ? 0.52f : tintScale * 0.92f) * opacityFactor),
-                            withAlpha(0xFF0A0E18, (pressed ? 0.60f : tintScale * 1.04f) * opacityFactor)
-                    },
-                    new float[]{0f, 0.52f, 1f},
-                    android.graphics.Shader.TileMode.CLAMP);
-
-            android.graphics.LinearGradient glassSheenShader = new android.graphics.LinearGradient(
-                    blurBounds.left, blurBounds.top, blurBounds.right * 0.85f, blurBounds.bottom * 0.85f,
-                    new int[]{
-                            withAlpha(0xFFFFFFFF, (pressed ? 0.44f : 0.24f) * opacityFactor),
-                            withAlpha(0xFFFFFFFF, (pressed ? 0.22f : 0.06f) * opacityFactor),
-                            withAlpha(0xFFFFFFFF, 0.02f * opacityFactor)
-                    },
-                    new float[]{0f, 0.45f, 1f},
-                    android.graphics.Shader.TileMode.CLAMP);
-
+            float tintAlpha = (pressed ? 0.56f : (drewLiveBlur ? 0.42f : 0.72f)) * opacityFactor;
+            int fillColor = withAlpha(pressed ? 0xFF1A2236 : 0xFF101624, tintAlpha);
             float borderAlpha = (pressed ? 0.95f : 0.60f) * opacityFactor;
 
+            paint.setShader(null);
             if (isCircle) {
                 paint.setStyle(Paint.Style.FILL);
-                paint.setShader(glassBaseShader);
+                paint.setColor(fillColor);
                 canvas.drawCircle(cx, cy, r, paint);
-                paint.setShader(glassSheenShader);
-                canvas.drawCircle(cx, cy, r, paint);
-                paint.setShader(null);
 
                 if (strokeW > 0.1f) {
-                    // Inner frosted specular rim
                     paint.setStyle(Paint.Style.STROKE);
-                    paint.setStrokeWidth(Math.max(1f, strokeW * 0.55f));
-                    paint.setColor(withAlpha(0xFFFFFFFF, 0.22f * opacityFactor));
-                    canvas.drawCircle(cx, cy, Math.max(2f, r - strokeW * 0.8f), paint);
-
                     paint.setStrokeWidth(strokeW);
                     paint.setColor(withAlpha(baseRgb, borderAlpha));
                     canvas.drawCircle(cx, cy, r, paint);
                 }
             } else {
                 paint.setStyle(Paint.Style.FILL);
-                paint.setShader(glassBaseShader);
+                paint.setColor(fillColor);
                 canvas.drawRoundRect(rect, cornerR, cornerR, paint);
-                paint.setShader(glassSheenShader);
-                canvas.drawRoundRect(rect, cornerR, cornerR, paint);
-                paint.setShader(null);
 
                 if (strokeW > 0.1f) {
-                    // Inner frosted specular rim
                     paint.setStyle(Paint.Style.STROKE);
-                    paint.setStrokeWidth(Math.max(1f, strokeW * 0.55f));
-                    paint.setColor(withAlpha(0xFFFFFFFF, 0.22f * opacityFactor));
-                    canvas.drawRoundRect(rect, cornerR, cornerR, paint);
-
                     paint.setStrokeWidth(strokeW);
                     paint.setColor(withAlpha(baseRgb, borderAlpha));
                     canvas.drawRoundRect(rect, cornerR, cornerR, paint);

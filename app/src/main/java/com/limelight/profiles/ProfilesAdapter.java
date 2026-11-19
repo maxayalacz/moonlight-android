@@ -35,6 +35,11 @@ public class ProfilesAdapter extends RecyclerView.Adapter<ProfilesAdapter.Profil
     @Override
     public ProfileViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
         View view = LayoutInflater.from(context).inflate(R.layout.row_profile, parent, false);
+        UiHelper.applyFrostedCardBackground(
+                view,
+                com.limelight.ui.FlowingAuroraView.CornerMode.ALL,
+                24f,
+                0x52121826);
         return new ProfileViewHolder(view);
     }
 
@@ -66,7 +71,12 @@ public class ProfilesAdapter extends RecyclerView.Adapter<ProfilesAdapter.Profil
         holder.editProfile.setOnClickListener(v -> {
             Intent intent = new Intent(context, EditProfileActivity.class);
             intent.putExtra("profileUuid", profile.getUuid().toString());
-            context.startActivity(intent);
+            android.app.Activity activity = UiHelper.findActivity(context);
+            if (activity != null) {
+                UiHelper.startMenuActivityWithDepth(activity, intent);
+            } else {
+                context.startActivity(intent);
+            }
         });
 
         holder.deleteProfile.setOnClickListener(v -> {

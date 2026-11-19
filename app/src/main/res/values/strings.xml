@@ -820,10 +820,12 @@
     <string name="summary_portal_particle_brightness">Brightness of the floating dust motes inside the portal window</string>
     <string name="title_portal_sonar_speed">Sonar Pulse Speed</string>
     <string name="summary_portal_sonar_speed">Speed of the expanding sonar rings while waiting for the host</string>
-    <string name="title_blur_amount">Live Blur Amount</string>
-    <string name="summary_blur_amount">Strength of the live frosted glass blur across menus and on-screen controls</string>
+    <string name="title_blur_amount">Menu Live Blur Amount</string>
+    <string name="summary_blur_amount">Strength of the live frosted glass blur across app menus and cards (0% = clear glass)</string>
+    <string name="title_osc_blur_amount">On-Screen Controls Live Blur</string>
+    <string name="summary_osc_blur_amount">Strength of the live stream blur behind on-screen controller buttons (0% = clear glass)</string>
     <string name="title_osc_outline_thickness">Button Outline Thickness</string>
-    <string name="summary_osc_outline_thickness">Thickness of the glowing border around on-screen controller buttons (0% hides outlines)</string>
+    <string name="summary_osc_outline_thickness">Thickness of the border around on-screen controller buttons (0% hides outlines)</string>
 
     <string name="title_post_session_metrics">Post-Session Metrics</string>
     <string name="summary_post_session_metrics">Show a telemetry summary dialog with FPS, decode latency, bitrate, and drop charts after ending a stream</string>

@@ -833,9 +833,72 @@ public class AppView extends AppCompatActivity implements AdapterFragmentCallbac
 
                 if (updated) {
                     appGridAdapter.notifyDataSetChanged();
+                    if (appGridView != null) {
+                        appGridView.post(AppView.this::centerAppGrid);
+                    }
                 }
             }
         });
+    }
+
+    private android.widget.GridView appGridView;
+    private int lastCenteredCount = -1;
+    private int lastCenteredW = -1;
+    private int lastCenteredH = -1;
+
+    private void centerAppGrid() {
+        if (appGridView == null || appGridAdapter == null) {
+            return;
+        }
+        int gridW = appGridView.getWidth();
+        int gridH = appGridView.getHeight();
+        int count = appGridAdapter.getCount();
+        if (gridW <= 0 || gridH <= 0 || count <= 0) {
+            return;
+        }
+        if (count == lastCenteredCount && gridW == lastCenteredW && gridH == lastCenteredH) {
+            return;
+        }
+        lastCenteredCount = count;
+        lastCenteredW = gridW;
+        lastCenteredH = gridH;
+
+        int colWidth = getResources().getDimensionPixelSize(
+                prefConfig != null && prefConfig.smallIconMode
+                        ? R.dimen.app_grid_small_column_width
+                        : R.dimen.app_grid_column_width);
+        int baseHorizPad = getResources().getDimensionPixelSize(R.dimen.activity_horizontal_margin);
+        int availW = Math.max(colWidth, gridW - baseHorizPad * 2);
+        int maxCols = Math.max(1, availW / colWidth);
+        int effectiveCols;
+        int horizPad;
+        if (count < maxCols) {
+            effectiveCols = count;
+            appGridView.setNumColumns(count);
+            int totalItemsW = count * colWidth;
+            horizPad = Math.max(baseHorizPad, (gridW - totalItemsW) / 2);
+        } else {
+            effectiveCols = maxCols;
+            appGridView.setNumColumns(android.widget.GridView.AUTO_FIT);
+            horizPad = baseHorizPad;
+        }
+
+        int baseTopPad = getResources().getDimensionPixelSize(R.dimen.oneui_reachability_top_margin)
+                + (int) UiHelper.dpToPx(this, 68f);
+        int baseBottomPad = (int) UiHelper.dpToPx(this, 24f);
+        int rows = (int) Math.ceil(count / (double) effectiveCols);
+        int rowHeight = (appGridView.getChildCount() > 0 && appGridView.getChildAt(0).getHeight() > 0)
+                ? appGridView.getChildAt(0).getHeight()
+                : Math.round(colWidth * 1.38f);
+        int vSpacing = appGridView.getVerticalSpacing();
+        int totalContentH = rows * rowHeight + Math.max(0, rows - 1) * vSpacing;
+        int availH = gridH - baseTopPad - baseBottomPad;
+        int topPad = baseTopPad;
+        if (totalContentH < availH) {
+            topPad = baseTopPad + Math.max(0, (availH - totalContentH) / 2);
+        }
+
+        appGridView.setPadding(horizPad, topPad, horizPad, baseBottomPad);
     }
 
     @Override
@@ -883,6 +946,16 @@ public class AppView extends AppCompatActivity implements AdapterFragmentCallbac
                 listView.getPaddingRight(),
                 listView.getPaddingBottom());
         UiHelper.applyStatusBarPadding(listView);
+        if (listView instanceof android.widget.GridView) {
+            appGridView = (android.widget.GridView) listView;
+            lastCenteredCount = -1;
+            appGridView.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
+                if ((r - l) != (or - ol) || (b - t) != (ob - ot)) {
+                    centerAppGrid();
+                }
+            });
+            appGridView.post(this::centerAppGrid);
+        }
         listView.setOnItemLongClickListener((parent, view, position, id) -> {
             openAppContextMenu(view, position);
             return true;

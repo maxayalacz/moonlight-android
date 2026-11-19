@@ -246,32 +246,10 @@ public class DigitalPad extends VirtualControllerElement {
                 && blurHelper.drawLiveBlurForBounds(canvas, this, dpadPath, rect, opacityFactor);
 
         float tintScale = drewLiveBlur ? 0.42f : 0.72f;
-        android.graphics.LinearGradient glassBaseShader = new android.graphics.LinearGradient(
-                cx - halfSpan, cy - halfSpan, cx + halfSpan, cy + halfSpan,
-                new int[]{
-                        dpadWithAlpha(0xFF222B40, tintScale * opacityFactor),
-                        dpadWithAlpha(0xFF101624, tintScale * 0.92f * opacityFactor),
-                        dpadWithAlpha(0xFF0A0E18, tintScale * 1.04f * opacityFactor)
-                },
-                new float[]{0f, 0.52f, 1f},
-                android.graphics.Shader.TileMode.CLAMP);
-
-        android.graphics.LinearGradient glassSheenShader = new android.graphics.LinearGradient(
-                cx - halfSpan, cy - halfSpan, cx + halfSpan * 0.75f, cy + halfSpan * 0.75f,
-                new int[]{
-                        dpadWithAlpha(0xFFFFFFFF, 0.24f * opacityFactor),
-                        dpadWithAlpha(0xFFFFFFFF, 0.06f * opacityFactor),
-                        dpadWithAlpha(0xFFFFFFFF, 0.02f * opacityFactor)
-                },
-                new float[]{0f, 0.45f, 1f},
-                android.graphics.Shader.TileMode.CLAMP);
-
-        paint.setStyle(Paint.Style.FILL);
-        paint.setShader(glassBaseShader);
-        canvas.drawPath(dpadPath, paint);
-        paint.setShader(glassSheenShader);
-        canvas.drawPath(dpadPath, paint);
         paint.setShader(null);
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(dpadWithAlpha(0xFF101624, tintScale * opacityFactor));
+        canvas.drawPath(dpadPath, paint);
 
         if (strokeW > 0.1f) {
             paint.setStyle(Paint.Style.STROKE);

@@ -840,6 +840,17 @@
             seekbar:step="1" />
         <com.limelight.preferences.SeekBarPreference
             android:defaultValue="100"
+            android:dialogMessage="@string/summary_osc_blur_amount"
+            android:key="seekbar_osc_blur_amount"
+            android:max="200"
+            android:summary="@string/summary_osc_blur_amount"
+            android:text="%"
+            android:title="@string/title_osc_blur_amount"
+            app:iconSpaceReserved="false"
+            seekbar:min="0"
+            seekbar:step="5" />
+        <com.limelight.preferences.SeekBarPreference
+            android:defaultValue="100"
             android:dialogMessage="@string/summary_osc_outline_thickness"
             android:key="seekbar_osc_outline_thickness"
             android:max="250"

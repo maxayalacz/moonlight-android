@@ -1093,19 +1093,49 @@ public class UiHelper {
         if (fg == null) {
             return;
         }
+        if (Boolean.TRUE.equals(fg.getTag(R.id.oneui_enter_anim_running_tag))) {
+            return;
+        }
         fg.animate().cancel();
-        float startScale = returningFromDeeper ? 1.06f : 0.93f;
+        fg.setTag(R.id.oneui_enter_anim_running_tag, Boolean.TRUE);
+        final float startScale = returningFromDeeper ? 1.05f : 0.94f;
+        final long duration = returningFromDeeper ? 280L : 260L;
         fg.setAlpha(0f);
         fg.setScaleX(startScale);
         fg.setScaleY(startScale);
-        fg.animate()
-                .alpha(1f)
-                .scaleX(1f)
-                .scaleY(1f)
-                .setStartDelay(returningFromDeeper ? 40L : 0L)
-                .setDuration(returningFromDeeper ? 280L : 260L)
-                .setInterpolator(new android.view.animation.DecelerateInterpolator(2.0f))
-                .start();
+
+        final Runnable startAnim = () -> {
+            if (fg.getWidth() > 0 && fg.getHeight() > 0) {
+                fg.setPivotX(fg.getWidth() * 0.5f);
+                fg.setPivotY(fg.getHeight() * 0.5f);
+            }
+            fg.animate().cancel();
+            fg.animate()
+                    .alpha(1f)
+                    .scaleX(1f)
+                    .scaleY(1f)
+                    .setDuration(duration)
+                    .setInterpolator(new android.view.animation.DecelerateInterpolator(2.2f))
+                    .withLayer()
+                    .withEndAction(() -> fg.setTag(R.id.oneui_enter_anim_running_tag, null))
+                    .start();
+        };
+
+        if (fg.getWidth() > 0 && fg.getHeight() > 0) {
+            // Post two animation frames so resumed activity layout & GL surface handoff settle first
+            fg.postOnAnimation(() -> fg.postOnAnimation(startAnim));
+        } else {
+            fg.getViewTreeObserver().addOnPreDrawListener(new android.view.ViewTreeObserver.OnPreDrawListener() {
+                @Override
+                public boolean onPreDraw() {
+                    if (fg.getViewTreeObserver().isAlive()) {
+                        fg.getViewTreeObserver().removeOnPreDrawListener(this);
+                    }
+                    fg.postOnAnimation(startAnim);
+                    return true;
+                }
+            });
+        }
     }
 
     private static volatile boolean returningFromStream = false;
@@ -1117,6 +1147,9 @@ public class UiHelper {
     public static void restoreMenuForegroundIfNeeded(Activity activity) {
         final View fg = getMenuForegroundView(activity);
         if (fg == null) {
+            return;
+        }
+        if (Boolean.TRUE.equals(fg.getTag(R.id.oneui_enter_anim_running_tag))) {
             return;
         }
         if (returningFromStream) {
@@ -1139,13 +1172,19 @@ public class UiHelper {
             disableActivityTransition(from, false);
             return;
         }
+        fg.setTag(R.id.oneui_enter_anim_running_tag, null);
+        if (fg.getWidth() > 0 && fg.getHeight() > 0) {
+            fg.setPivotX(fg.getWidth() * 0.5f);
+            fg.setPivotY(fg.getHeight() * 0.5f);
+        }
         fg.animate().cancel();
         fg.animate()
                 .alpha(0f)
-                .scaleX(1.06f)
-                .scaleY(1.06f)
+                .scaleX(1.05f)
+                .scaleY(1.05f)
                 .setDuration(150L)
                 .setInterpolator(new android.view.animation.AccelerateInterpolator(1.5f))
+                .withLayer()
                 .withEndAction(() -> {
                     if (!from.isFinishing()) {
                         from.startActivity(intent);
@@ -1165,13 +1204,19 @@ public class UiHelper {
             disableActivityTransition(activity, true);
             return;
         }
+        fg.setTag(R.id.oneui_enter_anim_running_tag, null);
+        if (fg.getWidth() > 0 && fg.getHeight() > 0) {
+            fg.setPivotX(fg.getWidth() * 0.5f);
+            fg.setPivotY(fg.getHeight() * 0.5f);
+        }
         fg.animate().cancel();
         fg.animate()
                 .alpha(0f)
-                .scaleX(0.92f)
-                .scaleY(0.92f)
+                .scaleX(0.94f)
+                .scaleY(0.94f)
                 .setDuration(160L)
                 .setInterpolator(new android.view.animation.AccelerateInterpolator(1.5f))
+                .withLayer()
                 .withEndAction(() -> {
                     superFinish.run();
                     disableActivityTransition(activity, true);

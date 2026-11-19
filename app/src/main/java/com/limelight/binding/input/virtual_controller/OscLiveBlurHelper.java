@@ -131,8 +131,8 @@ public class OscLiveBlurHelper {
                 }
                 int blurPct = com.limelight.profiles.ProfilesManager.getInstance()
                         .getOverlayingSharedPreferences(context)
-                        .getInt(com.limelight.preferences.PreferenceConfiguration.BLUR_AMOUNT_PREF_STRING,
-                                com.limelight.preferences.PreferenceConfiguration.DEFAULT_BLUR_AMOUNT);
+                        .getInt(com.limelight.preferences.PreferenceConfiguration.OSC_BLUR_AMOUNT_PREF_STRING,
+                                com.limelight.preferences.PreferenceConfiguration.DEFAULT_OSC_BLUR_AMOUNT);
                 int blurRadius = Math.round(4f * (blurPct / 100f));
                 if (blurRadius > 0) {
                     UiHelper.fastBoxBlur(target, Math.min(10, blurRadius));
