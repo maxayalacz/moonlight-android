@@ -186,6 +186,7 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
 
     public NvConnection conn;
     private SpinnerDialog spinner;
+    private com.limelight.ui.PortalConnectionOverlay portalOverlay;
     private boolean displayedFailureDialog = false;
     private boolean connecting = false;
     public boolean connected = false;
@@ -357,8 +358,17 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
         tombstonePrefs = Game.this.getSharedPreferences("DecoderTombstone", 0);
 
         if (prefConfig.fullScreen) {
-            // Full-screen
+            // Full-screen including display cutout / punch-hole areas
+            androidx.core.view.WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
             getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                getWindow().getAttributes().layoutInDisplayCutoutMode =
+                        WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS;
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                getWindow().getAttributes().layoutInDisplayCutoutMode =
+                        WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+            }
 
             // If we're going to use immersive mode, we want to have
             // the entire screen
@@ -381,9 +391,31 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
 
         clipboardManager = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
 
-        // Start the spinner
-        spinner = SpinnerDialog.displayDialog(this, getResources().getString(R.string.conn_establishing_title),
-                getResources().getString(R.string.conn_establishing_msg), true);
+        portalOverlay = findViewById(R.id.portalConnectionOverlay);
+        boolean usePortalOverlay = portalOverlay != null && !"card".equals(prefConfig.connectingAnimationStyle);
+        if (usePortalOverlay) {
+            String hostDisplayName = getIntent().getStringExtra(EXTRA_PC_NAME);
+            if (hostDisplayName == null || hostDisplayName.trim().isEmpty()) {
+                hostDisplayName = getIntent().getStringExtra(EXTRA_HOST);
+            }
+            portalOverlay.startConnecting(
+                    hostDisplayName,
+                    getResources().getString(R.string.conn_establishing_msg),
+                    () -> {
+                        if (!isFinishing()) {
+                            finish();
+                        }
+                    },
+                    () -> {
+                        if (connected && !isFinishing()) {
+                            setInputGrabState(true);
+                        }
+                    });
+        } else {
+            // Start the spinner
+            spinner = SpinnerDialog.displayDialog(this, getResources().getString(R.string.conn_establishing_title),
+                    getResources().getString(R.string.conn_establishing_msg), true);
+        }
 
 
         Display currentDisplay = null;
@@ -790,6 +822,11 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
                 willStreamHdr,
                 PreferenceConfiguration.getSelectedFramePacingName(this));
         decoderRenderer.setSessionMetricsListener(SessionMetricsStore::recordSample);
+        decoderRenderer.setFirstFrameRenderedListener(() -> {
+            if (portalOverlay != null) {
+                portalOverlay.onFirstVideoFrameRendered();
+            }
+        });
 
         StreamConfiguration config = new StreamConfiguration.Builder()
                 .setResolution(
@@ -868,6 +905,9 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
             if (spinner != null) {
                 spinner.dismiss();
                 spinner = null;
+            }
+            if (portalOverlay != null) {
+                portalOverlay.releaseAndHide();
             }
 
             // If we can't find an AVC decoder, we can't proceed
@@ -1761,6 +1801,9 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
         // Destroy the capture provider
         inputCaptureProvider.destroy();
         streamContainer.onDestroy();
+        if (portalOverlay != null) {
+            portalOverlay.releaseAndHide();
+        }
     }
 
     @Override
@@ -1773,6 +1816,10 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
 
             // Ungrab input to prevent further input device notifications
             setInputGrabState(false);
+
+            if (portalOverlay != null) {
+                portalOverlay.releaseAndHide();
+            }
         }
 
         super.onPause();
@@ -1784,6 +1831,9 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
 
         SpinnerDialog.closeDialogs(this);
         Dialog.closeDialogs();
+        if (portalOverlay != null) {
+            portalOverlay.releaseAndHide();
+        }
 
         if (virtualController != null) {
             virtualController.hide();
@@ -3462,8 +3512,12 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
+                String msg = getResources().getString(R.string.conn_starting) + " " + stage;
                 if (spinner != null) {
-                    spinner.setMessage(getResources().getString(R.string.conn_starting) + " " + stage);
+                    spinner.setMessage(msg);
+                }
+                if (portalOverlay != null && portalOverlay.isOverlayActive()) {
+                    portalOverlay.updateStageMessage(msg);
                 }
             }
         });
@@ -3512,7 +3566,17 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
         final int portTestResult = MoonBridge.testClientConnectivity(ServerHelper.CONNECTION_TEST_SERVER, 443, portFlags);
 
         if (errorCode == 0 && portFlags != 0 && (portTestResult == MoonBridge.ML_TEST_RESULT_INCONCLUSIVE || portTestResult == 0)) {
-            spinner.setMessage(getResources().getString(R.string.unlocking_or_starting));
+            final String unlockingMsg = getResources().getString(R.string.unlocking_or_starting);
+            if (spinner != null) {
+                spinner.setMessage(unlockingMsg);
+            }
+            if (portalOverlay != null) {
+                runOnUiThread(() -> {
+                    if (portalOverlay != null && portalOverlay.isOverlayActive()) {
+                        portalOverlay.updateStageMessage(unlockingMsg);
+                    }
+                });
+            }
             return true;
         }
 
@@ -3522,6 +3586,9 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
                 if (spinner != null) {
                     spinner.dismiss();
                     spinner = null;
+                }
+                if (portalOverlay != null) {
+                    portalOverlay.releaseAndHide();
                 }
 
                 if (!displayedFailureDialog) {
@@ -3600,6 +3667,10 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
 
                 // Ungrab input
                 setInputGrabState(false);
+
+                if (portalOverlay != null) {
+                    portalOverlay.releaseAndHide();
+                }
 
                 if (!displayedFailureDialog) {
                     displayedFailureDialog = true;
@@ -3701,7 +3772,10 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                if (spinner != null) {
+                boolean portalActive = portalOverlay != null && portalOverlay.isOverlayActive();
+                if (portalActive) {
+                    portalOverlay.onConnectionStarted();
+                } else if (spinner != null) {
                     spinner.dismissWithPortalReveal();
                     spinner = null;
                 }
@@ -3710,17 +3784,19 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
                 connecting = false;
                 updatePipAutoEnter();
 
-                // Hide the mouse cursor now after a short delay.
-                // Doing it before dismissing the spinner seems to be undone
-                // when the spinner gets displayed. On Android Q, even now
-                // is too early to capture. We will delay a second to allow
-                // the spinner to dismiss before capturing.
-                timerHandler.postDelayed(new Runnable() {
-                    @Override
-                    public void run() {
-                        setInputGrabState(true);
-                    }
-                }, 1550);
+                if (!portalActive) {
+                    // Hide the mouse cursor now after a short delay.
+                    // Doing it before dismissing the spinner seems to be undone
+                    // when the spinner gets displayed. On Android Q, even now
+                    // is too early to capture. We will delay a second to allow
+                    // the spinner to dismiss before capturing.
+                    timerHandler.postDelayed(new Runnable() {
+                        @Override
+                        public void run() {
+                            setInputGrabState(true);
+                        }
+                    }, 1550);
+                }
 
                 // Keep the display on
                 getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -4009,6 +4085,11 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
 
     @Override
     public void onBackPressed() {
+        if (portalOverlay != null && portalOverlay.isOverlayActive()) {
+            portalOverlay.releaseAndHide();
+            finish();
+            return;
+        }
         if(prefConfig.enableBackMenu){
             showGameMenu(null);
             return;
@@ -4269,10 +4350,17 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
             return;
         }
         disconnectingWithPortal = true;
-        SpinnerDialog.displayDisconnectPortal(this, () -> {
-            maybeLaunchSessionMetrics();
-            finish();
-        });
+        if (portalOverlay != null && !"card".equals(prefConfig.connectingAnimationStyle)) {
+            portalOverlay.startDisconnecting(() -> {
+                maybeLaunchSessionMetrics();
+                finish();
+            });
+        } else {
+            SpinnerDialog.displayDisconnectPortal(this, () -> {
+                maybeLaunchSessionMetrics();
+                finish();
+            });
+        }
     }
 
     public void disconnect() {

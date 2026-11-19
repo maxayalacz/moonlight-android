@@ -141,6 +141,8 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
     private boolean foreground = true;
     private PerfOverlayListener perfListener;
     private volatile SessionMetricsListener sessionMetricsListener;
+    private volatile Runnable firstFrameRenderedListener;
+    private final java.util.concurrent.atomic.AtomicBoolean firstFrameNotified = new java.util.concurrent.atomic.AtomicBoolean(false);
 
     public interface SessionMetricsListener {
         void onSecondSample(int fps, int decodeMs, int bitrateMbps, int dropRate, String codecLabel, String decoderName);
@@ -148,6 +150,20 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
 
     public void setSessionMetricsListener(SessionMetricsListener listener) {
         this.sessionMetricsListener = listener;
+    }
+
+    public void setFirstFrameRenderedListener(Runnable listener) {
+        this.firstFrameRenderedListener = listener;
+        this.firstFrameNotified.set(false);
+    }
+
+    private void notifyFirstFrameRendered() {
+        if (firstFrameNotified.compareAndSet(false, true)) {
+            Runnable listener = this.firstFrameRenderedListener;
+            if (listener != null) {
+                listener.run();
+            }
+        }
     }
 
     private static final int CR_MAX_TRIES = 10;
@@ -1120,6 +1136,7 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
 
                     lastRenderedFrameTimeNanos = frameTimeNanos;
                     activeWindowVideoStats.totalFramesRendered++;
+                    notifyFirstFrameRendered();
                 } catch (IllegalStateException ignored) {
                     try {
                         // Try to avoid leaking the output buffer by releasing it without rendering
@@ -1435,6 +1452,7 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
                                 }
 
                                 activeWindowVideoStats.totalFramesRendered++;
+                                notifyFirstFrameRendered();
                             }
                             else {
                                 // For balanced frame pacing case, the Choreographer callback will handle rendering.

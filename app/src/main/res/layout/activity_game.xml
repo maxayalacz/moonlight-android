@@ -126,4 +126,11 @@
         android:visibility="gone"
         android:elevation="9999dp" />
 
+    <com.limelight.ui.PortalConnectionOverlay
+        android:id="@+id/portalConnectionOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone"
+        android:elevation="10000dp" />
+
 </merge>
