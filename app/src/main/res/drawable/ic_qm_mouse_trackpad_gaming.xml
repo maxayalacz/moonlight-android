@@ -1,0 +1,21 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Gaming aim reticle / FPS relative trackpad icon -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M12,12m-6.5,0a6.5,6.5 0,1 1,13 0a6.5,6.5 0,1 1,-13 0"
+        android:strokeWidth="1.9"
+        android:strokeColor="#FFFFFF" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M12,2.5v3.5M12,18v3.5M2.5,12h3.5M18,12h3.5"
+        android:strokeWidth="2.0"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M12,12m-1.8,0a1.8,1.8 0,1 1,3.6 0a1.8,1.8 0,1 1,-3.6 0" />
+</vector>

@@ -1,13 +1,17 @@
 package com.limelight.utils;
 
+import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.app.Dialog;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.DialogInterface.OnCancelListener;
+import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.PixelFormat;
+import android.graphics.Paint;
+import android.graphics.RectF;
+import android.graphics.SweepGradient;
 import android.graphics.Typeface;
-import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.Looper;
@@ -17,30 +21,30 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
-import android.view.WindowManager;
-import android.widget.FrameLayout;
+import android.view.animation.LinearInterpolator;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import androidx.annotation.NonNull;
+
 import com.limelight.R;
-import com.limelight.preferences.PreferenceConfiguration;
-import com.limelight.ui.PortalConnectingView;
+import com.limelight.ui.AppThemePalette;
 
 import java.util.ArrayList;
 import java.util.Iterator;
 
+/**
+ * Compact One UI frosted-glass squircle loading dialog used for manual PC addition,
+ * network tests, app list refresh, help viewer, and shortcut handoffs.
+ */
 public class SpinnerDialog implements Runnable, OnCancelListener {
     private final String title;
     private volatile String currentMessage;
     private final Activity activity;
     private Dialog dialog;
-    private PortalConnectingView portalView;
-    private View topHudContainer;
-    private View bottomCancelView;
     private TextView messageView;
     private final boolean finish;
     private volatile boolean dismissed = false;
-    private volatile boolean playRevealOnDismiss = false;
 
     private static final ArrayList<SpinnerDialog> rundownDialogs = new ArrayList<>();
 
@@ -66,7 +70,6 @@ public class SpinnerDialog implements Runnable, OnCancelListener {
                 SpinnerDialog entry = i.next();
                 if (entry.activity == activity) {
                     entry.dismissed = true;
-                    entry.playRevealOnDismiss = false;
                     i.remove();
                     if (entry.dialog != null) {
                         toDismiss.add(entry.dialog);
@@ -90,19 +93,22 @@ public class SpinnerDialog implements Runnable, OnCancelListener {
 
     public void dismiss() {
         dismissed = true;
-        playRevealOnDismiss = false;
         activity.runOnUiThread(this);
     }
 
-    /**
-     * Plays the PlayStation Portal stream-reveal transition (fading the circular window interior to
-     * the live stream, igniting accelerating Dr. Strange rim sparks, and expanding the circular
-     * window fullscreen) before dismissing the dialog.
-     */
     public void dismissWithPortalReveal() {
-        dismissed = true;
-        playRevealOnDismiss = true;
-        activity.runOnUiThread(this);
+        dismiss();
+    }
+
+    public static void displayDisconnectPortal(final Activity activity, final Runnable onComplete) {
+        if (onComplete == null) {
+            return;
+        }
+        if (activity == null || activity.isFinishing() || activity.isDestroyed()) {
+            onComplete.run();
+            return;
+        }
+        activity.runOnUiThread(onComplete);
     }
 
     public void setMessage(final String message) {
@@ -137,307 +143,107 @@ public class SpinnerDialog implements Runnable, OnCancelListener {
                 return;
             }
 
-            PreferenceConfiguration config = PreferenceConfiguration.readPreferences(activity);
-            boolean useCardMode = "card".equals(config.connectingAnimationStyle);
-
-            if (useCardMode) {
-                dialog = buildCardDialog();
-            } else {
-                dialog = buildFullscreenDialog();
-            }
-
+            dialog = buildLoadingCardDialog();
             dialog.setOnCancelListener(this);
-            if (finish) {
-                dialog.setCancelable(true);
-                dialog.setCanceledOnTouchOutside(false);
-            } else {
-                dialog.setCancelable(false);
-                dialog.setCanceledOnTouchOutside(false);
-            }
+            dialog.setCancelable(finish);
+            dialog.setCanceledOnTouchOutside(false);
 
             synchronized (rundownDialogs) {
                 if (dismissed) {
                     return;
                 }
                 rundownDialogs.add(this);
-                if (useCardMode) {
-                    UiHelper.styleDialogSquircle(dialog);
-                }
+                UiHelper.styleDialogSquircle(dialog);
                 dialog.show();
-                if (useCardMode) {
-                    UiHelper.styleDialogSquircle(dialog);
-                }
+                UiHelper.styleDialogSquircle(dialog);
             }
         } else {
             synchronized (rundownDialogs) {
                 rundownDialogs.remove(this);
             }
-            final Dialog targetDialog = dialog;
-            if (playRevealOnDismiss && portalView != null && targetDialog.isShowing() && !activity.isFinishing()) {
-                // Make window pass-through immediately so controller/touch input reaches the stream right away
-                Window window = targetDialog.getWindow();
-                if (window != null) {
-                    window.addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                            | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE);
-                }
-                if (topHudContainer != null) {
-                    topHudContainer.animate().alpha(0f).setDuration(240L).start();
-                }
-                if (bottomCancelView != null) {
-                    bottomCancelView.animate().alpha(0f).setDuration(220L).start();
-                }
-                portalView.startStreamReveal(() -> dismissSafely(targetDialog));
-            } else {
-                dismissSafely(targetDialog);
-            }
+            dismissSafely(dialog);
         }
     }
 
-    private Dialog buildFullscreenDialog() {
-        Dialog d = new Dialog(activity, android.R.style.Theme_Translucent_NoTitleBar_Fullscreen);
+    private Dialog buildLoadingCardDialog() {
+        Dialog d = new Dialog(activity, R.style.OneUI_DialogTheme);
         d.requestWindowFeature(Window.FEATURE_NO_TITLE);
 
-        FrameLayout root = new FrameLayout(activity);
-        root.setLayoutParams(new ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT));
-        root.setBackgroundColor(Color.TRANSPARENT);
+        DisplayMetrics dm = activity.getResources().getDisplayMetrics();
+        int cardWidth = Math.min(dp(320), Math.max(dp(260), dm.widthPixels - dp(48)));
 
-        // Fullscreen PS Portal view draws the dark eclipse surround, circular aperture,
-        // inward-flowing particles, and accelerating Dr. Strange spark expansion
-        portalView = new PortalConnectingView(activity);
-        portalView.setCompactCardMode(false);
-        FrameLayout.LayoutParams portalLp = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT);
-        root.addView(portalView, portalLp);
+        LinearLayout column = new LinearLayout(activity);
+        column.setOrientation(LinearLayout.VERTICAL);
+        column.setGravity(Gravity.CENTER_HORIZONTAL);
+        column.setPadding(dp(24), dp(24), dp(24), dp(22));
+        column.setLayoutParams(new ViewGroup.LayoutParams(cardWidth, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        // Top-left PS Portal status HUD ("Connecting to..." + stage message)
-        LinearLayout topHud = new LinearLayout(activity);
-        topHud.setOrientation(LinearLayout.VERTICAL);
-        topHud.setGravity(Gravity.START);
+        LoadingRingView ring = new LoadingRingView(activity);
+        int ringSize = dp(48);
+        LinearLayout.LayoutParams ringLp = new LinearLayout.LayoutParams(ringSize, ringSize);
+        ring.setLayoutParams(ringLp);
+        column.addView(ring);
 
-        TextView titleView = new TextView(activity);
-        titleView.setText(title != null ? title : "");
-        titleView.setTextColor(Color.WHITE);
-        titleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f);
-        titleView.setTypeface(Typeface.DEFAULT_BOLD);
-        titleView.setLetterSpacing(0.01f);
-        titleView.setShadowLayer(8f, 0f, 2f, 0xCC000000);
-        topHud.addView(titleView, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        if (title != null && !title.isEmpty()) {
+            TextView titleView = new TextView(activity);
+            titleView.setText(title);
+            titleView.setTextColor(Color.WHITE);
+            titleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16.5f);
+            titleView.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+            titleView.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            titleLp.topMargin = dp(16);
+            titleView.setLayoutParams(titleLp);
+            column.addView(titleView);
+        }
 
         messageView = new TextView(activity);
         messageView.setText(currentMessage != null ? currentMessage : "");
-        messageView.setTextColor(0xD8E8F2FF);
+        messageView.setTextColor(0xC8DCE8FF);
         messageView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.5f);
-        messageView.setShadowLayer(6f, 0f, 1.5f, 0xCC000000);
+        messageView.setLineSpacing(dp(2), 1.0f);
+        messageView.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams msgLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        msgLp.topMargin = dp(4);
-        topHud.addView(messageView, msgLp);
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        msgLp.topMargin = dp(8);
+        messageView.setLayoutParams(msgLp);
+        column.addView(messageView);
 
-        FrameLayout.LayoutParams topHudLp = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                Gravity.TOP | Gravity.START);
-        topHudLp.leftMargin = dp(32);
-        topHudLp.topMargin = dp(26);
-        root.addView(topHud, topHudLp);
-        this.topHudContainer = topHud;
-
-        // Bottom-left PS Portal Cancel control
         if (finish) {
-            TextView cancelHint = new TextView(activity);
-            cancelHint.setText(R.string.conn_cancel_hint);
-            cancelHint.setTextColor(0xE6FFFFFF);
-            cancelHint.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f);
-            cancelHint.setGravity(Gravity.CENTER_VERTICAL);
-            cancelHint.setPadding(dp(16), dp(8), dp(16), dp(8));
+            TextView cancelBtn = new TextView(activity);
+            cancelBtn.setText(R.string.cancel);
+            cancelBtn.setTextColor(0xEBFFFFFF);
+            cancelBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.5f);
+            cancelBtn.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+            cancelBtn.setGravity(Gravity.CENTER);
+            cancelBtn.setPadding(dp(22), dp(9), dp(22), dp(9));
 
             GradientDrawable pillBg = new GradientDrawable();
             pillBg.setShape(GradientDrawable.RECTANGLE);
             pillBg.setCornerRadius(dp(999));
-            pillBg.setColor(0x24141C2E);
-            pillBg.setStroke(Math.max(1, dp(1)), 0x45FFFFFF);
-            cancelHint.setBackground(pillBg);
-            cancelHint.setOnClickListener(v -> {
+            pillBg.setColor(0x24FFFFFF);
+            pillBg.setStroke(Math.max(1, dp(1)), 0x3DFFFFFF);
+            cancelBtn.setBackground(pillBg);
+            cancelBtn.setOnClickListener(v -> {
                 if (dialog != null && dialog.isShowing()) {
                     dialog.cancel();
                 }
             });
 
-            FrameLayout.LayoutParams hintLp = new FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                    Gravity.BOTTOM | Gravity.START);
-            hintLp.leftMargin = dp(32);
-            hintLp.bottomMargin = dp(26);
-            root.addView(cancelHint, hintLp);
-            this.bottomCancelView = cancelHint;
-        }
-
-        d.setContentView(root);
-
-        Window window = d.getWindow();
-        if (window != null) {
-            window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
-            window.setFormat(PixelFormat.TRANSLUCENT);
-            window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-            // Do NOT blur behind the fullscreen portal window so the live stream inside the circular
-            // aperture is crystal-clear when revealed
-            window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND
-                    | WindowManager.LayoutParams.FLAG_BLUR_BEHIND);
-            window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN
-                    | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
-                    | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
-                    | WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                WindowManager.LayoutParams lp = window.getAttributes();
-                lp.layoutInDisplayCutoutMode = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
-                        ? WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
-                        : WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
-                window.setAttributes(lp);
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                window.setStatusBarColor(Color.TRANSPARENT);
-                window.setNavigationBarColor(Color.TRANSPARENT);
-            }
-            androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false);
-            View decor = window.getDecorView();
-            decor.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                    | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                    | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                    | View.SYSTEM_UI_FLAG_FULLSCREEN
-                    | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                    | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
-        }
-        return d;
-    }
-
-    /**
-     * Displays the reversed, faster PlayStation Portal disconnecting animation over the full screen
-     * (including display cutouts) and invokes {@code onComplete} once the portal has closed.
-     */
-    public static void displayDisconnectPortal(final Activity activity, final Runnable onComplete) {
-        if (activity == null || activity.isFinishing()
-                || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1 && activity.isDestroyed())) {
-            if (onComplete != null) {
-                onComplete.run();
-            }
-            return;
-        }
-        activity.runOnUiThread(() -> {
-            if (activity.isFinishing()
-                    || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1 && activity.isDestroyed())) {
-                if (onComplete != null) {
-                    onComplete.run();
-                }
-                return;
-            }
-            PreferenceConfiguration config = PreferenceConfiguration.readPreferences(activity);
-            if ("card".equals(config.connectingAnimationStyle)) {
-                if (onComplete != null) {
-                    onComplete.run();
-                }
-                return;
-            }
-            SpinnerDialog disconnectDialog = new SpinnerDialog(activity, "", "", false);
-            final Dialog d = disconnectDialog.buildFullscreenDialog();
-            if (disconnectDialog.topHudContainer != null) {
-                disconnectDialog.topHudContainer.setVisibility(View.GONE);
-            }
-            if (disconnectDialog.bottomCancelView != null) {
-                disconnectDialog.bottomCancelView.setVisibility(View.GONE);
-            }
-            d.setCancelable(false);
-            d.setCanceledOnTouchOutside(false);
-            Window window = d.getWindow();
-            if (window != null) {
-                window.addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                        | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE);
-            }
-            try {
-                d.show();
-            } catch (Exception e) {
-                if (onComplete != null) {
-                    onComplete.run();
-                }
-                return;
-            }
-            if (disconnectDialog.portalView != null) {
-                disconnectDialog.portalView.startStreamDisconnect(() -> {
-                    dismissSafely(d);
-                    if (onComplete != null) {
-                        onComplete.run();
-                    }
-                });
-            } else {
-                dismissSafely(d);
-                if (onComplete != null) {
-                    onComplete.run();
-                }
-            }
-        });
-    }
-
-    private Dialog buildCardDialog() {
-        Dialog d = new Dialog(activity, R.style.OneUI_DialogTheme);
-        d.requestWindowFeature(Window.FEATURE_NO_TITLE);
-
-        DisplayMetrics dm = activity.getResources().getDisplayMetrics();
-        int minDimPx = Math.min(dm.widthPixels, dm.heightPixels);
-        int portalSize = Math.min(dp(150), Math.round(minDimPx * 0.36f));
-
-        LinearLayout column = new LinearLayout(activity);
-        column.setOrientation(LinearLayout.VERTICAL);
-        column.setGravity(Gravity.CENTER_HORIZONTAL);
-        column.setMinimumWidth(dp(280));
-        column.setPadding(dp(24), dp(22), dp(24), dp(22));
-
-        portalView = new PortalConnectingView(activity);
-        portalView.setCompactCardMode(true);
-        LinearLayout.LayoutParams portalLp = new LinearLayout.LayoutParams(portalSize, portalSize);
-        portalView.setLayoutParams(portalLp);
-        column.addView(portalView);
-
-        TextView titleView = new TextView(activity);
-        titleView.setText(title != null ? title : "");
-        titleView.setTextColor(Color.WHITE);
-        titleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f);
-        titleView.setTypeface(Typeface.DEFAULT_BOLD);
-        titleView.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        titleLp.topMargin = dp(8);
-        titleView.setLayoutParams(titleLp);
-        column.addView(titleView);
-
-        messageView = new TextView(activity);
-        messageView.setText(currentMessage != null ? currentMessage : "");
-        messageView.setTextColor(0xD0E4F0FF);
-        messageView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.5f);
-        messageView.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams msgLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        msgLp.topMargin = dp(6);
-        messageView.setLayoutParams(msgLp);
-        column.addView(messageView);
-
-        if (finish) {
-            TextView cancelHint = new TextView(activity);
-            cancelHint.setText(R.string.conn_cancel_hint);
-            cancelHint.setTextColor(0x8AFFFFFF);
-            cancelHint.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f);
-            cancelHint.setGravity(Gravity.CENTER);
-            LinearLayout.LayoutParams hintLp = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams cancelLp = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            hintLp.topMargin = dp(10);
-            cancelHint.setLayoutParams(hintLp);
-            column.addView(cancelHint);
+            cancelLp.topMargin = dp(18);
+            cancelBtn.setLayoutParams(cancelLp);
+            column.addView(cancelBtn);
         }
 
         d.setContentView(column);
+        Window w = d.getWindow();
+        if (w != null) {
+            w.setLayout(cardWidth, ViewGroup.LayoutParams.WRAP_CONTENT);
+            w.setGravity(Gravity.CENTER);
+        }
         return d;
     }
 
@@ -451,9 +257,101 @@ public class SpinnerDialog implements Runnable, OnCancelListener {
             rundownDialogs.remove(this);
         }
         dismissed = true;
-        playRevealOnDismiss = false;
 
         // This will only be called if finish was true, so we don't need to check again
         activity.finish();
+    }
+
+    /**
+     * Lightweight, smooth rotating gradient loading ring styled for One UI frosted cards.
+     */
+    private static final class LoadingRingView extends View {
+        private final Paint trackPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint arcPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final RectF arcBounds = new RectF();
+        private final int accentColor;
+        private final int highlightColor;
+        private final float strokePx;
+        private ValueAnimator spinAnimator;
+        private float rotationDeg = 0f;
+        private int cachedSize = -1;
+
+        LoadingRingView(Context context) {
+            super(context);
+            AppThemePalette palette = AppThemePalette.getCurrent(context);
+            accentColor = palette.accentLight;
+            highlightColor = palette.highlight;
+            strokePx = UiHelper.dpToPx(context, 3.6f);
+
+            trackPaint.setStyle(Paint.Style.STROKE);
+            trackPaint.setStrokeWidth(strokePx);
+            trackPaint.setColor(0x24FFFFFF);
+
+            arcPaint.setStyle(Paint.Style.STROKE);
+            arcPaint.setStrokeWidth(strokePx);
+            arcPaint.setStrokeCap(Paint.Cap.ROUND);
+        }
+
+        @Override
+        protected void onAttachedToWindow() {
+            super.onAttachedToWindow();
+            if (spinAnimator == null) {
+                spinAnimator = ValueAnimator.ofFloat(0f, 360f);
+                spinAnimator.setDuration(920L);
+                spinAnimator.setRepeatCount(ValueAnimator.INFINITE);
+                spinAnimator.setInterpolator(new LinearInterpolator());
+                spinAnimator.addUpdateListener(anim -> {
+                    rotationDeg = (float) anim.getAnimatedValue();
+                    invalidate();
+                });
+                spinAnimator.start();
+            }
+        }
+
+        @Override
+        protected void onDetachedFromWindow() {
+            if (spinAnimator != null) {
+                spinAnimator.cancel();
+                spinAnimator = null;
+            }
+            super.onDetachedFromWindow();
+        }
+
+        @Override
+        protected void onDraw(@NonNull Canvas canvas) {
+            super.onDraw(canvas);
+            int w = getWidth();
+            int h = getHeight();
+            int size = Math.min(w, h);
+            if (size <= 0) {
+                return;
+            }
+            float cx = w * 0.5f;
+            float cy = h * 0.5f;
+            float r = (size - strokePx) * 0.5f - 1f;
+            if (r <= 1f) {
+                return;
+            }
+
+            if (size != cachedSize) {
+                cachedSize = size;
+                arcBounds.set(cx - r, cy - r, cx + r, cy + r);
+                arcPaint.setShader(new SweepGradient(
+                        cx, cy,
+                        new int[]{
+                                AppThemePalette.withAlpha(accentColor, 0.0f),
+                                AppThemePalette.withAlpha(accentColor, 0.45f),
+                                highlightColor,
+                                0xFFFFFFFF
+                        },
+                        new float[]{0.0f, 0.35f, 0.72f, 0.96f}));
+            }
+
+            canvas.drawCircle(cx, cy, r, trackPaint);
+            canvas.save();
+            canvas.rotate(rotationDeg, cx, cy);
+            canvas.drawArc(arcBounds, 18f, 324f, false, arcPaint);
+            canvas.restore();
+        }
     }
 }

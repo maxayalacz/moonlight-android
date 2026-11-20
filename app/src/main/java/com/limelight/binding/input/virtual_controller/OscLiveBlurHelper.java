@@ -113,6 +113,18 @@ public class OscLiveBlurHelper {
         SurfaceView surfaceView = UiHelper.findStreamSurfaceView(activity);
         if (surfaceView == null || surfaceView.getWidth() <= 0 || surfaceView.getHeight() <= 0
                 || !surfaceView.getHolder().getSurface().isValid()) {
+            // Standalone OSC editor fallback: invalidate elements periodically against live starfield
+            View root = activity.findViewById(android.R.id.content);
+            View portalCandidate = root != null ? root.findViewWithTag("oneui_portal_starfield_bg") : null;
+            if (portalCandidate instanceof com.limelight.ui.PortalShaderView) {
+                List<VirtualControllerElement> elems = controller.getElements();
+                for (int i = 0; i < elems.size(); i++) {
+                    VirtualControllerElement el = elems.get(i);
+                    if (el.getVisibility() == View.VISIBLE) {
+                        el.invalidate();
+                    }
+                }
+            }
             return;
         }
 
@@ -173,14 +185,36 @@ public class OscLiveBlurHelper {
     }
 
     /**
-     * Draws the live blurred stream region located directly behind {@code view}'s local {@code bounds},
-     * clipped to {@code clipPath}. Returns true if a live blurred frame was drawn.
+     * Draws the live blurred stream (or starfield backdrop in editor mode) located directly behind
+     * {@code view}'s local {@code bounds}, clipped to {@code clipPath}. Returns true if drawn.
      */
     public boolean drawLiveBlurForBounds(Canvas canvas, View view, Path clipPath, RectF bounds, float alphaFactor) {
+        if (alphaFactor <= 0.005f) {
+            return false;
+        }
         Bitmap bmp = readyBitmap;
         int sw = surfaceWidth;
         int sh = surfaceHeight;
-        if (bmp == null || bmp.isRecycled() || sw <= 0 || sh <= 0 || alphaFactor <= 0.005f) {
+        int originL = surfaceScreenLeft;
+        int originT = surfaceScreenTop;
+
+        if (bmp == null || bmp.isRecycled() || sw <= 0 || sh <= 0) {
+            View rootView = view.getRootView();
+            View portalCandidate = rootView != null ? rootView.findViewWithTag("oneui_portal_starfield_bg") : null;
+            if (portalCandidate instanceof com.limelight.ui.PortalShaderView
+                    && portalCandidate.getWidth() > 0 && portalCandidate.getHeight() > 0) {
+                Bitmap portalBmp = ((com.limelight.ui.PortalShaderView) portalCandidate).getBlurredBitmap();
+                if (portalBmp != null && !portalBmp.isRecycled()) {
+                    portalCandidate.getLocationOnScreen(surfaceLoc);
+                    bmp = portalBmp;
+                    originL = surfaceLoc[0];
+                    originT = surfaceLoc[1];
+                    sw = portalCandidate.getWidth();
+                    sh = portalCandidate.getHeight();
+                }
+            }
+        }
+        if (bmp == null || bmp.isRecycled() || sw <= 0 || sh <= 0) {
             return false;
         }
 
@@ -195,10 +229,10 @@ public class OscLiveBlurHelper {
         float scaleX = bw / (float) sw;
         float scaleY = bh / (float) sh;
 
-        int srcL = Math.max(0, Math.min(bw - 1, Math.round((screenLeft - surfaceScreenLeft) * scaleX)));
-        int srcT = Math.max(0, Math.min(bh - 1, Math.round((screenTop - surfaceScreenTop) * scaleY)));
-        int srcR = Math.max(srcL + 1, Math.min(bw, Math.round((screenRight - surfaceScreenLeft) * scaleX)));
-        int srcB = Math.max(srcT + 1, Math.min(bh, Math.round((screenBottom - surfaceScreenTop) * scaleY)));
+        int srcL = Math.max(0, Math.min(bw - 1, Math.round((screenLeft - originL) * scaleX)));
+        int srcT = Math.max(0, Math.min(bh - 1, Math.round((screenTop - originT) * scaleY)));
+        int srcR = Math.max(srcL + 1, Math.min(bw, Math.round((screenRight - originL) * scaleX)));
+        int srcB = Math.max(srcT + 1, Math.min(bh, Math.round((screenBottom - originT) * scaleY)));
 
         srcRect.set(srcL, srcT, srcR, srcB);
         dstRect.set(bounds);

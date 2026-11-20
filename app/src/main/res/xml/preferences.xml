@@ -533,7 +533,7 @@
     <PreferenceCategory
         android:key="category_ui_settings"
         android:title="@string/category_ui_settings"
-        app:initialExpandedChildrenCount="9"
+        app:initialExpandedChildrenCount="10"
         app:iconSpaceReserved="false">
         <SwitchPreferenceCompat
             android:defaultValue="true"
@@ -571,6 +571,13 @@
             android:key="checkbox_enable_quit_dialog"
             android:summary="@string/summary_quit_dialog"
             android:title="@string/title_quit_dialog"
+            app:iconSpaceReserved="false" />
+        <SwitchPreferenceCompat
+            android:dependency="checkbox_enable_quit_dialog"
+            android:defaultValue="true"
+            android:key="checkbox_condensed_quick_menu"
+            android:summary="@string/summary_condensed_quick_menu"
+            android:title="@string/title_condensed_quick_menu"
             app:iconSpaceReserved="false" />
         <SwitchPreferenceCompat
             android:dependency="checkbox_enable_quit_dialog"
@@ -795,7 +802,7 @@
     <PreferenceCategory
         android:key="category_onscreen_controls"
         android:title="@string/category_on_screen_controls_settings"
-        app:initialExpandedChildrenCount="13"
+        app:initialExpandedChildrenCount="14"
         app:iconSpaceReserved="false">
         <SwitchPreferenceCompat
             android:defaultValue="false"
@@ -885,6 +892,11 @@
             app:iconSpaceReserved="false"
             seekbar:min="0"
             seekbar:step="1" />
+        <Preference
+            android:key="option_edit_osc_layout"
+            android:summary="@string/summary_edit_osc_layout"
+            android:title="@string/title_edit_osc_layout"
+            app:iconSpaceReserved="false" />
         <com.limelight.preferences.ConfirmDeleteOscPreference
             android:dialogMessage="@string/dialog_text_reset_osc"
             android:dialogTitle="@string/dialog_title_reset_osc"

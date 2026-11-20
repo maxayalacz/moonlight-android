@@ -846,4 +846,19 @@
     <string name="session_metrics_drop_pct">Drop %</string>
     <string name="session_metrics_stable">Stable</string>
     <string name="session_metrics_share">Share Summary</string>
+
+    <string name="title_condensed_quick_menu">Condensed Icon Quick Menu</string>
+    <string name="summary_condensed_quick_menu">Use the compact icon-only frosted quick menu while streaming. Disable to restore the classic list menu.</string>
+
+    <string name="title_edit_osc_layout">Customize On-Screen Controller Layout</string>
+    <string name="summary_edit_osc_layout">Move, resize, or enable/disable on-screen controller buttons without starting a stream</string>
+    <string name="osc_editor_mode_move">Move</string>
+    <string name="osc_editor_mode_resize">Resize</string>
+    <string name="osc_editor_mode_toggle">Show / Hide</string>
+    <string name="osc_editor_reset">Reset</string>
+    <string name="osc_editor_save">Save</string>
+    <string name="osc_editor_saved">On-screen controller layout saved</string>
+    <string name="osc_editor_unsaved_title">Save Layout Changes?</string>
+    <string name="osc_editor_unsaved_msg">You have unsaved changes to your on-screen controller layout.</string>
+    <string name="osc_editor_discard">Discard</string>
 </resources>

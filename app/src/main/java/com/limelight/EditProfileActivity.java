@@ -316,6 +316,10 @@ public class EditProfileActivity extends AppCompatActivity {
             if (_pref != null) {
                 _pref.setVisible(false);
             }
+            _pref = findPreference("option_edit_osc_layout");
+            if (_pref != null) {
+                _pref.setVisible(false);
+            }
             _pref = findPreference("import_keyboard_file");
             if (_pref != null) {
                 _pref.setVisible(false);

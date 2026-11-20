@@ -48,9 +48,6 @@ public class DigitalPad extends VirtualControllerElement {
 
     @Override
     protected void onElementDraw(Canvas canvas) {
-        // set transparent background
-        canvas.drawColor(Color.TRANSPARENT);
-
         paint.setTextSize(getPercent(getCorrectWidth(), 20));
         paint.setTextAlign(Paint.Align.CENTER);
         paint.setStrokeWidth(getDefaultStrokeWidth());
@@ -65,6 +62,9 @@ public class DigitalPad extends VirtualControllerElement {
             float opacityFactor = Math.max(0.0f, Math.min(1.0f, oscOpacity / 100f));
             if (isEditMode && opacityFactor < 0.35f) {
                 opacityFactor = 0.35f;
+            }
+            if (bIsEnable && !enabled) {
+                opacityFactor *= 0.38f;
             }
             if (opacityFactor <= 0.005f && !isEditMode) {
                 return;

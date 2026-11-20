@@ -57,12 +57,19 @@ public class VirtualController {
         }
     };
 
+    public interface OnLayoutEditedListener {
+        void onLayoutEdited();
+    }
+
     private FrameLayout frame_layout = null;
 
     ControllerMode currentMode = ControllerMode.Active;
     ControllerInputContext inputContext = new ControllerInputContext();
 
     private Button buttonConfigure = null;
+    private boolean visible = false;
+    private boolean configureButtonVisible = true;
+    private OnLayoutEditedListener layoutEditedListener = null;
 
     private List<VirtualControllerElement> elements = new ArrayList<>();
 
@@ -96,32 +103,62 @@ public class VirtualController {
                 String message;
 
                 if (currentMode == ControllerMode.Active) {
-                    currentMode = ControllerMode.DisableEnableButtons;
-                    showElements();
+                    setControllerMode(ControllerMode.DisableEnableButtons);
                     message = context.getString(R.string.configuration_mode_disable_enable_buttons);
-                } else if (currentMode == ControllerMode.DisableEnableButtons){
-                    currentMode = ControllerMode.MoveButtons;
-                    showEnabledElements();
+                } else if (currentMode == ControllerMode.DisableEnableButtons) {
+                    setControllerMode(ControllerMode.MoveButtons);
                     message = context.getString(R.string.configuration_mode_move_buttons);
                 } else if (currentMode == ControllerMode.MoveButtons) {
-                    currentMode = ControllerMode.ResizeButtons;
+                    setControllerMode(ControllerMode.ResizeButtons);
                     message = context.getString(R.string.configuration_mode_resize_buttons);
                 } else {
-                    currentMode = ControllerMode.Active;
+                    setControllerMode(ControllerMode.Active);
                     VirtualControllerConfigurationLoader.saveProfile(VirtualController.this, context);
                     message = context.getString(R.string.configuration_mode_exiting);
                 }
 
                 Toast.makeText(context, message, Toast.LENGTH_SHORT).show();
-
-                buttonConfigure.invalidate();
-
-                for (VirtualControllerElement element : elements) {
-                    element.invalidate();
-                }
             }
         });
 
+    }
+
+    public void setOnLayoutEditedListener(OnLayoutEditedListener listener) {
+        this.layoutEditedListener = listener;
+    }
+
+    void notifyLayoutEdited() {
+        if (layoutEditedListener != null) {
+            layoutEditedListener.onLayoutEdited();
+        }
+    }
+
+    public void setConfigureButtonVisible(boolean showConfigureButton) {
+        this.configureButtonVisible = showConfigureButton;
+        if (buttonConfigure != null) {
+            buttonConfigure.setVisibility((visible && configureButtonVisible) ? View.VISIBLE : View.GONE);
+        }
+    }
+
+    public void setControllerMode(ControllerMode mode) {
+        this.currentMode = mode;
+        if (visible) {
+            if (mode == ControllerMode.DisableEnableButtons) {
+                showElements();
+            } else {
+                showEnabledElements();
+            }
+        }
+        if (buttonConfigure != null) {
+            buttonConfigure.invalidate();
+        }
+        for (VirtualControllerElement element : elements) {
+            element.invalidate();
+        }
+    }
+
+    public boolean isVisible() {
+        return visible;
     }
 
     public OscLiveBlurHelper getLiveBlurHelper() {
@@ -133,6 +170,7 @@ public class VirtualController {
     }
 
     public void hide() {
+        visible = false;
         liveBlurHelper.stop();
         for (VirtualControllerElement element : elements) {
             element.setVisibility(View.GONE);
@@ -142,14 +180,19 @@ public class VirtualController {
     }
 
     public void show() {
-        showEnabledElements();
+        visible = true;
+        if (currentMode == ControllerMode.DisableEnableButtons) {
+            showElements();
+        } else {
+            showEnabledElements();
+        }
 
-        buttonConfigure.setVisibility(View.VISIBLE);
+        buttonConfigure.setVisibility(configureButtonVisible ? View.VISIBLE : View.GONE);
         liveBlurHelper.start();
     }
 
     public int switchShowHide() {
-        if (buttonConfigure.getVisibility() == View.VISIBLE) {
+        if (visible) {
             hide();
             return 0;
         } else {

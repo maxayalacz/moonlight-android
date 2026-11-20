@@ -219,16 +219,18 @@ public class AnalogStick extends VirtualControllerElement {
 
     @Override
     protected void onElementDraw(Canvas canvas) {
-        // set transparent background
-        canvas.drawColor(Color.TRANSPARENT);
         paint.setAntiAlias(true);
 
         if (!com.limelight.preferences.PreferenceConfiguration.readPreferences(getContext()).enableOnScreenStyleOfficial) {
-            boolean isEditMode = virtualController.getControllerMode() != VirtualController.ControllerMode.Active;
+            VirtualController.ControllerMode mode = virtualController.getControllerMode();
+            boolean isEditMode = mode != VirtualController.ControllerMode.Active;
             int oscOpacity = getEffectiveOscOpacity();
             float opacityFactor = Math.max(0.0f, Math.min(1.0f, oscOpacity / 100f));
             if (isEditMode && opacityFactor < 0.35f) {
                 opacityFactor = 0.35f;
+            }
+            if (mode == VirtualController.ControllerMode.DisableEnableButtons && !enabled) {
+                opacityFactor *= 0.38f;
             }
             if (opacityFactor <= 0.005f && !isEditMode) {
                 return;
@@ -282,6 +284,15 @@ public class AnalogStick extends VirtualControllerElement {
                 paint.setStrokeWidth(Math.max(1.5f, strokeW * 0.85f));
                 paint.setColor(stickWithAlpha(knobRgb, 0.88f * opacityFactor));
                 canvas.drawCircle(drawX, drawY, knobR, paint);
+            }
+
+            if (isEditMode) {
+                float editStroke = Math.max(2f, getDefaultStrokeWidth());
+                float pad = editStroke * 0.5f;
+                paint.setStyle(Paint.Style.STROKE);
+                paint.setStrokeWidth(editStroke);
+                paint.setColor(isPressed() ? pressedColor : getDefaultColor());
+                canvas.drawRect(pad, pad, getWidth() - pad, getHeight() - pad, paint);
             }
             return;
         }

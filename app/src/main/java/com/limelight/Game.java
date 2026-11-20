@@ -4309,7 +4309,59 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
         }
     }
 
+    private int currentMouseMode = 0;
+
+    public int getCurrentMouseMode() {
+        return currentMouseMode;
+    }
+
+    public boolean isVirtualControllerVisible() {
+        return virtualController != null && virtualController.isVisible();
+    }
+
+    public boolean isFullKeyboardVisible() {
+        if (isOnExternalDisplay()) {
+            return ExternalDisplayControlActivity.isFullKeyboardVisible();
+        }
+        return isKeyboardLayoutVisible();
+    }
+
+    public boolean isPerformanceOverlayVisible() {
+        return prefConfig != null && prefConfig.enablePerfOverlay;
+    }
+
+    public boolean isCondensedQuickMenuEnabled() {
+        return prefConfig == null || prefConfig.enableCondensedQuickMenu;
+    }
+
+    public int cycleQuickMouseMode() {
+        final int[] cycle = isOnExternalDisplay()
+                ? new int[]{2, 3}
+                : new int[]{0, 2, 3, 1};
+        int nextIndex = 0;
+        for (int i = 0; i < cycle.length; i++) {
+            if (cycle[i] == currentMouseMode) {
+                nextIndex = (i + 1) % cycle.length;
+                break;
+            }
+        }
+        int nextMode = cycle[nextIndex];
+        applyMouseMode(nextMode);
+        if (prefConfig != null && prefConfig.rememberMouseMode) {
+            ProfilesManager.getInstance().getOverlayingSharedPreferences(this)
+                    .edit()
+                    .putString("mouse_mode_list", String.valueOf(nextMode))
+                    .apply();
+        }
+        String[] allModes = getResources().getStringArray(R.array.mouse_mode_names);
+        if (nextMode >= 0 && nextMode < allModes.length) {
+            Toast.makeText(this, allModes[nextMode], Toast.LENGTH_SHORT).show();
+        }
+        return nextMode;
+    }
+
     private void applyMouseMode(int mode) {
+        currentMouseMode = mode;
         switch (mode) {
             case 0: // Multi-touch
                 prefConfig.enableMultiTouchScreen = true;

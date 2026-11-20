@@ -81,13 +81,18 @@ public abstract class VirtualControllerElement extends View {
         int newPos_x = (int) getX() + x - pressed_x;
         int newPos_y = (int) getY() + y - pressed_y;
 
+        View parentView = getParent() instanceof View ? (View) getParent() : null;
+        int maxX = parentView != null ? Math.max(0, parentView.getWidth() - getWidth()) : Integer.MAX_VALUE;
+        int maxY = parentView != null ? Math.max(0, parentView.getHeight() - getHeight()) : Integer.MAX_VALUE;
+
         FrameLayout.LayoutParams layoutParams = (FrameLayout.LayoutParams) getLayoutParams();
 
-        layoutParams.leftMargin = newPos_x > 0 ? newPos_x : 0;
-        layoutParams.topMargin = newPos_y > 0 ? newPos_y : 0;
+        layoutParams.leftMargin = Math.max(0, Math.min(maxX, newPos_x));
+        layoutParams.topMargin = Math.max(0, Math.min(maxY, newPos_y));
         layoutParams.rightMargin = 0;
         layoutParams.bottomMargin = 0;
 
+        virtualController.notifyLayoutEdited();
         requestLayout();
     }
 
@@ -97,14 +102,22 @@ public abstract class VirtualControllerElement extends View {
         int newHeight = height + (startSize_y - pressed_y);
         int newWidth = width + (startSize_x - pressed_x);
 
-        layoutParams.height = newHeight > 20 ? newHeight : 20;
-        layoutParams.width = newWidth > 20 ? newWidth : 20;
+        View parentView = getParent() instanceof View ? (View) getParent() : null;
+        int minDim = Math.max(40, (int) (getResources().getDisplayMetrics().heightPixels * 0.04f));
+        int maxW = parentView != null ? Math.max(minDim, parentView.getWidth() - layoutParams.leftMargin) : Integer.MAX_VALUE;
+        int maxH = parentView != null ? Math.max(minDim, parentView.getHeight() - layoutParams.topMargin) : Integer.MAX_VALUE;
 
+        layoutParams.height = Math.max(minDim, Math.min(maxH, newHeight));
+        layoutParams.width = Math.max(minDim, Math.min(maxW, newWidth));
+
+        virtualController.notifyLayoutEdited();
         requestLayout();
     }
 
-    protected  void actionDisableEnableButton(){
+    protected void actionDisableEnableButton() {
         enabled = !enabled;
+        virtualController.notifyLayoutEdited();
+        invalidate();
     }
 
     @Override

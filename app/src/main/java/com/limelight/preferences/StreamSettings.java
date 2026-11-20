@@ -1142,6 +1142,15 @@ public class StreamSettings extends AppCompatActivity {
                 });
             }
 
+            _pref = findPreference("option_edit_osc_layout");
+            if (_pref != null) {
+                _pref.setOnPreferenceClickListener(preference -> {
+                    Intent intent = new Intent(requireActivity(), com.limelight.OscLayoutEditorActivity.class);
+                    UiHelper.startMenuActivityWithDepth(requireActivity(), intent);
+                    return true;
+                });
+            }
+
             _pref = findPreference("pref_debug_info");
             if (_pref != null) {
                 _pref.setOnPreferenceClickListener(new Preference.OnPreferenceClickListener() {

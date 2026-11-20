@@ -143,9 +143,6 @@ public class DigitalButton extends VirtualControllerElement {
 
     @Override
     protected void onElementDraw(Canvas canvas) {
-        // set transparent background
-        canvas.drawColor(Color.TRANSPARENT);
-
         paint.setAntiAlias(true);
 
         //皮肤选择 官方皮肤
@@ -170,11 +167,15 @@ public class DigitalButton extends VirtualControllerElement {
             return;
         }
 
-        boolean isEditMode = virtualController.getControllerMode() != VirtualController.ControllerMode.Active;
+        VirtualController.ControllerMode mode = virtualController.getControllerMode();
+        boolean isEditMode = mode != VirtualController.ControllerMode.Active;
         int oscOpacity = getEffectiveOscOpacity();
         float opacityFactor = Math.max(0.0f, Math.min(1.0f, oscOpacity / 100f));
         if (isEditMode && opacityFactor < 0.35f) {
             opacityFactor = 0.35f;
+        }
+        if (mode == VirtualController.ControllerMode.DisableEnableButtons && !enabled) {
+            opacityFactor *= 0.38f;
         }
         float w = getWidth();
         float h = getHeight();

@@ -240,17 +240,6 @@ public class AnalogStickFree extends VirtualControllerElement {
         boolean bIsEnable = virtualController.getControllerMode() == VirtualController.ControllerMode.DisableEnableButtons;
         boolean isEditMode = bIsMoving || bIsResizing || bIsEnable;
 
-        if (isEditMode) {
-            canvas.drawColor(getDefaultColor());
-            paint.setColor(Color.WHITE);
-            int nWidth = getWidth();
-            int nHeight = getHeight();
-
-            paint.setStyle(Paint.Style.FILL);
-            paint.setTextSize(Math.min(nWidth, nHeight) / 2);
-            canvas.drawText(strStickSide, nWidth / 2, nHeight / 2, paint);
-        }
-
         paint.setAntiAlias(true);
         paint.setPathEffect(null);
         paint.setStyle(Paint.Style.STROKE);
@@ -262,10 +251,13 @@ public class AnalogStickFree extends VirtualControllerElement {
         if (isEditMode && opacityFactor < 0.35f) {
             opacityFactor = 0.35f;
         }
+        if (bIsEnable && !enabled) {
+            opacityFactor *= 0.38f;
+        }
         float freeBgFactor = Math.max(0.0f, Math.min(1.0f, cfg.enableNewAnalogStickOpacity / 100f));
 
         if (!bIsFingerOnScreen) {
-            if (!cfg.enableOnScreenStyleOfficial && !isEditMode && opacityFactor > 0.005f) {
+            if (!cfg.enableOnScreenStyleOfficial && opacityFactor > 0.005f) {
                 float cx = getWidth() * 0.5f;
                 float cy = getHeight() * 0.5f;
                 float outlineScale = getOutlineScaleFactor();
@@ -301,12 +293,40 @@ public class AnalogStickFree extends VirtualControllerElement {
                 paint.setColor(freeStickWithAlpha(0xFFFFFFFF, 0.55f * opacityFactor));
                 canvas.drawCircle(cx, cy, dotR, paint);
             }
+
+            if (isEditMode) {
+                int nWidth = getWidth();
+                int nHeight = getHeight();
+                int editColor = getDefaultColor();
+                float editStroke = Math.max(2f, getDefaultStrokeWidth());
+                float pad = editStroke * 0.5f;
+                float cornerR = Math.min(nWidth, nHeight) * 0.14f;
+
+                paint.setShader(null);
+                paint.setPathEffect(null);
+                paint.setStyle(Paint.Style.FILL);
+                paint.setColor(freeStickWithAlpha(editColor, 0.20f));
+                canvas.drawRoundRect(pad, pad, nWidth - pad, nHeight - pad, cornerR, cornerR, paint);
+
+                paint.setStyle(Paint.Style.STROKE);
+                paint.setStrokeWidth(editStroke);
+                paint.setColor(editColor);
+                canvas.drawRoundRect(pad, pad, nWidth - pad, nHeight - pad, cornerR, cornerR, paint);
+
+                paint.setStyle(Paint.Style.FILL);
+                paint.setColor(freeStickWithAlpha(Color.WHITE, (bIsEnable && !enabled) ? 0.50f : 0.92f));
+                paint.setTextAlign(Paint.Align.CENTER);
+                paint.setFakeBoldText(true);
+                paint.setTextSize(Math.min(nWidth, nHeight) * 0.30f);
+                Paint.FontMetrics fm = paint.getFontMetrics();
+                float textY = nHeight * 0.5f - (fm.ascent + fm.descent) * 0.5f;
+                canvas.drawText(strStickSide, nWidth * 0.5f, textY, paint);
+                paint.setFakeBoldText(false);
+            }
             return;
         }
 
         if (bIsFingerOnScreen) {
-            canvas.drawColor(Color.TRANSPARENT);
-
             if (!cfg.enableOnScreenStyleOfficial) {
                 if (opacityFactor <= 0.005f && freeBgFactor <= 0.005f && !isEditMode) {
                     return;

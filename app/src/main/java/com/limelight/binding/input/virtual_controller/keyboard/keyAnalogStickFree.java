@@ -238,22 +238,34 @@ public class keyAnalogStickFree extends keyBoardVirtualControllerElement {
         boolean bIsEnable = virtualController.getControllerMode() == KeyBoardController.ControllerMode.DisableEnableButtons;
 
         if (bIsMoving || bIsResizing || bIsEnable) {
-            canvas.drawColor(getDefaultColor());
-            paint.setColor(Color.WHITE);
             int nWidth = getWidth();
             int nHeight = getHeight();
+            int editColor = getDefaultColor();
+            float editStroke = Math.max(2f, getDefaultStrokeWidth());
+            float pad = editStroke * 0.5f;
+
+            paint.setAntiAlias(true);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor((0x38 << 24) | (editColor & 0x00FFFFFF));
+            canvas.drawRect(pad, pad, nWidth - pad, nHeight - pad, paint);
+
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(editStroke);
+            paint.setColor(editColor);
+            canvas.drawRect(pad, pad, nWidth - pad, nHeight - pad, paint);
 
             paint.setStyle(Paint.Style.FILL);
-            paint.setTextSize(Math.min(nWidth, nHeight) / 2);
-            canvas.drawText(strStickSide, nWidth / 2, nHeight / 2, paint);
+            paint.setColor(Color.WHITE);
+            paint.setTextAlign(Paint.Align.CENTER);
+            paint.setTextSize(Math.min(nWidth, nHeight) * 0.35f);
+            Paint.FontMetrics fm = paint.getFontMetrics();
+            canvas.drawText(strStickSide, nWidth * 0.5f, nHeight * 0.5f - (fm.ascent + fm.descent) * 0.5f, paint);
         }
 
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeWidth(getDefaultStrokeWidth());
 
         if (bIsFingerOnScreen) {
-            // set transparent background
-            canvas.drawColor(Color.TRANSPARENT);
             //canvas.drawCircle(touchX, touchY, 50, paint);
 
             // draw outer circle
