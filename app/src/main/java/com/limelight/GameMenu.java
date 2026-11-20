@@ -5,30 +5,52 @@ import android.app.Dialog;
 import androidx.appcompat.app.AlertDialog;
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.content.res.ColorStateList;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.LinearGradient;
+import android.graphics.Outline;
+import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.PorterDuff;
+import android.graphics.Rect;
+import android.graphics.RectF;
+import android.graphics.Shader;
+import android.graphics.Typeface;
+import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.TextUtils;
+import android.util.DisplayMetrics;
+import android.util.TypedValue;
 import android.view.ContextThemeWrapper;
 import android.view.Gravity;
 import android.view.KeyEvent;
+import android.view.PixelCopy;
+import android.view.SurfaceView;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewOutlineProvider;
 import android.view.Window;
 import android.view.WindowManager;
 import android.view.animation.PathInterpolator;
 import android.widget.ArrayAdapter;
+import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.SeekBar;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.limelight.binding.input.GameInputDevice;
 import com.limelight.binding.input.KeyboardTranslator;
 import com.limelight.preferences.PreferenceConfiguration;
+import com.limelight.profiles.ProfilesManager;
 import com.limelight.ui.AppThemePalette;
 import com.limelight.utils.KeyConfigHelper;
 import com.limelight.utils.KeyMapper;
@@ -162,40 +184,347 @@ public class GameMenu implements Game.GameMenuCallbacks {
         }
     }
 
-    // --- Revamped Condensed Icon-Only Quick Menu ---
+    // --- Revamped Condensed Icon-Only Quick Menu + Live-Blur Side Settings Drawer ---
+
+    private interface BooleanConsumer {
+        void accept(boolean value);
+    }
+
+    private interface IntConsumer {
+        void accept(int value);
+    }
+
+    /**
+     * Single-pass 30 FPS PixelCopy live stream blur shared across both the centered Quick Menu
+     * card and the left-edge Side Settings Drawer so each card refracts the exact pixels beneath it.
+     */
+    private static final class StreamBlurController {
+        private static final int CAPTURE_LONG_EDGE = 220;
+        private static final long CAPTURE_INTERVAL_MS = 33L;
+
+        private final Activity activity;
+        private final Handler handler = new Handler(Looper.getMainLooper());
+        private final List<FrostedStreamCardLayout> cards = new ArrayList<>();
+        private final int[] surfaceLoc = new int[2];
+        private final Bitmap[] buffers = new Bitmap[2];
+
+        private int writeIndex = 0;
+        private volatile Bitmap readyBitmap = null;
+        private volatile int surfaceScreenLeft = 0;
+        private volatile int surfaceScreenTop = 0;
+        private volatile int surfaceWidth = 0;
+        private volatile int surfaceHeight = 0;
+
+        private boolean running = false;
+        private boolean inFlight = false;
+        private int blurRadius = 5;
+
+        private final Runnable captureTick = new Runnable() {
+            @Override
+            public void run() {
+                if (!running) {
+                    return;
+                }
+                requestFrameCapture();
+                handler.postDelayed(this, CAPTURE_INTERVAL_MS);
+            }
+        };
+
+        StreamBlurController(Activity activity) {
+            this.activity = activity;
+            int blurPct = ProfilesManager.getInstance()
+                    .getOverlayingSharedPreferences(activity)
+                    .getInt(PreferenceConfiguration.BLUR_AMOUNT_PREF_STRING,
+                            PreferenceConfiguration.DEFAULT_BLUR_AMOUNT);
+            this.blurRadius = Math.max(0, Math.min(12, Math.round(5f * (blurPct / 100f))));
+        }
+
+        void registerCard(FrostedStreamCardLayout card) {
+            if (!cards.contains(card)) {
+                cards.add(card);
+            }
+        }
+
+        void start() {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N || running || blurRadius <= 0) {
+                return;
+            }
+            running = true;
+            handler.removeCallbacks(captureTick);
+            handler.post(captureTick);
+        }
+
+        void stop() {
+            running = false;
+            inFlight = false;
+            handler.removeCallbacks(captureTick);
+            readyBitmap = null;
+        }
+
+        Bitmap getReadyBitmap() {
+            return readyBitmap;
+        }
+
+        int getSurfaceScreenLeft() {
+            return surfaceScreenLeft;
+        }
+
+        int getSurfaceScreenTop() {
+            return surfaceScreenTop;
+        }
+
+        int getSurfaceWidth() {
+            return surfaceWidth;
+        }
+
+        int getSurfaceHeight() {
+            return surfaceHeight;
+        }
+
+        private void requestFrameCapture() {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N || inFlight
+                    || activity == null || activity.isFinishing()) {
+                return;
+            }
+            SurfaceView surfaceView = UiHelper.findStreamSurfaceView(activity);
+            if (surfaceView == null || surfaceView.getWidth() <= 0 || surfaceView.getHeight() <= 0
+                    || !surfaceView.getHolder().getSurface().isValid()) {
+                return;
+            }
+
+            final int sw = surfaceView.getWidth();
+            final int sh = surfaceView.getHeight();
+            surfaceView.getLocationOnScreen(surfaceLoc);
+            final int sl = surfaceLoc[0];
+            final int st = surfaceLoc[1];
+
+            int bw;
+            int bh;
+            if (sw >= sh) {
+                bw = CAPTURE_LONG_EDGE;
+                bh = Math.max(16, Math.round(CAPTURE_LONG_EDGE * (sh / (float) sw)));
+            } else {
+                bh = CAPTURE_LONG_EDGE;
+                bw = Math.max(16, Math.round(CAPTURE_LONG_EDGE * (sw / (float) sh)));
+            }
+
+            if (buffers[0] == null || buffers[0].getWidth() != bw || buffers[0].getHeight() != bh) {
+                buffers[0] = Bitmap.createBitmap(bw, bh, Bitmap.Config.ARGB_8888);
+                buffers[1] = Bitmap.createBitmap(bw, bh, Bitmap.Config.ARGB_8888);
+                readyBitmap = null;
+            }
+
+            final int idx = writeIndex;
+            final Bitmap target = buffers[idx];
+            inFlight = true;
+            try {
+                PixelCopy.request(surfaceView, target, copyResult -> {
+                    inFlight = false;
+                    if (!running || copyResult != PixelCopy.SUCCESS) {
+                        return;
+                    }
+                    if (blurRadius > 0) {
+                        UiHelper.fastBoxBlur(target, blurRadius);
+                    }
+                    surfaceScreenLeft = sl;
+                    surfaceScreenTop = st;
+                    surfaceWidth = sw;
+                    surfaceHeight = sh;
+                    readyBitmap = target;
+                    writeIndex = 1 - idx;
+
+                    for (int i = 0; i < cards.size(); i++) {
+                        FrostedStreamCardLayout card = cards.get(i);
+                        if (card.getVisibility() == View.VISIBLE) {
+                            card.invalidate();
+                        }
+                    }
+                }, handler);
+            } catch (IllegalArgumentException | IllegalStateException e) {
+                inFlight = false;
+            }
+        }
+    }
+
+    /**
+     * Rounded One UI frosted glass card that clips a live screen-aligned blurred stream crop
+     * strictly inside its squircle outline, layered with a translucent dark-glass tint, subtle
+     * top specular sheen, and crisp glass rim stroke.
+     */
+    private static final class FrostedStreamCardLayout extends FrameLayout {
+        private final StreamBlurController blurController;
+        private final float cornerRadiusPx;
+        private final int tintColorWithBlur;
+        private final int tintColorFallback;
+        private final int accentDeepTint;
+
+        private final Path clipPath = new Path();
+        private final RectF cardBounds = new RectF();
+        private final Rect srcRect = new Rect();
+        private final RectF dstRect = new RectF();
+        private final int[] viewLoc = new int[2];
+
+        private final Paint bitmapPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+        private final Paint fillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint sheenPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint rimPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+        FrostedStreamCardLayout(Context context, StreamBlurController blurController,
+                                float cornerRadiusPx, AppThemePalette palette) {
+            super(context);
+            this.blurController = blurController;
+            this.cornerRadiusPx = cornerRadiusPx;
+            this.tintColorWithBlur = 0xAA0C1018;
+            this.tintColorFallback = 0xDE0C1018;
+            this.accentDeepTint = AppThemePalette.withAlpha(palette.deep, 0.22f);
+
+            setWillNotDraw(false);
+            setClickable(true);
+
+            rimPaint.setStyle(Paint.Style.STROKE);
+            rimPaint.setStrokeWidth(Math.max(1f, UiHelper.dpToPx(context, 1.15f)));
+            rimPaint.setColor(0x3DFFFFFF);
+
+            setOutlineProvider(new ViewOutlineProvider() {
+                @Override
+                public void getOutline(View view, Outline outline) {
+                    outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), cornerRadiusPx);
+                }
+            });
+            setClipToOutline(true);
+            blurController.registerCard(this);
+        }
+
+        @Override
+        protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+            super.onSizeChanged(w, h, oldw, oldh);
+            cardBounds.set(0f, 0f, w, h);
+            clipPath.reset();
+            clipPath.addRoundRect(cardBounds, cornerRadiusPx, cornerRadiusPx, Path.Direction.CW);
+            if (h > 0) {
+                sheenPaint.setShader(new LinearGradient(
+                        0f, 0f, 0f, Math.min(h, cornerRadiusPx * 3.4f),
+                        0x1CFFFFFF, 0x00FFFFFF, Shader.TileMode.CLAMP));
+            }
+        }
+
+        @Override
+        protected void onDraw(Canvas canvas) {
+            int w = getWidth();
+            int h = getHeight();
+            if (w <= 0 || h <= 0) {
+                return;
+            }
+
+            boolean drewBlur = false;
+            Bitmap bmp = blurController.getReadyBitmap();
+            int sw = blurController.getSurfaceWidth();
+            int sh = blurController.getSurfaceHeight();
+
+            canvas.save();
+            canvas.clipPath(clipPath);
+
+            if (bmp != null && !bmp.isRecycled() && sw > 0 && sh > 0) {
+                getLocationOnScreen(viewLoc);
+                int originL = blurController.getSurfaceScreenLeft();
+                int originT = blurController.getSurfaceScreenTop();
+                int bw = bmp.getWidth();
+                int bh = bmp.getHeight();
+                float scaleX = bw / (float) sw;
+                float scaleY = bh / (float) sh;
+
+                int srcL = Math.max(0, Math.min(bw - 1, Math.round((viewLoc[0] - originL) * scaleX)));
+                int srcT = Math.max(0, Math.min(bh - 1, Math.round((viewLoc[1] - originT) * scaleY)));
+                int srcR = Math.max(srcL + 1, Math.min(bw, Math.round((viewLoc[0] + w - originL) * scaleX)));
+                int srcB = Math.max(srcT + 1, Math.min(bh, Math.round((viewLoc[1] + h - originT) * scaleY)));
+
+                srcRect.set(srcL, srcT, srcR, srcB);
+                dstRect.set(0f, 0f, w, h);
+                canvas.drawBitmap(bmp, srcRect, dstRect, bitmapPaint);
+                drewBlur = true;
+            }
+
+            fillPaint.setColor(drewBlur ? tintColorWithBlur : tintColorFallback);
+            canvas.drawRect(cardBounds, fillPaint);
+
+            fillPaint.setColor(accentDeepTint);
+            canvas.drawRect(cardBounds, fillPaint);
+
+            if (sheenPaint.getShader() != null) {
+                canvas.drawRect(cardBounds, sheenPaint);
+            }
+            canvas.restore();
+
+            float inset = rimPaint.getStrokeWidth() * 0.5f;
+            dstRect.set(inset, inset, w - inset, h - inset);
+            canvas.drawRoundRect(dstRect, Math.max(0f, cornerRadiusPx - inset),
+                    Math.max(0f, cornerRadiusPx - inset), rimPaint);
+        }
+    }
 
     private void showCondensedQuickMenu() {
         hideMenu();
 
-        Context themedContext = new ContextThemeWrapper(dialogScreenContext, R.style.OneUI_DialogTheme);
+        final Context themedContext = new ContextThemeWrapper(dialogScreenContext, R.style.OneUI_DialogTheme);
         final Dialog dialog = new Dialog(themedContext, R.style.OneUI_DialogTheme);
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
         dialog.setCancelable(true);
         dialog.setCanceledOnTouchOutside(true);
+
+        final AppThemePalette palette = AppThemePalette.getCurrent(game);
+        final StreamBlurController blurController = new StreamBlurController(game);
+        final boolean[] drawerOpen = { false };
+        final Runnable[] closeDrawerRef = new Runnable[1];
+
         dialog.setOnCancelListener(d -> hideMenu());
         dialog.setOnDismissListener(d -> {
+            blurController.stop();
             if (currentDialog == d) {
                 currentDialog = null;
             }
         });
         dialog.setOnKeyListener((d, keyCode, event) -> {
             if (event.getAction() == KeyEvent.ACTION_DOWN
-                    && (keyCode == KeyEvent.KEYCODE_BUTTON_B || keyCode == KeyEvent.KEYCODE_ESCAPE)) {
+                    && (keyCode == KeyEvent.KEYCODE_BACK
+                    || keyCode == KeyEvent.KEYCODE_BUTTON_B
+                    || keyCode == KeyEvent.KEYCODE_ESCAPE)) {
+                if (drawerOpen[0] && closeDrawerRef[0] != null) {
+                    closeDrawerRef[0].run();
+                    return true;
+                }
                 hideMenu();
                 return true;
             }
             return false;
         });
 
-        final AppThemePalette palette = AppThemePalette.getCurrent(game);
+        // Fullscreen transparent overlay container catching outside taps
+        final FrameLayout overlayRoot = new FrameLayout(themedContext);
+        overlayRoot.setLayoutParams(new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        overlayRoot.setClipChildren(false);
+        overlayRoot.setClipToPadding(false);
+
+        final View scrimView = new View(themedContext);
+        scrimView.setBackgroundColor(0x28000000);
+        scrimView.setAlpha(0f);
+        scrimView.setOnClickListener(v -> hideMenu());
+        overlayRoot.addView(scrimView, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        // --- Centered Quick Menu Card (4x2 Squircle Grid + Centered Settings Pill Below) ---
         final int tileSize = dp(58f);
         final int tileGap = dp(12f);
         final int cardPad = dp(18f);
+        final float cardRadius = dp(28f);
+
+        final FrostedStreamCardLayout quickMenuCard = new FrostedStreamCardLayout(
+                themedContext, blurController, cardRadius, palette);
 
         LinearLayout rootColumn = new LinearLayout(themedContext);
         rootColumn.setOrientation(LinearLayout.VERTICAL);
-        rootColumn.setGravity(Gravity.CENTER);
-        rootColumn.setPadding(cardPad, cardPad, cardPad, cardPad);
+        rootColumn.setGravity(Gravity.CENTER_HORIZONTAL);
+        rootColumn.setPadding(cardPad, cardPad, cardPad, dp(14f));
         rootColumn.setClipChildren(false);
         rootColumn.setClipToPadding(false);
 
@@ -346,17 +675,160 @@ public class GameMenu implements Game.GameMenuCallbacks {
         row2Lp.topMargin = tileGap;
         rootColumn.addView(row2, row2Lp);
 
-        dialog.setContentView(rootColumn);
+        // 9. Centered Settings Pill below the 4x2 grid
+        final int pillWidth = dp(96f);
+        final int pillHeight = dp(36f);
+        final FrameLayout btnSettingsPill = new FrameLayout(themedContext);
+        btnSettingsPill.setFocusable(true);
+        btnSettingsPill.setClickable(true);
+        setTooltipAndDesc(btnSettingsPill, getString(R.string.quick_settings_title));
+
+        final ImageView settingsIconView = new ImageView(themedContext);
+        settingsIconView.setImageResource(R.drawable.ic_settings);
+        settingsIconView.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        int gearSize = dp(20f);
+        FrameLayout.LayoutParams gearLp = new FrameLayout.LayoutParams(gearSize, gearSize);
+        gearLp.gravity = Gravity.CENTER;
+        btnSettingsPill.addView(settingsIconView, gearLp);
+
+        final Runnable refreshSettingsPill = () -> applySettingsPillStyle(
+                btnSettingsPill, settingsIconView, drawerOpen[0], palette.highlight, btnSettingsPill.isFocused());
+        refreshSettingsPill.run();
+        attachFocusRing(btnSettingsPill, refreshSettingsPill);
+
+        LinearLayout.LayoutParams pillLp = new LinearLayout.LayoutParams(pillWidth, pillHeight);
+        pillLp.topMargin = dp(12f);
+        pillLp.gravity = Gravity.CENTER_HORIZONTAL;
+        rootColumn.addView(btnSettingsPill, pillLp);
+
+        quickMenuCard.addView(rootColumn, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        FrameLayout.LayoutParams quickCardLp = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        quickCardLp.gravity = Gravity.CENTER;
+        overlayRoot.addView(quickMenuCard, quickCardLp);
+
+        // --- Left-Edge Scrollable Live-Blur Side Settings Drawer ---
+        DisplayMetrics dm = dialogScreenContext.getResources().getDisplayMetrics();
+        final int drawerMargin = dp(12f);
+        final int drawerWidth = Math.max(dp(256f), Math.min(dp(304f), Math.round(dm.widthPixels * 0.42f)));
+
+        final FrostedStreamCardLayout sideDrawerCard = new FrostedStreamCardLayout(
+                themedContext, blurController, cardRadius, palette);
+        sideDrawerCard.setVisibility(View.GONE);
+        sideDrawerCard.setAlpha(0f);
+        sideDrawerCard.setTranslationX(-(drawerWidth + dp(24f)));
+
+        Runnable setDrawerVisibility = new Runnable() {
+            @Override
+            public void run() {
+                boolean open = drawerOpen[0];
+                refreshSettingsPill.run();
+                settingsIconView.animate().cancel();
+                settingsIconView.animate()
+                        .rotation(open ? 60f : 0f)
+                        .setDuration(240L)
+                        .setInterpolator(SPRING_EASE)
+                        .start();
+
+                if (open) {
+                    sideDrawerCard.setVisibility(View.VISIBLE);
+                    sideDrawerCard.animate().cancel();
+                    sideDrawerCard.animate()
+                            .translationX(0f)
+                            .alpha(1f)
+                            .setDuration(240L)
+                            .setInterpolator(SPRING_EASE)
+                            .setUpdateListener(a -> sideDrawerCard.invalidate())
+                            .start();
+                } else {
+                    sideDrawerCard.animate().cancel();
+                    sideDrawerCard.animate()
+                            .translationX(-(drawerWidth + dp(24f)))
+                            .alpha(0f)
+                            .setDuration(190L)
+                            .setInterpolator(SPRING_EASE)
+                            .setUpdateListener(a -> sideDrawerCard.invalidate())
+                            .withEndAction(() -> {
+                                if (!drawerOpen[0]) {
+                                    sideDrawerCard.setVisibility(View.GONE);
+                                }
+                            })
+                            .start();
+                }
+
+                // Gently shift centered Quick Menu right only if screen width would overlap drawer
+                float targetShiftX = 0f;
+                if (open) {
+                    int screenW = overlayRoot.getWidth() > 0 ? overlayRoot.getWidth() : dm.widthPixels;
+                    int quickW = quickMenuCard.getWidth() > 0 ? quickMenuCard.getWidth() : dp(304f);
+                    float defaultLeft = (screenW - quickW) * 0.5f;
+                    float minClearLeft = drawerMargin + drawerWidth + dp(12f);
+                    if (defaultLeft < minClearLeft) {
+                        float maxShift = Math.max(0f, screenW - dp(10f) - (defaultLeft + quickW));
+                        targetShiftX = Math.min(minClearLeft - defaultLeft, maxShift);
+                    }
+                }
+                quickMenuCard.animate().cancel();
+                quickMenuCard.animate()
+                        .translationX(targetShiftX)
+                        .setDuration(240L)
+                        .setInterpolator(SPRING_EASE)
+                        .setUpdateListener(a -> quickMenuCard.invalidate())
+                        .start();
+            }
+        };
+
+        closeDrawerRef[0] = () -> {
+            if (drawerOpen[0]) {
+                drawerOpen[0] = false;
+                setDrawerVisibility.run();
+            }
+        };
+
+        View drawerContent = buildSideSettingsDrawerContent(
+                themedContext, palette, closeDrawerRef[0], refreshMouseTile);
+        sideDrawerCard.addView(drawerContent, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        FrameLayout.LayoutParams drawerLp = new FrameLayout.LayoutParams(
+                drawerWidth, ViewGroup.LayoutParams.MATCH_PARENT);
+        drawerLp.gravity = Gravity.START | Gravity.CENTER_VERTICAL;
+        drawerLp.setMargins(drawerMargin, drawerMargin, drawerMargin, drawerMargin);
+        overlayRoot.addView(sideDrawerCard, drawerLp);
+
+        btnSettingsPill.setOnClickListener(v -> {
+            animateTileTap(v);
+            drawerOpen[0] = !drawerOpen[0];
+            setDrawerVisibility.run();
+        });
+
+        // Re-evaluate non-overlapping shift if device rotates while drawer is open
+        overlayRoot.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
+            if ((r - l) != (or - ol) && drawerOpen[0]) {
+                overlayRoot.post(setDrawerVisibility);
+            }
+        });
+
+        dialog.setContentView(overlayRoot);
         currentDialog = dialog;
 
         Window window = dialog.getWindow();
         if (window != null) {
-            window.setGravity(Gravity.CENTER);
-            window.setLayout(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            window.setGravity(Gravity.FILL);
+            window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
             WindowManager.LayoutParams lp = window.getAttributes();
-            lp.dimAmount = 0.18f;
+            lp.dimAmount = 0f;
+            lp.flags |= WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+            }
             window.setAttributes(lp);
             View decor = window.getDecorView();
+            decor.setPadding(0, 0, 0, 0);
+            decor.setBackground(new ColorDrawable(Color.TRANSPARENT));
             decor.setSystemUiVisibility(
                     View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
                             | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
@@ -366,9 +838,564 @@ public class GameMenu implements Game.GameMenuCallbacks {
                             | View.SYSTEM_UI_FLAG_FULLSCREEN);
         }
 
-        UiHelper.styleDialogSquircle(dialog);
+        // Smooth entrance animation on card & scrim
+        quickMenuCard.setAlpha(0f);
+        quickMenuCard.setScaleX(0.93f);
+        quickMenuCard.setScaleY(0.93f);
+
         dialog.show();
-        UiHelper.styleDialogSquircle(dialog);
+        blurController.start();
+
+        scrimView.animate()
+                .alpha(1f)
+                .setDuration(180L)
+                .setInterpolator(SPRING_EASE)
+                .start();
+        quickMenuCard.animate()
+                .alpha(1f)
+                .scaleX(1f)
+                .scaleY(1f)
+                .setDuration(210L)
+                .setInterpolator(SPRING_EASE)
+                .setUpdateListener(a -> quickMenuCard.invalidate())
+                .start();
+    }
+
+    private View buildSideSettingsDrawerContent(Context ctx, AppThemePalette palette,
+                                                Runnable onCloseDrawer, Runnable onMouseModeMayChange) {
+        LinearLayout container = new LinearLayout(ctx);
+        container.setOrientation(LinearLayout.VERTICAL);
+
+        // Fixed Header Bar
+        LinearLayout header = new LinearLayout(ctx);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        header.setPadding(dp(16f), dp(14f), dp(12f), dp(12f));
+
+        TextView titleView = new TextView(ctx);
+        titleView.setText(R.string.quick_settings_title);
+        titleView.setTextColor(Color.WHITE);
+        titleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f);
+        titleView.setTypeface(Typeface.DEFAULT_BOLD);
+        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        header.addView(titleView, titleLp);
+
+        TextView closeBtn = new TextView(ctx);
+        closeBtn.setText("\u2715");
+        closeBtn.setTextColor(0xD8FFFFFF);
+        closeBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f);
+        closeBtn.setGravity(Gravity.CENTER);
+        closeBtn.setFocusable(true);
+        closeBtn.setClickable(true);
+        GradientDrawable closeBg = new GradientDrawable();
+        closeBg.setShape(GradientDrawable.OVAL);
+        closeBg.setColor(0x20FFFFFF);
+        closeBg.setStroke(Math.max(1, dp(1f)), 0x3DFFFFFF);
+        closeBtn.setBackground(closeBg);
+        closeBtn.setOnClickListener(v -> {
+            animateTileTap(v);
+            onCloseDrawer.run();
+        });
+        header.addView(closeBtn, new LinearLayout.LayoutParams(dp(28f), dp(28f)));
+        container.addView(header, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        View divider = new View(ctx);
+        divider.setBackgroundColor(0x22FFFFFF);
+        container.addView(divider, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(1f))));
+
+        // Scrollable Settings Body
+        ScrollView scrollView = new ScrollView(ctx);
+        scrollView.setVerticalScrollBarEnabled(false);
+        scrollView.setOverScrollMode(View.OVER_SCROLL_ALWAYS);
+
+        LinearLayout body = new LinearLayout(ctx);
+        body.setOrientation(LinearLayout.VERTICAL);
+        body.setPadding(dp(14f), dp(10f), dp(14f), dp(18f));
+
+        // 1. On-Screen Controller Section (hidden on external display)
+        if (!game.isOnExternalDisplay()) {
+            addDrawerSectionHeader(body, ctx, getString(R.string.quick_settings_section_osc), palette, false);
+
+            addDrawerSliderRow(body, ctx, getString(R.string.dialog_title_osc_opacity),
+                    0, 100, 1, game.getOscOpacity(), "%", palette,
+                    game::setOscOpacityLive);
+
+            addDrawerSliderRow(body, ctx, getString(R.string.title_osc_blur_amount),
+                    0, 200, 5, game.getOscBlurAmount(), "%", palette,
+                    game::setOscBlurAmountLive);
+
+            addDrawerSliderRow(body, ctx, getString(R.string.title_osc_outline_thickness),
+                    0, 250, 5, game.getOscOutlineThickness(), "%", palette,
+                    game::setOscOutlineThicknessLive);
+
+            addDrawerToggleRow(body, ctx, getString(R.string.title_checkbox_vibrate_osc),
+                    game.isOscVibrateEnabled(), palette,
+                    game::setOscVibrateLive);
+
+            final View[] freeStickOpacityRowRef = new View[1];
+            addDrawerToggleRow(body, ctx, getString(R.string.title_free_analog_stick),
+                    game.isFreeAnalogStickEnabled(), palette, enabled -> {
+                        game.setFreeAnalogStickLive(enabled);
+                        if (freeStickOpacityRowRef[0] != null) {
+                            setRowEnabledState(freeStickOpacityRowRef[0], enabled);
+                        }
+                    });
+
+            freeStickOpacityRowRef[0] = addDrawerSliderRow(body, ctx,
+                    getString(R.string.title_free_analog_stick_opacity),
+                    0, 100, 5, game.getFreeAnalogStickOpacity(), "%", palette,
+                    game::setFreeAnalogStickOpacityLive);
+            setRowEnabledState(freeStickOpacityRowRef[0], game.isFreeAnalogStickEnabled());
+
+            addDrawerActionButton(body, ctx, getString(R.string.quick_settings_edit_osc_inline), palette, () -> {
+                hideMenu();
+                game.startInlineOscLayoutEdit();
+            });
+        }
+
+        // 2. Touch & Trackpad Section
+        addDrawerSectionHeader(body, ctx, getString(R.string.quick_settings_section_touch),
+                palette, !game.isOnExternalDisplay());
+
+        addDrawerSliderRow(body, ctx, getString(R.string.title_touchpad_sensitivity_x),
+                10, 300, 10, game.getTrackpadSensitivityX(), "%", palette,
+                game::setTrackpadSensitivityXLive);
+
+        addDrawerSliderRow(body, ctx, getString(R.string.title_touchpad_sensitivity_y),
+                10, 300, 10, game.getTrackpadSensitivityY(), "%", palette,
+                game::setTrackpadSensitivityYLive);
+
+        addDrawerToggleRow(body, ctx, getString(R.string.title_trackpad_swap_axis),
+                game.isTrackpadSwapAxisEnabled(), palette,
+                game::setTrackpadSwapAxisLive);
+
+        addDrawerToggleRow(body, ctx, getString(R.string.title_trackpad_drag_drop_vibration),
+                game.isTrackpadDragDropVibrationEnabled(), palette,
+                game::setTrackpadDragDropVibrationLive);
+
+        final View[] touchSensXRowRef = new View[1];
+        final View[] touchSensYRowRef = new View[1];
+        addDrawerToggleRow(body, ctx, getString(R.string.title_touch_sensitivity),
+                game.isTouchSensitivityEnabled(), palette, enabled -> {
+                    game.setTouchSensitivityEnabledLive(enabled);
+                    if (touchSensXRowRef[0] != null) {
+                        setRowEnabledState(touchSensXRowRef[0], enabled);
+                    }
+                    if (touchSensYRowRef[0] != null) {
+                        setRowEnabledState(touchSensYRowRef[0], enabled);
+                    }
+                });
+
+        touchSensXRowRef[0] = addDrawerSliderRow(body, ctx, getString(R.string.title_touch_sensitivity_x),
+                10, 300, 10, game.getTouchSensitivityX(), "%", palette,
+                game::setTouchSensitivityXLive);
+        touchSensYRowRef[0] = addDrawerSliderRow(body, ctx, getString(R.string.title_touch_sensitivity_y),
+                10, 300, 10, game.getTouchSensitivityY(), "%", palette,
+                game::setTouchSensitivityYLive);
+        setRowEnabledState(touchSensXRowRef[0], game.isTouchSensitivityEnabled());
+        setRowEnabledState(touchSensYRowRef[0], game.isTouchSensitivityEnabled());
+
+        addDrawerToggleRow(body, ctx, getString(R.string.quick_settings_local_cursor),
+                game.isLocalMouseCursorVisible(), palette, enabled -> {
+                    if (game.isLocalMouseCursorVisible() != enabled) {
+                        game.toggleLocalMouseCursor();
+                    }
+                });
+
+        addDrawerToggleRow(body, ctx, getString(R.string.quick_settings_special_keys),
+                game.isSpecialKeysVisible(), palette, enabled -> {
+                    if (game.isSpecialKeysVisible() != enabled) {
+                        game.toggleKeyboardController();
+                    }
+                });
+
+        // 3. Display & View Section
+        addDrawerSectionHeader(body, ctx, getString(R.string.quick_settings_section_display), palette, true);
+
+        addDrawerScaleModeRow(body, ctx, palette);
+
+        addDrawerToggleRow(body, ctx, getString(R.string.quick_settings_pan_zoom),
+                game.isZoomModeEnabled(), palette, enabled -> {
+                    if (game.isZoomModeEnabled() != enabled) {
+                        game.toggleZoomMode();
+                        if (onMouseModeMayChange != null) {
+                            onMouseModeMayChange.run();
+                        }
+                    }
+                });
+
+        addDrawerToggleRow(body, ctx, getString(R.string.title_top_center_display),
+                game.isAlignDisplayTopCenter(), palette,
+                game::setAlignDisplayTopCenterLive);
+
+        if (dialogScreenContext == game) {
+            addDrawerActionButton(body, ctx, getString(R.string.quick_settings_rotate_screen),
+                    palette, game::rotateScreen);
+        }
+
+        // 4. Overlay & UI Section
+        addDrawerSectionHeader(body, ctx, getString(R.string.quick_settings_section_overlay), palette, true);
+
+        addDrawerToggleRow(body, ctx, getString(R.string.quick_settings_perf_lite),
+                game.isPerfOverlayLite(), palette,
+                game::setPerfOverlayLiteLive);
+
+        addDrawerToggleRow(body, ctx, getString(R.string.quick_settings_perf_bottom),
+                game.isPerfOverlayBottom(), palette,
+                game::setPerfOverlayBottomLive);
+
+        addDrawerToggleRow(body, ctx, getString(R.string.title_floating_button),
+                game.isFloatingMenuButtonVisible(), palette,
+                game::setFloatingMenuButtonLive);
+
+        addDrawerToggleRow(body, ctx, getString(R.string.title_post_session_metrics),
+                game.isPostSessionMetricsEnabled(), palette,
+                game::setPostSessionMetricsLive);
+
+        addDrawerToggleRow(body, ctx, getString(R.string.title_checkbox_disable_warnings),
+                game.isDisableWarningsEnabled(), palette,
+                game::setDisableWarningsLive);
+
+        scrollView.addView(body, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        container.addView(scrollView, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
+        return container;
+    }
+
+    private void addDrawerSectionHeader(LinearLayout parent, Context ctx, String title,
+                                        AppThemePalette palette, boolean withTopDivider) {
+        if (withTopDivider) {
+            View sep = new View(ctx);
+            sep.setBackgroundColor(0x1CFFFFFF);
+            LinearLayout.LayoutParams sepLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(1f)));
+            sepLp.topMargin = dp(12f);
+            sepLp.bottomMargin = dp(8f);
+            parent.addView(sep, sepLp);
+        }
+
+        TextView header = new TextView(ctx);
+        header.setText(title.toUpperCase());
+        header.setTextColor(palette.getNeonAccent());
+        header.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10.5f);
+        header.setTypeface(Typeface.DEFAULT_BOLD);
+        header.setLetterSpacing(0.08f);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = withTopDivider ? dp(2f) : dp(4f);
+        lp.bottomMargin = dp(6f);
+        parent.addView(header, lp);
+    }
+
+    private View addDrawerToggleRow(LinearLayout parent, Context ctx, String label,
+                                    boolean initialState, AppThemePalette palette,
+                                    BooleanConsumer onToggle) {
+        final boolean[] checked = { initialState };
+
+        LinearLayout row = new LinearLayout(ctx);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(4f), dp(7f), dp(2f), dp(7f));
+        row.setFocusable(true);
+        row.setClickable(true);
+
+        TextView text = new TextView(ctx);
+        text.setText(label);
+        text.setTextColor(0xEAFFFFFF);
+        text.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f);
+        text.setMaxLines(2);
+        text.setEllipsize(TextUtils.TruncateAt.END);
+        LinearLayout.LayoutParams textLp = new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        textLp.setMarginEnd(dp(10f));
+        row.addView(text, textLp);
+
+        // Sleek One UI pill toggle switch
+        final int trackW = dp(40f);
+        final int trackH = dp(22f);
+        final int thumbSize = dp(16f);
+        final int thumbMargin = dp(3f);
+        final float travelPx = trackW - thumbSize - thumbMargin * 2f;
+
+        FrameLayout switchTrack = new FrameLayout(ctx);
+        View thumb = new View(ctx);
+        GradientDrawable thumbBg = new GradientDrawable();
+        thumbBg.setShape(GradientDrawable.OVAL);
+        thumbBg.setColor(Color.WHITE);
+        thumb.setBackground(thumbBg);
+        FrameLayout.LayoutParams thumbLp = new FrameLayout.LayoutParams(thumbSize, thumbSize);
+        thumbLp.gravity = Gravity.START | Gravity.CENTER_VERTICAL;
+        thumbLp.setMarginStart(thumbMargin);
+        switchTrack.addView(thumb, thumbLp);
+
+        Runnable applyVisual = () -> {
+            GradientDrawable trackBg = new GradientDrawable();
+            trackBg.setShape(GradientDrawable.RECTANGLE);
+            trackBg.setCornerRadius(trackH * 0.5f);
+            if (checked[0]) {
+                trackBg.setColor(AppThemePalette.withAlpha(palette.highlight, 0.85f));
+                trackBg.setStroke(Math.max(1, dp(1f)), 0x99FFFFFF);
+            } else {
+                trackBg.setColor(0x28FFFFFF);
+                trackBg.setStroke(Math.max(1, dp(1f)), 0x44FFFFFF);
+            }
+            switchTrack.setBackground(trackBg);
+            thumb.setAlpha(checked[0] ? 1f : 0.78f);
+        };
+        applyVisual.run();
+        thumb.setTranslationX(checked[0] ? travelPx : 0f);
+
+        row.addView(switchTrack, new LinearLayout.LayoutParams(trackW, trackH));
+
+        row.setOnClickListener(v -> {
+            checked[0] = !checked[0];
+            applyVisual.run();
+            thumb.animate().cancel();
+            thumb.animate()
+                    .translationX(checked[0] ? travelPx : 0f)
+                    .setDuration(170L)
+                    .setInterpolator(SPRING_EASE)
+                    .start();
+            onToggle.accept(checked[0]);
+        });
+
+        parent.addView(row, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        return row;
+    }
+
+    private View addDrawerSliderRow(LinearLayout parent, Context ctx, String label,
+                                    int minVal, int maxVal, int step, int initialVal,
+                                    String suffix, AppThemePalette palette,
+                                    IntConsumer onChanged) {
+        final int clampedInit = Math.max(minVal, Math.min(maxVal, initialVal));
+        final int safeStep = Math.max(1, step);
+        final int stepsCount = Math.max(1, (maxVal - minVal) / safeStep);
+
+        LinearLayout block = new LinearLayout(ctx);
+        block.setOrientation(LinearLayout.VERTICAL);
+        block.setPadding(dp(4f), dp(5f), dp(2f), dp(6f));
+
+        LinearLayout topLine = new LinearLayout(ctx);
+        topLine.setOrientation(LinearLayout.HORIZONTAL);
+        topLine.setGravity(Gravity.CENTER_VERTICAL);
+
+        TextView labelView = new TextView(ctx);
+        labelView.setText(label);
+        labelView.setTextColor(0xDEFFFFFF);
+        labelView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f);
+        labelView.setMaxLines(1);
+        labelView.setEllipsize(TextUtils.TruncateAt.END);
+        topLine.addView(labelView, new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        TextView valueView = new TextView(ctx);
+        valueView.setText(clampedInit + suffix);
+        valueView.setTextColor(palette.getNeonAccent());
+        valueView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f);
+        valueView.setTypeface(Typeface.DEFAULT_BOLD);
+        LinearLayout.LayoutParams valLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        valLp.setMarginStart(dp(8f));
+        topLine.addView(valueView, valLp);
+
+        block.addView(topLine, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        SeekBar seekBar = new SeekBar(ctx);
+        seekBar.setMax(stepsCount);
+        seekBar.setProgress(Math.max(0, Math.min(stepsCount, Math.round((clampedInit - minVal) / (float) safeStep))));
+        seekBar.setProgressTintList(ColorStateList.valueOf(palette.highlight));
+        seekBar.setProgressBackgroundTintList(ColorStateList.valueOf(0x3DFFFFFF));
+        seekBar.setThumbTintList(ColorStateList.valueOf(Color.WHITE));
+        seekBar.setPadding(dp(8f), dp(4f), dp(8f), dp(2f));
+        seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar sb, int progress, boolean fromUser) {
+                int val = Math.min(maxVal, minVal + progress * safeStep);
+                valueView.setText(val + suffix);
+                if (fromUser) {
+                    onChanged.accept(val);
+                }
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar sb) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar sb) {
+            }
+        });
+
+        LinearLayout.LayoutParams sbLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        sbLp.topMargin = dp(2f);
+        block.addView(seekBar, sbLp);
+
+        parent.addView(block, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        return block;
+    }
+
+    private void addDrawerScaleModeRow(LinearLayout parent, Context ctx, AppThemePalette palette) {
+        LinearLayout block = new LinearLayout(ctx);
+        block.setOrientation(LinearLayout.VERTICAL);
+        block.setPadding(dp(4f), dp(5f), dp(2f), dp(7f));
+
+        TextView label = new TextView(ctx);
+        label.setText(R.string.title_video_scale_mode);
+        label.setTextColor(0xDEFFFFFF);
+        label.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f);
+        block.addView(label, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        LinearLayout capsule = new LinearLayout(ctx);
+        capsule.setOrientation(LinearLayout.HORIZONTAL);
+        capsule.setPadding(dp(3f), dp(3f), dp(3f), dp(3f));
+        GradientDrawable capsuleBg = new GradientDrawable();
+        capsuleBg.setShape(GradientDrawable.RECTANGLE);
+        capsuleBg.setCornerRadius(dp(13f));
+        capsuleBg.setColor(0x18FFFFFF);
+        capsuleBg.setStroke(Math.max(1, dp(1f)), 0x33FFFFFF);
+        capsule.setBackground(capsuleBg);
+
+        final PreferenceConfiguration.ScaleMode[] modes = {
+                PreferenceConfiguration.ScaleMode.FIT,
+                PreferenceConfiguration.ScaleMode.FILL,
+                PreferenceConfiguration.ScaleMode.STRETCH
+        };
+        final int[] labels = {
+                R.string.video_scale_mode_fit,
+                R.string.video_scale_mode_fill,
+                R.string.video_scale_mode_stretch
+        };
+        final TextView[] tabs = new TextView[modes.length];
+        final PreferenceConfiguration.ScaleMode[] selected = { game.getVideoScaleMode() };
+
+        Runnable refreshTabs = () -> {
+            for (int i = 0; i < modes.length; i++) {
+                boolean active = modes[i] == selected[0];
+                TextView tab = tabs[i];
+                if (active) {
+                    GradientDrawable tabBg = new GradientDrawable();
+                    tabBg.setShape(GradientDrawable.RECTANGLE);
+                    tabBg.setCornerRadius(dp(10f));
+                    tabBg.setColor(AppThemePalette.withAlpha(palette.highlight, 0.34f));
+                    tabBg.setStroke(Math.max(1, dp(1.1f)), 0xC8FFFFFF);
+                    tab.setBackground(tabBg);
+                    tab.setTextColor(Color.WHITE);
+                    tab.setTypeface(Typeface.DEFAULT_BOLD);
+                } else {
+                    tab.setBackground(null);
+                    tab.setTextColor(0xA8FFFFFF);
+                    tab.setTypeface(Typeface.DEFAULT);
+                }
+            }
+        };
+
+        for (int i = 0; i < modes.length; i++) {
+            final PreferenceConfiguration.ScaleMode mode = modes[i];
+            TextView tab = new TextView(ctx);
+            tab.setText(labels[i]);
+            tab.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f);
+            tab.setGravity(Gravity.CENTER);
+            tab.setPadding(dp(4f), dp(6f), dp(4f), dp(6f));
+            tab.setFocusable(true);
+            tab.setClickable(true);
+            tab.setOnClickListener(v -> {
+                selected[0] = mode;
+                refreshTabs.run();
+                game.setVideoScaleModeLive(mode);
+            });
+            tabs[i] = tab;
+            capsule.addView(tab, new LinearLayout.LayoutParams(
+                    0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        }
+        refreshTabs.run();
+
+        LinearLayout.LayoutParams capLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        capLp.topMargin = dp(6f);
+        block.addView(capsule, capLp);
+
+        parent.addView(block, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+    }
+
+    private void addDrawerActionButton(LinearLayout parent, Context ctx, String label,
+                                       AppThemePalette palette, Runnable onClick) {
+        TextView btn = new TextView(ctx);
+        btn.setText(label);
+        btn.setTextColor(Color.WHITE);
+        btn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f);
+        btn.setTypeface(Typeface.DEFAULT_BOLD);
+        btn.setGravity(Gravity.CENTER);
+        btn.setPadding(dp(12f), dp(9f), dp(12f), dp(9f));
+        btn.setFocusable(true);
+        btn.setClickable(true);
+
+        Runnable applyStyle = () -> {
+            GradientDrawable bg = new GradientDrawable();
+            bg.setShape(GradientDrawable.RECTANGLE);
+            bg.setCornerRadius(dp(14f));
+            boolean focused = btn.isFocused();
+            bg.setColor(AppThemePalette.withAlpha(palette.highlight, focused ? 0.32f : 0.18f));
+            bg.setStroke(Math.max(1, dp(focused ? 1.6f : 1.1f)),
+                    focused ? Color.WHITE : 0x66FFFFFF);
+            btn.setBackground(bg);
+        };
+        applyStyle.run();
+        attachFocusRing(btn, applyStyle);
+        btn.setOnClickListener(v -> {
+            animateTileTap(v);
+            onClick.run();
+        });
+
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = dp(6f);
+        lp.bottomMargin = dp(2f);
+        parent.addView(btn, lp);
+    }
+
+    private void setRowEnabledState(View row, boolean enabled) {
+        row.setAlpha(enabled ? 1f : 0.38f);
+        setViewTreeEnabled(row, enabled);
+    }
+
+    private void setViewTreeEnabled(View v, boolean enabled) {
+        v.setEnabled(enabled);
+        if (v instanceof ViewGroup) {
+            ViewGroup vg = (ViewGroup) v;
+            for (int i = 0; i < vg.getChildCount(); i++) {
+                setViewTreeEnabled(vg.getChildAt(i), enabled);
+            }
+        }
+    }
+
+    private void applySettingsPillStyle(View pill, ImageView icon, boolean isOpen, int accentRgb, boolean focused) {
+        GradientDrawable bg = new GradientDrawable();
+        bg.setShape(GradientDrawable.RECTANGLE);
+        bg.setCornerRadius(dp(999f));
+        if (isOpen) {
+            bg.setColor(AppThemePalette.withAlpha(accentRgb, focused ? 0.34f : 0.24f));
+            bg.setStroke(Math.max(1, dp(focused ? 2.0f : 1.5f)),
+                    focused ? Color.WHITE : AppThemePalette.withAlpha(Color.WHITE, 0.88f));
+            pill.setBackground(bg);
+            icon.setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN);
+        } else {
+            bg.setColor(focused ? 0x2EFFFFFF : 0x1AFFFFFF);
+            bg.setStroke(Math.max(1, dp(focused ? 1.8f : 1.15f)),
+                    focused ? 0xCCFFFFFF : 0x4AFFFFFF);
+            pill.setBackground(bg);
+            icon.setColorFilter(focused ? Color.WHITE : 0xC8FFFFFF, PorterDuff.Mode.SRC_IN);
+        }
     }
 
     private ImageButton createSquircleIconButton(Context ctx, int iconRes, String contentDesc, int tileSizePx) {

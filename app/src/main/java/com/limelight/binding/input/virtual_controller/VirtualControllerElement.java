@@ -59,6 +59,10 @@ public abstract class VirtualControllerElement extends View {
 
     float position_pressed_x = 0;
     float position_pressed_y = 0;
+    private float startRawX = 0f;
+    private float startRawY = 0f;
+    private float startCenterX = 0f;
+    private float startCenterY = 0f;
 
     public boolean enabled = true;
 
@@ -75,6 +79,29 @@ public abstract class VirtualControllerElement extends View {
 
         this.virtualController = controller;
         this.elementId = elementId;
+    }
+
+    /**
+     * Returns the locked width/height aspect ratio for controls that should only scale uniformly
+     * (never stretch), or 0f for controls that may be resized freely.
+     */
+    protected float getLockedAspectRatio() {
+        switch (elementId) {
+            case EID_LS:
+            case EID_RS:
+            case EID_DPAD:
+            case EID_A:
+            case EID_B:
+            case EID_X:
+            case EID_Y:
+                return 1.0f;
+            case EID_GDB:
+            case EID_START:
+            case EID_BACK:
+                return 11.0f / 7.0f;
+            default:
+                return 0f;
+        }
     }
 
     protected void moveElement(int pressed_x, int pressed_y, int x, int y) {
@@ -96,22 +123,64 @@ public abstract class VirtualControllerElement extends View {
         requestLayout();
     }
 
-    protected void resizeElement(int pressed_x, int pressed_y, int width, int height) {
+    protected void resizeElementByRawDelta(float rawX, float rawY) {
         FrameLayout.LayoutParams layoutParams = (FrameLayout.LayoutParams) getLayoutParams();
-
-        int newHeight = height + (startSize_y - pressed_y);
-        int newWidth = width + (startSize_x - pressed_x);
-
         View parentView = getParent() instanceof View ? (View) getParent() : null;
+        int parentW = parentView != null ? parentView.getWidth() : getResources().getDisplayMetrics().widthPixels;
+        int parentH = parentView != null ? parentView.getHeight() : getResources().getDisplayMetrics().heightPixels;
         int minDim = Math.max(40, (int) (getResources().getDisplayMetrics().heightPixels * 0.04f));
-        int maxW = parentView != null ? Math.max(minDim, parentView.getWidth() - layoutParams.leftMargin) : Integer.MAX_VALUE;
-        int maxH = parentView != null ? Math.max(minDim, parentView.getHeight() - layoutParams.topMargin) : Integer.MAX_VALUE;
 
-        layoutParams.height = Math.max(minDim, Math.min(maxH, newHeight));
-        layoutParams.width = Math.max(minDim, Math.min(maxW, newWidth));
+        float dx = rawX - startRawX;
+        float dy = rawY - startRawY;
+        float ar = getLockedAspectRatio();
+
+        if (ar > 0f) {
+            // Uniform aspect-ratio locked scaling anchored to the element's center
+            float ox = position_pressed_x - startSize_x * 0.5f;
+            float oy = position_pressed_y - startSize_y * 0.5f;
+            float offsetLen = (float) Math.hypot(ox, oy);
+            float delta;
+            if (offsetLen > Math.min(startSize_x, startSize_y) * 0.12f) {
+                // Dragging outward in any direction grows evenly; inward shrinks evenly
+                delta = 2.0f * (dx * (ox / offsetLen) + dy * (oy / offsetLen));
+            } else {
+                delta = 1.5f * (dx + dy);
+            }
+
+            float baseW = (startSize_x + startSize_y * ar) * 0.5f;
+            float minW = Math.max(minDim, minDim * ar);
+            float maxW = Math.max(minW, Math.min(parentW, parentH * ar));
+            float clampedW = Math.max(minW, Math.min(maxW, baseW + delta));
+            int newW = Math.round(clampedW);
+            int newH = Math.max(minDim, Math.round(clampedW / ar));
+            if (newH > parentH) {
+                newH = parentH;
+                newW = Math.max(minDim, Math.round(newH * ar));
+            }
+
+            int newLeft = Math.round(startCenterX - newW * 0.5f);
+            int newTop = Math.round(startCenterY - newH * 0.5f);
+            layoutParams.width = newW;
+            layoutParams.height = newH;
+            layoutParams.leftMargin = Math.max(0, Math.min(Math.max(0, parentW - newW), newLeft));
+            layoutParams.topMargin = Math.max(0, Math.min(Math.max(0, parentH - newH), newTop));
+            layoutParams.rightMargin = 0;
+            layoutParams.bottomMargin = 0;
+        } else {
+            int newWidth = startSize_x + Math.round(dx);
+            int newHeight = startSize_y + Math.round(dy);
+            int maxW = Math.max(minDim, parentW - layoutParams.leftMargin);
+            int maxH = Math.max(minDim, parentH - layoutParams.topMargin);
+            layoutParams.width = Math.max(minDim, Math.min(maxW, newWidth));
+            layoutParams.height = Math.max(minDim, Math.min(maxH, newHeight));
+        }
 
         virtualController.notifyLayoutEdited();
         requestLayout();
+    }
+
+    protected void resizeElement(int pressed_x, int pressed_y, int width, int height) {
+        resizeElementByRawDelta(startRawX + (width - pressed_x), startRawY + (height - pressed_y));
     }
 
     protected void actionDisableEnableButton() {
@@ -277,8 +346,13 @@ public abstract class VirtualControllerElement extends View {
             case MotionEvent.ACTION_DOWN: {
                 position_pressed_x = event.getX();
                 position_pressed_y = event.getY();
+                startRawX = event.getRawX();
+                startRawY = event.getRawY();
                 startSize_x = getWidth();
                 startSize_y = getHeight();
+                FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) getLayoutParams();
+                startCenterX = (lp != null ? lp.leftMargin : getX()) + startSize_x * 0.5f;
+                startCenterY = (lp != null ? lp.topMargin : getY()) + startSize_y * 0.5f;
 
                 if (virtualController.getControllerMode() == VirtualController.ControllerMode.MoveButtons)
                     actionEnableMove();
@@ -299,11 +373,7 @@ public abstract class VirtualControllerElement extends View {
                         break;
                     }
                     case Resize: {
-                        resizeElement(
-                                (int) position_pressed_x,
-                                (int) position_pressed_y,
-                                (int) event.getX(),
-                                (int) event.getY());
+                        resizeElementByRawDelta(event.getRawX(), event.getRawY());
                         break;
                     }
                     case Normal: {

@@ -82,6 +82,17 @@ public class OscLiveBlurHelper {
         cachedBlurRadius = Math.max(0, Math.min(10, Math.round(4f * (blurPct / 100f))));
     }
 
+    /**
+     * Immediately reloads the OSC live-blur intensity preference so mid-stream slider adjustments
+     * take effect on the very next frame instead of waiting for the periodic preference refresh.
+     */
+    public void refreshBlurPreferenceNow() {
+        refreshBlurPreferenceIfNeeded(true);
+        if (running && !inFlight) {
+            requestFrameCapture();
+        }
+    }
+
     public void start() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
             return;

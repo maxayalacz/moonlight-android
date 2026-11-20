@@ -861,4 +861,18 @@
     <string name="osc_editor_unsaved_title">Save Layout Changes?</string>
     <string name="osc_editor_unsaved_msg">You have unsaved changes to your on-screen controller layout.</string>
     <string name="osc_editor_discard">Discard</string>
+
+    <string name="category_onscreen_keyboard">On-Screen Full Keyboard</string>
+    <string name="quick_settings_title">Live Stream Settings</string>
+    <string name="quick_settings_section_osc">On-Screen Controller</string>
+    <string name="quick_settings_section_touch">Touch &amp; Trackpad</string>
+    <string name="quick_settings_section_display">Display &amp; View</string>
+    <string name="quick_settings_section_overlay">Overlay &amp; UI</string>
+    <string name="quick_settings_edit_osc_inline">Edit Controller Layout</string>
+    <string name="quick_settings_local_cursor">Local Mouse Cursor</string>
+    <string name="quick_settings_special_keys">Special Keys Overlay</string>
+    <string name="quick_settings_pan_zoom">Pan &amp; Zoom Mode</string>
+    <string name="quick_settings_rotate_screen">Rotate Screen</string>
+    <string name="quick_settings_perf_lite">Compact Stats Overlay</string>
+    <string name="quick_settings_perf_bottom">Overlay at Bottom</string>
 </resources>

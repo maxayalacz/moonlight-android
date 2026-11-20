@@ -65,6 +65,12 @@ public class TrackpadContext implements TouchContext {
         this.sensitivityY = (float) sensitivityY / 100;
     }
 
+    public void updateConfig(boolean swapAxis, int sensitivityX, int sensitivityY) {
+        this.swapAxis = swapAxis;
+        this.sensitivityX = (float) sensitivityX / 100f;
+        this.sensitivityY = (float) sensitivityY / 100f;
+    }
+
     private final Runnable scrollTransitionRunnable = new Runnable() {
         @Override
         public void run() {

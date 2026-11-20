@@ -4394,7 +4394,7 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
             } else if (mode == 3) {
                 touchContextMap[i] = new RelativeTouchContext(conn, i, REFERENCE_HORIZ_RES, REFERENCE_VERT_RES, streamContainer, prefConfig);
             } else {
-                touchContextMap[i] = new TrackpadContext(conn, i);
+                touchContextMap[i] = new TrackpadContext(conn, i, prefConfig.trackpadSwapAxis, prefConfig.touchPadSensitivity, prefConfig.touchPadYSensitity);
             }
         }
 
@@ -4405,12 +4405,30 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
 
     public void toggleHUD() {
         prefConfig.enablePerfOverlay = !prefConfig.enablePerfOverlay;
+        applyPerfOverlayState();
+    }
+
+    private void applyPerfOverlayState() {
+        if (performanceOverlayView == null || prefConfig == null) {
+            return;
+        }
         if (prefConfig.enablePerfOverlay) {
             performanceOverlayView.setVisibility(View.VISIBLE);
-            if(prefConfig.enablePerfOverlayLite){
-                performanceOverlayLite.setVisibility(View.VISIBLE);
-            }else{
-                performanceOverlayBig.setVisibility(View.VISIBLE);
+            if (performanceOverlayLite != null) {
+                performanceOverlayLite.setVisibility(prefConfig.enablePerfOverlayLite ? View.VISIBLE : View.GONE);
+                if (prefConfig.enablePerfOverlayLite && prefConfig.enablePerfOverlayLiteDialog) {
+                    performanceOverlayLite.setOnClickListener(v -> showGameMenu(null));
+                }
+            }
+            if (performanceOverlayBig != null) {
+                performanceOverlayBig.setVisibility(prefConfig.enablePerfOverlayLite ? View.GONE : View.VISIBLE);
+            }
+            FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) performanceOverlayView.getLayoutParams();
+            if (params != null) {
+                params.gravity = prefConfig.enablePerfOverlayBottom
+                        ? (Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL)
+                        : (Gravity.TOP | Gravity.START);
+                performanceOverlayView.setLayoutParams(params);
             }
         } else {
             performanceOverlayView.setVisibility(View.GONE);
@@ -4419,7 +4437,367 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
 
     //切换触控灵敏度开关
     public void switchTouchSensitivity(){
-        prefConfig.enableTouchSensitivity = !prefConfig.enableTouchSensitivity;
+        setTouchSensitivityEnabledLive(!prefConfig.enableTouchSensitivity);
+    }
+
+    // --- Live Mid-Stream Quick Settings Helpers ---
+
+    private SharedPreferences getLiveOverlayPrefs() {
+        return ProfilesManager.getInstance().getOverlayingSharedPreferences(this);
+    }
+
+    // 1. On-Screen Controller live settings
+
+    public int getOscOpacity() {
+        return prefConfig != null ? prefConfig.oscOpacity : PreferenceConfiguration.DEFAULT_OPACITY;
+    }
+
+    public void setOscOpacityLive(int opacity) {
+        int clamped = Math.max(0, Math.min(100, opacity));
+        if (prefConfig != null) {
+            prefConfig.oscOpacity = clamped;
+        }
+        getLiveOverlayPrefs().edit().putInt("seekbar_osc_opacity", clamped).apply();
+        if (virtualController != null) {
+            virtualController.setOpacity(clamped);
+        }
+    }
+
+    public int getOscBlurAmount() {
+        return getLiveOverlayPrefs().getInt(
+                PreferenceConfiguration.OSC_BLUR_AMOUNT_PREF_STRING,
+                PreferenceConfiguration.DEFAULT_OSC_BLUR_AMOUNT);
+    }
+
+    public void setOscBlurAmountLive(int blurPct) {
+        int clamped = Math.max(0, Math.min(200, blurPct));
+        getLiveOverlayPrefs().edit()
+                .putInt(PreferenceConfiguration.OSC_BLUR_AMOUNT_PREF_STRING, clamped)
+                .apply();
+        if (virtualController != null) {
+            virtualController.getLiveBlurHelper().refreshBlurPreferenceNow();
+            invalidateVirtualControllerElements();
+        }
+    }
+
+    public int getOscOutlineThickness() {
+        return prefConfig != null
+                ? prefConfig.oscOutlineThicknessPercent
+                : PreferenceConfiguration.DEFAULT_OSC_OUTLINE_THICKNESS;
+    }
+
+    public void setOscOutlineThicknessLive(int pct) {
+        int clamped = Math.max(0, Math.min(250, pct));
+        if (prefConfig != null) {
+            prefConfig.oscOutlineThicknessPercent = clamped;
+        }
+        getLiveOverlayPrefs().edit()
+                .putInt(PreferenceConfiguration.OSC_OUTLINE_THICKNESS_PREF_STRING, clamped)
+                .apply();
+        invalidateVirtualControllerElements();
+    }
+
+    public boolean isOscVibrateEnabled() {
+        return prefConfig != null && prefConfig.vibrateOsc;
+    }
+
+    public void setOscVibrateLive(boolean enabled) {
+        if (prefConfig != null) {
+            prefConfig.vibrateOsc = enabled;
+        }
+        getLiveOverlayPrefs().edit().putBoolean("checkbox_vibrate_osc", enabled).apply();
+    }
+
+    public boolean isFreeAnalogStickEnabled() {
+        return prefConfig != null && prefConfig.enableNewAnalogStick;
+    }
+
+    public void setFreeAnalogStickLive(boolean enabled) {
+        if (prefConfig != null) {
+            prefConfig.enableNewAnalogStick = enabled;
+        }
+        getLiveOverlayPrefs().edit().putBoolean("checkbox_enable_analog_stick_new", enabled).apply();
+        if (virtualController != null && virtualController.isVisible()) {
+            virtualController.refreshLayout();
+            virtualController.show();
+        }
+    }
+
+    public int getFreeAnalogStickOpacity() {
+        return prefConfig != null ? prefConfig.enableNewAnalogStickOpacity : 20;
+    }
+
+    public void setFreeAnalogStickOpacityLive(int opacity) {
+        int clamped = Math.max(0, Math.min(100, opacity));
+        if (prefConfig != null) {
+            prefConfig.enableNewAnalogStickOpacity = clamped;
+        }
+        getLiveOverlayPrefs().edit().putInt("seekbar_osc_free_analog_stick_opacity", clamped).apply();
+        invalidateVirtualControllerElements();
+    }
+
+    public void startInlineOscLayoutEdit() {
+        if (isOnExternalDisplay()) {
+            return;
+        }
+        if (virtualController == null) {
+            initVirtualController();
+        } else if (!virtualController.isVisible()) {
+            virtualController.show();
+        }
+        if (virtualController != null) {
+            virtualController.setConfigureButtonVisible(true);
+            virtualController.setControllerMode(VirtualController.ControllerMode.MoveButtons);
+            Toast.makeText(this, R.string.configuration_mode_move_buttons, Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void invalidateVirtualControllerElements() {
+        if (virtualController == null) {
+            return;
+        }
+        for (com.limelight.binding.input.virtual_controller.VirtualControllerElement el : virtualController.getElements()) {
+            el.invalidate();
+        }
+    }
+
+    // 2. Touch & Trackpad live settings
+
+    private void syncActiveTrackpadContexts() {
+        if (prefConfig == null) {
+            return;
+        }
+        for (TouchContext ctx : touchContextMap) {
+            if (ctx instanceof TrackpadContext) {
+                ((TrackpadContext) ctx).updateConfig(
+                        prefConfig.trackpadSwapAxis,
+                        prefConfig.touchPadSensitivity,
+                        prefConfig.touchPadYSensitity);
+            }
+        }
+        for (TouchContext ctx : trackpadContextMap) {
+            if (ctx instanceof TrackpadContext) {
+                ((TrackpadContext) ctx).updateConfig(
+                        prefConfig.trackpadSwapAxis,
+                        prefConfig.trackpadSensitivityX,
+                        prefConfig.trackpadSensitivityY);
+            }
+        }
+    }
+
+    public int getTrackpadSensitivityX() {
+        return prefConfig != null ? prefConfig.touchPadSensitivity : 100;
+    }
+
+    public void setTrackpadSensitivityXLive(int sens) {
+        int clamped = Math.max(10, Math.min(300, sens));
+        if (prefConfig != null) {
+            prefConfig.touchPadSensitivity = clamped;
+        }
+        getLiveOverlayPrefs().edit().putInt("seekbar_touchpad_sensitivity_opacity", clamped).apply();
+        syncActiveTrackpadContexts();
+    }
+
+    public int getTrackpadSensitivityY() {
+        return prefConfig != null ? prefConfig.touchPadYSensitity : 100;
+    }
+
+    public void setTrackpadSensitivityYLive(int sens) {
+        int clamped = Math.max(10, Math.min(300, sens));
+        if (prefConfig != null) {
+            prefConfig.touchPadYSensitity = clamped;
+        }
+        getLiveOverlayPrefs().edit().putInt("seekbar_touchpad_sensitivity_y_opacity", clamped).apply();
+        syncActiveTrackpadContexts();
+    }
+
+    public boolean isTrackpadSwapAxisEnabled() {
+        return prefConfig != null && prefConfig.trackpadSwapAxis;
+    }
+
+    public void setTrackpadSwapAxisLive(boolean swap) {
+        if (prefConfig != null) {
+            prefConfig.trackpadSwapAxis = swap;
+        }
+        getLiveOverlayPrefs().edit().putBoolean("checkbox_trackpad_swap_axis", swap).apply();
+        syncActiveTrackpadContexts();
+    }
+
+    public boolean isTrackpadDragDropVibrationEnabled() {
+        return prefConfig != null && prefConfig.trackpadDragDropVibration;
+    }
+
+    public void setTrackpadDragDropVibrationLive(boolean enabled) {
+        if (prefConfig != null) {
+            prefConfig.trackpadDragDropVibration = enabled;
+        }
+        getLiveOverlayPrefs().edit().putBoolean("checkbox_trackpad_drag_drop_vibration", enabled).apply();
+    }
+
+    public boolean isTouchSensitivityEnabled() {
+        return prefConfig != null && prefConfig.enableTouchSensitivity;
+    }
+
+    public void setTouchSensitivityEnabledLive(boolean enabled) {
+        if (prefConfig != null) {
+            prefConfig.enableTouchSensitivity = enabled;
+        }
+        getLiveOverlayPrefs().edit().putBoolean("checkbox_enable_touch_sensitivity", enabled).apply();
+    }
+
+    public int getTouchSensitivityX() {
+        return prefConfig != null ? prefConfig.touchSensitivityX : 100;
+    }
+
+    public void setTouchSensitivityXLive(int sens) {
+        int clamped = Math.max(10, Math.min(300, sens));
+        if (prefConfig != null) {
+            prefConfig.touchSensitivityX = clamped;
+        }
+        getLiveOverlayPrefs().edit().putInt("seekbar_touch_sensitivity_opacity_x", clamped).apply();
+    }
+
+    public int getTouchSensitivityY() {
+        return prefConfig != null ? prefConfig.touchSensitivityY : 100;
+    }
+
+    public void setTouchSensitivityYLive(int sens) {
+        int clamped = Math.max(10, Math.min(300, sens));
+        if (prefConfig != null) {
+            prefConfig.touchSensitivityY = clamped;
+        }
+        getLiveOverlayPrefs().edit().putInt("seekbar_touch_sensitivity_opacity_y", clamped).apply();
+    }
+
+    public boolean isLocalMouseCursorVisible() {
+        return cursorVisible;
+    }
+
+    public void toggleLocalMouseCursor() {
+        toggleMouseLocalCursor();
+    }
+
+    public boolean isSpecialKeysVisible() {
+        return keyBoardController != null && keyBoardController.shown;
+    }
+
+    // 3. Display & View live settings
+
+    public PreferenceConfiguration.ScaleMode getVideoScaleMode() {
+        return (prefConfig != null && prefConfig.videoScaleMode != null)
+                ? prefConfig.videoScaleMode
+                : PreferenceConfiguration.ScaleMode.FIT;
+    }
+
+    public void setVideoScaleModeLive(PreferenceConfiguration.ScaleMode mode) {
+        if (mode == null) {
+            return;
+        }
+        if (prefConfig != null) {
+            prefConfig.videoScaleMode = mode;
+        }
+        String prefVal;
+        if (mode == PreferenceConfiguration.ScaleMode.FILL) {
+            prefVal = "fill";
+        } else if (mode == PreferenceConfiguration.ScaleMode.STRETCH) {
+            prefVal = "stretch";
+        } else {
+            prefVal = "fit";
+        }
+        getLiveOverlayPrefs().edit().putString("list_video_scale_mode", prefVal).apply();
+        if (streamContainer != null) {
+            if (mode == PreferenceConfiguration.ScaleMode.STRETCH) {
+                streamContainer.setDesiredAspectRatio(0);
+                streamContainer.setFillDisplay(false);
+            } else {
+                int w = displayWidth > 0 ? displayWidth : (prefConfig != null ? prefConfig.width : 1920);
+                int h = displayHeight > 0 ? displayHeight : (prefConfig != null ? prefConfig.height : 1080);
+                streamContainer.setDesiredAspectRatio((double) w / (double) Math.max(1, h));
+                streamContainer.setFillDisplay(mode == PreferenceConfiguration.ScaleMode.FILL);
+            }
+        }
+    }
+
+    public boolean isAlignDisplayTopCenter() {
+        return prefConfig != null && prefConfig.alignDisplayTopCenter;
+    }
+
+    public void setAlignDisplayTopCenterLive(boolean topCenter) {
+        if (prefConfig != null) {
+            prefConfig.alignDisplayTopCenter = topCenter;
+        }
+        getLiveOverlayPrefs().edit().putBoolean("checkbox_enable_view_top_center", topCenter).apply();
+        if (streamContainer != null) {
+            FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) streamContainer.getLayoutParams();
+            if (params != null) {
+                params.gravity = topCenter ? (Gravity.CENTER_HORIZONTAL | Gravity.TOP) : Gravity.CENTER;
+                streamContainer.setLayoutParams(params);
+            }
+        }
+    }
+
+    // 4. Overlay & UI live settings
+
+    public boolean isPerfOverlayLite() {
+        return prefConfig != null && prefConfig.enablePerfOverlayLite;
+    }
+
+    public void setPerfOverlayLiteLive(boolean lite) {
+        if (prefConfig != null) {
+            prefConfig.enablePerfOverlayLite = lite;
+        }
+        getLiveOverlayPrefs().edit().putBoolean("checkbox_enable_perf_overlay_lite", lite).apply();
+        applyPerfOverlayState();
+    }
+
+    public boolean isPerfOverlayBottom() {
+        return prefConfig != null && prefConfig.enablePerfOverlayBottom;
+    }
+
+    public void setPerfOverlayBottomLive(boolean bottom) {
+        if (prefConfig != null) {
+            prefConfig.enablePerfOverlayBottom = bottom;
+        }
+        getLiveOverlayPrefs().edit().putBoolean("checkbox_enable_perf_overlay_bottom", bottom).apply();
+        applyPerfOverlayState();
+    }
+
+    public boolean isFloatingMenuButtonVisible() {
+        return floatingMenuButton != null && floatingMenuButton.getVisibility() == View.VISIBLE;
+    }
+
+    public void setFloatingMenuButtonLive(boolean show) {
+        if (prefConfig != null) {
+            prefConfig.enableFloatingButton = show;
+        }
+        getLiveOverlayPrefs().edit().putBoolean("checkbox_enable_floating_button", show).apply();
+        if (floatingMenuButton != null) {
+            updateFloatingButtonVisibility(show);
+        }
+    }
+
+    public boolean isPostSessionMetricsEnabled() {
+        return prefConfig != null && prefConfig.enablePostSessionMetrics;
+    }
+
+    public void setPostSessionMetricsLive(boolean enabled) {
+        if (prefConfig != null) {
+            prefConfig.enablePostSessionMetrics = enabled;
+        }
+        getLiveOverlayPrefs().edit()
+                .putBoolean(PreferenceConfiguration.ENABLE_POST_SESSION_METRICS_PREF_STRING, enabled)
+                .apply();
+    }
+
+    public boolean isDisableWarningsEnabled() {
+        return prefConfig != null && prefConfig.disableWarnings;
+    }
+
+    public void setDisableWarningsLive(boolean disabled) {
+        if (prefConfig != null) {
+            prefConfig.disableWarnings = disabled;
+        }
+        getLiveOverlayPrefs().edit().putBoolean("checkbox_disable_warnings", disabled).apply();
     }
 
     private void maybeLaunchSessionMetrics() {
