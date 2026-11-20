@@ -4449,7 +4449,7 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
     // 1. On-Screen Controller live settings
 
     public int getOscOpacity() {
-        return prefConfig != null ? prefConfig.oscOpacity : PreferenceConfiguration.DEFAULT_OPACITY;
+        return prefConfig != null ? prefConfig.oscOpacity : 90;
     }
 
     public void setOscOpacityLive(int opacity) {

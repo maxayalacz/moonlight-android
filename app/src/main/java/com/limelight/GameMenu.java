@@ -376,7 +376,7 @@ public class GameMenu implements Game.GameMenuCallbacks {
             this.cornerRadiusPx = cornerRadiusPx;
             this.tintColorWithBlur = 0xAA0C1018;
             this.tintColorFallback = 0xDE0C1018;
-            this.accentDeepTint = AppThemePalette.withAlpha(palette.deep, 0.22f);
+            this.accentDeepTint = AppThemePalette.withAlpha(palette.surface, 0.24f);
 
             setWillNotDraw(false);
             setClickable(true);
