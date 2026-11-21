@@ -201,7 +201,6 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
         // consume these. Instead, let's ignore them since that's probably the
         // most likely case.
         defaultContext.ignoreBack = true;
-        defaultContext.type = MoonBridge.LI_CTYPE_PS;
         this.oscMotionEnabled = prefConfig.gamepadMotionSensors && prefConfig.gamepadMotionSensorsFallbackToDevice;
         if (this.oscMotionEnabled && deviceSensorManager != null) {
             defaultContext.sensorManager = deviceSensorManager;
