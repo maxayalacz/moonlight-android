@@ -153,6 +153,7 @@ public class ThemeStudioActivity extends AppCompatActivity {
 
     // Tab 2: Glass & Blur
     private SliderRow rowBlurAmount;
+    private SliderRow rowBlurSaturation;
     private SliderRow rowTintAmount;
     private TextView tintPerfHint;
     private SliderRow rowCardOutline;
@@ -178,6 +179,7 @@ public class ThemeStudioActivity extends AppCompatActivity {
     private SliderRow rowLaunchCloseMs;
     private SliderRow rowSonarHoldMs;
     private SliderRow rowReadyMs;
+    private SliderRow rowChargeMs;
     private SliderRow rowFadeMs;
     private SliderRow rowHoldMs;
     private SliderRow rowExpandMs;
@@ -825,6 +827,9 @@ public class ThemeStudioActivity extends AppCompatActivity {
         rowBlurAmount = addSliderRow(col, "Live Blur Amount", 0, 200, 5, 0, 2000, "%",
                 v -> { bundle.blurAmountPercent = v; refreshAll(); });
 
+        rowBlurSaturation = addSliderRow(col, "Glass Saturation", 50, 250, 5, 0, 500, "%",
+                v -> { bundle.blurSaturationPercent = v; refreshAll(); });
+
         rowTintAmount = addSliderRow(col, "Frosted Card Tint Amount", 0, 100, 1, 0, 100, "%",
                 v -> { bundle.frostedTintAmountPercent = v; refreshAll(); });
 
@@ -981,11 +986,13 @@ public class ThemeStudioActivity extends AppCompatActivity {
                 v -> { bundle.portalSonarHoldMs = v; refreshAll(); });
         rowReadyMs = addSliderRow(col, "3. Sonar \u2192 Ready Glow", 50, 1500, 25, 0, 30000, " ms",
                 v -> { bundle.portalReadyMs = v; refreshAll(); });
-        rowFadeMs = addSliderRow(col, "4. Ready \u2192 Charge / Stream Fade", 50, 1500, 25, 0, 30000, " ms",
+        rowChargeMs = addSliderRow(col, "4. Ready \u2192 Charge", 50, 1500, 25, 0, 30000, " ms",
+                v -> { bundle.portalChargeMs = v; refreshAll(); });
+        rowFadeMs = addSliderRow(col, "5. Stream Fade-In", 50, 1500, 25, 0, 30000, " ms",
                 v -> { bundle.portalPreviewFadeMs = v; refreshAll(); });
-        rowHoldMs = addSliderRow(col, "5. Peephole Preview Hold", 0, 2000, 50, 0, 30000, " ms",
+        rowHoldMs = addSliderRow(col, "6. Peephole Preview Hold", 0, 2000, 50, 0, 30000, " ms",
                 v -> { bundle.portalPreviewHoldMs = v; refreshAll(); });
-        rowExpandMs = addSliderRow(col, "6. Iris Wipe Expand Open", 150, 1800, 25, 0, 30000, " ms",
+        rowExpandMs = addSliderRow(col, "7. Iris Wipe Expand Open", 150, 1800, 25, 0, 30000, " ms",
                 v -> { bundle.portalExpandMs = v; refreshAll(); });
 
         // Section 2: Disconnect Sequence Timings (3 steps)
@@ -1025,6 +1032,7 @@ public class ThemeStudioActivity extends AppCompatActivity {
             bundle.portalLaunchCloseMs = PreferenceConfiguration.DEFAULT_PORTAL_LAUNCH_CLOSE_MS;
             bundle.portalSonarHoldMs = PreferenceConfiguration.DEFAULT_PORTAL_SONAR_HOLD_MS;
             bundle.portalReadyMs = PreferenceConfiguration.DEFAULT_PORTAL_READY_MS;
+            bundle.portalChargeMs = PreferenceConfiguration.DEFAULT_PORTAL_CHARGE_MS;
             bundle.portalPreviewFadeMs = PreferenceConfiguration.DEFAULT_PORTAL_PREVIEW_FADE_MS;
             bundle.portalPreviewHoldMs = PreferenceConfiguration.DEFAULT_PORTAL_PREVIEW_HOLD_MS;
             bundle.portalExpandMs = PreferenceConfiguration.DEFAULT_PORTAL_EXPAND_MS;
@@ -1310,22 +1318,24 @@ public class ThemeStudioActivity extends AppCompatActivity {
         updatePortalStageCenterOffset();
 
         if (!disconnectMode) {
-            // Exact 6-phase Launch state machine in milliseconds:
+            // Exact 7-phase Launch state machine in milliseconds:
             // 1. Launch Iris Close-In (1.0 -> 0.0 expand)
-            // 2. Sonar Pulse Hold (0.0 expand, 0.0 ready, 0.0 preview)
+            // 2. Sonar Pulse Hold (0.0 expand, 0.0 ready, 0.0 charge, 0.0 preview)
             // 3. Sonar -> Ready Glow (0.0 -> 1.0 ready)
-            // 4. Ready -> Charge / Stream Fade (0.0 -> 1.0 preview)
-            // 5. Peephole Preview Hold (1.0 ready, 1.0 preview, 0.0 expand)
-            // 6. Iris Wipe Expand Open (0.0 -> 1.0 expand)
+            // 4. Ready -> Charge (0.0 -> 1.0 charge)
+            // 5. Stream Fade-In (0.0 -> 1.0 preview)
+            // 6. Peephole Preview Hold (1.0 ready, 1.0 charge, 1.0 preview, 0.0 expand)
+            // 7. Iris Wipe Expand Open (0.0 -> 1.0 expand)
             final long t0 = Math.max(0L, bundle.portalLaunchCloseMs);
             final long t1 = t0 + Math.max(0L, bundle.portalSonarHoldMs);
             final long t2 = t1 + Math.max(0L, bundle.portalReadyMs);
-            final long t3 = t2 + Math.max(0L, bundle.portalPreviewFadeMs);
-            final long t4 = t3 + Math.max(0L, bundle.portalPreviewHoldMs);
-            final long t5 = t4 + Math.max(0L, bundle.portalExpandMs);
-            final long totalMs = Math.max(100L, t5);
+            final long t3 = t2 + Math.max(0L, bundle.portalChargeMs);
+            final long t4 = t3 + Math.max(0L, bundle.portalPreviewFadeMs);
+            final long t5 = t4 + Math.max(0L, bundle.portalPreviewHoldMs);
+            final long t6 = t5 + Math.max(0L, bundle.portalExpandMs);
+            final long totalMs = Math.max(100L, t6);
 
-            previewPortal.setUniforms(0f, 0f, 1f);
+            previewPortal.setUniforms(0f, 0f, 0f, 1f);
             irisAnimator = ValueAnimator.ofFloat(0f, (float) totalMs);
             irisAnimator.setDuration(totalMs);
             irisAnimator.setInterpolator(new android.view.animation.LinearInterpolator());
@@ -1333,35 +1343,39 @@ public class ThemeStudioActivity extends AppCompatActivity {
                 float elapsed = (float) anim.getAnimatedValue();
                 if (elapsed < t0) {
                     float prog = t0 > 0 ? (elapsed / (float) t0) : 1f;
-                    previewPortal.setUniforms(0f, 0f, 1f - Math.max(0f, Math.min(1f, prog)));
+                    previewPortal.setUniforms(0f, 0f, 0f, 1f - Math.max(0f, Math.min(1f, prog)));
                 } else if (elapsed < t1) {
-                    previewPortal.setUniforms(0f, 0f, 0f);
+                    previewPortal.setUniforms(0f, 0f, 0f, 0f);
                 } else if (elapsed < t2) {
                     float raw = (t2 > t1) ? ((elapsed - t1) / (float) (t2 - t1)) : 1f;
                     float r = cubicOutEase.getInterpolation(Math.max(0f, Math.min(1f, raw)));
-                    previewPortal.setUniforms(r, 0f, 0f);
+                    previewPortal.setUniforms(r, 0f, 0f, 0f);
                 } else if (elapsed < t3) {
                     float raw = (t3 > t2) ? ((elapsed - t2) / (float) (t3 - t2)) : 1f;
-                    float p = cubicOutEase.getInterpolation(Math.max(0f, Math.min(1f, raw)));
-                    previewPortal.setUniforms(1f, p, 0f);
+                    float c = cubicOutEase.getInterpolation(Math.max(0f, Math.min(1f, raw)));
+                    previewPortal.setUniforms(1f, c, 0f, 0f);
                 } else if (elapsed < t4) {
-                    previewPortal.setUniforms(1f, 1f, 0f);
+                    float raw = (t4 > t3) ? ((elapsed - t3) / (float) (t4 - t3)) : 1f;
+                    float p = cubicOutEase.getInterpolation(Math.max(0f, Math.min(1f, raw)));
+                    previewPortal.setUniforms(1f, 1f, p, 0f);
+                } else if (elapsed < t5) {
+                    previewPortal.setUniforms(1f, 1f, 1f, 0f);
                 } else {
-                    float e = (t5 > t4) ? ((elapsed - t4) / (float) (t5 - t4)) : 1f;
-                    previewPortal.setUniforms(1f, 1f, Math.max(0f, Math.min(1f, e)));
+                    float e = (t6 > t5) ? ((elapsed - t5) / (float) (t6 - t5)) : 1f;
+                    previewPortal.setUniforms(1f, 1f, 1f, Math.max(0f, Math.min(1f, e)));
                 }
             });
         } else {
             // Exact 3-step Disconnect state machine in milliseconds:
-            // 1. Disconnect Iris Close Over Stream (1.0 -> 0.0 expand, ready=1, preview=1)
-            // 2. Stream -> Starfield Fade (1.0 -> 0.0 ready & preview)
+            // 1. Disconnect Iris Close Over Stream (1.0 -> 0.0 expand, ready=1, charge=1, preview=1)
+            // 2. Stream -> Starfield Fade (1.0 -> 0.0 ready, charge & preview)
             // 3. Iris Reopen to Menu (0.0 -> 1.0 expand)
             final long d1 = Math.max(0L, bundle.portalDisconnectCloseMs);
             final long d2 = d1 + Math.max(0L, bundle.portalDisconnectFadeMs);
             final long d3 = d2 + Math.max(0L, bundle.portalDisconnectOpenMs);
             final long totalMs = Math.max(100L, d3);
 
-            previewPortal.setUniforms(1f, 1f, 1f);
+            previewPortal.setUniforms(1f, 1f, 1f, 1f);
             irisAnimator = ValueAnimator.ofFloat(0f, (float) totalMs);
             irisAnimator.setDuration(totalMs);
             irisAnimator.setInterpolator(new android.view.animation.LinearInterpolator());
@@ -1369,14 +1383,14 @@ public class ThemeStudioActivity extends AppCompatActivity {
                 float elapsed = (float) anim.getAnimatedValue();
                 if (elapsed < d1) {
                     float prog = d1 > 0 ? (elapsed / (float) d1) : 1f;
-                    previewPortal.setUniforms(1f, 1f, 1f - Math.max(0f, Math.min(1f, prog)));
+                    previewPortal.setUniforms(1f, 1f, 1f, 1f - Math.max(0f, Math.min(1f, prog)));
                 } else if (elapsed < d2) {
                     float raw = (d2 > d1) ? ((elapsed - d1) / (float) (d2 - d1)) : 1f;
                     float v = 1f - cubicOutEase.getInterpolation(Math.max(0f, Math.min(1f, raw)));
-                    previewPortal.setUniforms(v, v, 0f);
+                    previewPortal.setUniforms(v, v, v, 0f);
                 } else {
                     float e = (d3 > d2) ? ((elapsed - d2) / (float) (d3 - d2)) : 1f;
-                    previewPortal.setUniforms(0f, 0f, Math.max(0f, Math.min(1f, e)));
+                    previewPortal.setUniforms(0f, 0f, 0f, Math.max(0f, Math.min(1f, e)));
                 }
             });
         }
@@ -1574,6 +1588,8 @@ public class ThemeStudioActivity extends AppCompatActivity {
         // Tab 2: Glass & Blur
         rowBlurAmount.setValue(bundle.blurAmountPercent);
         rowBlurAmount.applyTheme(p, pillStroke, pillPadH, pillPadV, pillRad);
+        rowBlurSaturation.setValue(bundle.blurSaturationPercent);
+        rowBlurSaturation.applyTheme(p, pillStroke, pillPadH, pillPadV, pillRad);
         rowTintAmount.setValue(bundle.frostedTintAmountPercent);
         rowTintAmount.applyTheme(p, pillStroke, pillPadH, pillPadV, pillRad);
         tintPerfHint.setTextColor(bundle.frostedTintAmountPercent >= 100 ? p.getNeonAccent() : p.getSecondaryTextColor());
@@ -1616,12 +1632,12 @@ public class ThemeStudioActivity extends AppCompatActivity {
         animDisconnectHeading.setTextColor(p.getSecondaryTextColor());
         SliderRow[] animRows = {
                 rowLaunchCloseMs, rowSonarHoldMs, rowReadyMs,
-                rowFadeMs, rowHoldMs, rowExpandMs,
+                rowChargeMs, rowFadeMs, rowHoldMs, rowExpandMs,
                 rowDisconnectCloseMs, rowDisconnectFadeMs, rowDisconnectOpenMs
         };
         int[] animVals = {
                 bundle.portalLaunchCloseMs, bundle.portalSonarHoldMs, bundle.portalReadyMs,
-                bundle.portalPreviewFadeMs, bundle.portalPreviewHoldMs, bundle.portalExpandMs,
+                bundle.portalChargeMs, bundle.portalPreviewFadeMs, bundle.portalPreviewHoldMs, bundle.portalExpandMs,
                 bundle.portalDisconnectCloseMs, bundle.portalDisconnectFadeMs, bundle.portalDisconnectOpenMs
         };
         for (int i = 0; i < animRows.length; i++) {

@@ -75,6 +75,7 @@ public class PreferenceConfiguration {
     public static final String CONNECTING_ANIMATION_STYLE_PREF_STRING = "list_connecting_animation_style";
     public static final String DEFAULT_CONNECTING_ANIMATION_STYLE = "fullscreen";
     public static final String PORTAL_READY_MS_PREF_STRING = "seekbar_portal_ready_ms";
+    public static final String PORTAL_CHARGE_MS_PREF_STRING = "seekbar_portal_charge_ms";
     public static final String PORTAL_SONAR_HOLD_MS_PREF_STRING = "seekbar_portal_sonar_hold_ms";
     public static final String PORTAL_PREVIEW_FADE_MS_PREF_STRING = "seekbar_portal_preview_fade_ms";
     public static final String PORTAL_PREVIEW_HOLD_MS_PREF_STRING = "seekbar_portal_preview_hold_ms";
@@ -92,12 +93,14 @@ public class PreferenceConfiguration {
     public static final String PORTAL_PARTICLE_DENSITY_PREF_STRING = "seekbar_portal_particle_density";
     public static final String PORTAL_SONAR_SPEED_PREF_STRING = "seekbar_portal_sonar_speed";
     public static final String BLUR_AMOUNT_PREF_STRING = "seekbar_blur_amount";
+    public static final String BLUR_SATURATION_PREF_STRING = "seekbar_blur_saturation";
     public static final String FROSTED_TINT_AMOUNT_PREF_STRING = "seekbar_frosted_tint_amount";
     public static final String BG_QUALITY_PREF_STRING = "list_bg_quality";
     public static final String OSC_OUTLINE_THICKNESS_PREF_STRING = "seekbar_osc_outline_thickness";
     public static final String CARD_OUTLINE_THICKNESS_PREF_STRING = "seekbar_card_outline_thickness";
     public static final String UI_BATTERY_SAVER_PREF_STRING = "list_ui_battery_saver";
     public static final int DEFAULT_PORTAL_READY_MS = 300;
+    public static final int DEFAULT_PORTAL_CHARGE_MS = 280;
     public static final int DEFAULT_PORTAL_SONAR_HOLD_MS = 600;
     public static final int DEFAULT_PORTAL_PREVIEW_FADE_MS = 400;
     public static final int DEFAULT_PORTAL_PREVIEW_HOLD_MS = 900;
@@ -115,6 +118,7 @@ public class PreferenceConfiguration {
     public static final int DEFAULT_PORTAL_PARTICLE_DENSITY = 100;
     public static final int DEFAULT_PORTAL_SONAR_SPEED = 100;
     public static final int DEFAULT_BLUR_AMOUNT = 100;
+    public static final int DEFAULT_BLUR_SATURATION = 140;
     public static final int DEFAULT_FROSTED_TINT_AMOUNT = 35;
     public static final String DEFAULT_BG_QUALITY = "720";
     public static final int DEFAULT_OSC_OUTLINE_THICKNESS = 100;
@@ -328,6 +332,7 @@ public class PreferenceConfiguration {
     public boolean enablePostSessionMetrics;
     public String connectingAnimationStyle;
     public int portalReadyMs;
+    public int portalChargeMs;
     public int portalSonarHoldMs;
     public int portalPreviewFadeMs;
     public int portalPreviewHoldMs;
@@ -345,6 +350,7 @@ public class PreferenceConfiguration {
     public int portalParticleDensityPercent;
     public int portalSonarSpeedPercent;
     public int blurAmountPercent;
+    public int blurSaturationPercent;
     public int frostedTintAmountPercent;
     public int bgQualityMaxShortEdge;
     public int oscOutlineThicknessPercent;
@@ -1006,6 +1012,7 @@ private static int getFramePacingValue(Context context) {
         config.enablePostSessionMetrics = prefs.getBoolean(ENABLE_POST_SESSION_METRICS_PREF_STRING, DEFAULT_ENABLE_POST_SESSION_METRICS);
         config.connectingAnimationStyle = DEFAULT_CONNECTING_ANIMATION_STYLE;
         config.portalReadyMs = prefs.getInt(PORTAL_READY_MS_PREF_STRING, DEFAULT_PORTAL_READY_MS);
+        config.portalChargeMs = prefs.getInt(PORTAL_CHARGE_MS_PREF_STRING, DEFAULT_PORTAL_CHARGE_MS);
         config.portalSonarHoldMs = prefs.getInt(PORTAL_SONAR_HOLD_MS_PREF_STRING, DEFAULT_PORTAL_SONAR_HOLD_MS);
         config.portalPreviewFadeMs = prefs.getInt(PORTAL_PREVIEW_FADE_MS_PREF_STRING, DEFAULT_PORTAL_PREVIEW_FADE_MS);
         config.portalPreviewHoldMs = prefs.getInt(PORTAL_PREVIEW_HOLD_MS_PREF_STRING, DEFAULT_PORTAL_PREVIEW_HOLD_MS);
@@ -1023,6 +1030,7 @@ private static int getFramePacingValue(Context context) {
         config.portalParticleDensityPercent = prefs.getInt(PORTAL_PARTICLE_DENSITY_PREF_STRING, DEFAULT_PORTAL_PARTICLE_DENSITY);
         config.portalSonarSpeedPercent = prefs.getInt(PORTAL_SONAR_SPEED_PREF_STRING, DEFAULT_PORTAL_SONAR_SPEED);
         config.blurAmountPercent = prefs.getInt(BLUR_AMOUNT_PREF_STRING, DEFAULT_BLUR_AMOUNT);
+        config.blurSaturationPercent = prefs.getInt(BLUR_SATURATION_PREF_STRING, DEFAULT_BLUR_SATURATION);
         config.frostedTintAmountPercent = prefs.getInt(FROSTED_TINT_AMOUNT_PREF_STRING, -1);
         try {
             config.bgQualityMaxShortEdge = Integer.parseInt(prefs.getString(BG_QUALITY_PREF_STRING, DEFAULT_BG_QUALITY));

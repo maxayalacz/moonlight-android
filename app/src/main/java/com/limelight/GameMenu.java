@@ -227,6 +227,7 @@ public class GameMenu implements Game.GameMenuCallbacks {
         private volatile boolean batterySaver = false;
         private volatile int blurPct;
         private volatile int blurRadius;
+        private volatile int blurSaturationPct;
         private volatile int captureLongEdge;
 
         private final Runnable invalidateCardsRunnable = () -> {
@@ -257,10 +258,14 @@ public class GameMenu implements Game.GameMenuCallbacks {
 
         void recomputeFromPrefs() {
             AppThemePalette palette = AppThemePalette.getCurrent(activity);
-            int rawBlurPct = ProfilesManager.getInstance()
-                    .getOverlayingSharedPreferences(activity)
-                    .getInt(PreferenceConfiguration.BLUR_AMOUNT_PREF_STRING,
-                            PreferenceConfiguration.DEFAULT_BLUR_AMOUNT);
+            android.content.SharedPreferences overlayPrefs = ProfilesManager.getInstance()
+                    .getOverlayingSharedPreferences(activity);
+            int rawBlurPct = overlayPrefs.getInt(
+                    PreferenceConfiguration.BLUR_AMOUNT_PREF_STRING,
+                    PreferenceConfiguration.DEFAULT_BLUR_AMOUNT);
+            this.blurSaturationPct = Math.max(0, Math.min(500, overlayPrefs.getInt(
+                    PreferenceConfiguration.BLUR_SATURATION_PREF_STRING,
+                    PreferenceConfiguration.DEFAULT_BLUR_SATURATION)));
             this.batterySaver = PreferenceConfiguration.isUiBatterySaverEffective(activity);
             if (batterySaver || rawBlurPct <= 0 || palette.getEffectiveTintAmount() >= 100) {
                 this.blurPct = 0;
@@ -271,6 +276,10 @@ public class GameMenu implements Game.GameMenuCallbacks {
                 this.blurRadius = Math.max(1, Math.min(18, Math.round(5f * (rawBlurPct / 100f))));
                 this.captureLongEdge = chooseCaptureLongEdge(rawBlurPct);
             }
+        }
+
+        int getBlurSaturationPct() {
+            return blurSaturationPct;
         }
 
         void onBatterySaverChanged() {
@@ -455,6 +464,13 @@ public class GameMenu implements Game.GameMenuCallbacks {
 
             setWillNotDraw(false);
             setClickable(true);
+
+            int satPct = blurController.getBlurSaturationPct();
+            if (satPct != 100) {
+                android.graphics.ColorMatrix cm = new android.graphics.ColorMatrix();
+                cm.setSaturation(satPct / 100f);
+                bitmapPaint.setColorFilter(new android.graphics.ColorMatrixColorFilter(cm));
+            }
 
             rimPaint.setStyle(Paint.Style.STROKE);
             rimPaint.setColor(palette.getCardRimColor());

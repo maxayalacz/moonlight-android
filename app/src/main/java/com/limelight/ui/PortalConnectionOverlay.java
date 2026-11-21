@@ -51,6 +51,7 @@ public class PortalConnectionOverlay extends FrameLayout {
     private long phase0IrisCloseMs = com.limelight.preferences.PreferenceConfiguration.DEFAULT_PORTAL_LAUNCH_CLOSE_MS;
     private long phase1SonarHoldMs = com.limelight.preferences.PreferenceConfiguration.DEFAULT_PORTAL_SONAR_HOLD_MS;
     private long phase2ReadyMs = com.limelight.preferences.PreferenceConfiguration.DEFAULT_PORTAL_READY_MS;
+    private long phase3ChargeMs = com.limelight.preferences.PreferenceConfiguration.DEFAULT_PORTAL_CHARGE_MS;
     private long phase3PreviewFadeMs = com.limelight.preferences.PreferenceConfiguration.DEFAULT_PORTAL_PREVIEW_FADE_MS;
     private long phase3HoldMs = com.limelight.preferences.PreferenceConfiguration.DEFAULT_PORTAL_PREVIEW_HOLD_MS;
     private long phase4ExpandMs = com.limelight.preferences.PreferenceConfiguration.DEFAULT_PORTAL_EXPAND_MS;
@@ -64,6 +65,7 @@ public class PortalConnectionOverlay extends FrameLayout {
         phase0IrisCloseMs = Math.max(0L, cfg.portalLaunchCloseMs);
         phase1SonarHoldMs = Math.max(0L, cfg.portalSonarHoldMs);
         phase2ReadyMs = Math.max(0L, cfg.portalReadyMs);
+        phase3ChargeMs = Math.max(0L, cfg.portalChargeMs);
         phase3PreviewFadeMs = Math.max(0L, cfg.portalPreviewFadeMs);
         phase3HoldMs = Math.max(0L, cfg.portalPreviewHoldMs);
         phase4ExpandMs = Math.max(0L, cfg.portalExpandMs);
@@ -94,7 +96,8 @@ public class PortalConnectionOverlay extends FrameLayout {
     private boolean sonarHoldCompleted = false;
     private boolean connectionStartedPending = false;
     private boolean phase2Started = false;
-    private boolean phase2Completed = false;
+    private boolean phase3ChargeStarted = false;
+    private boolean phase3ChargeCompleted = false;
     private boolean firstFrameReceived = false;
     private boolean phase3Started = false;
     private boolean disconnectStep1Started = false;
@@ -114,7 +117,7 @@ public class PortalConnectionOverlay extends FrameLayout {
     };
 
     private final Runnable firstFrameFallbackRunnable = () -> {
-        if (active && !disconnecting && !canceling && phase2Completed && !phase3Started) {
+        if (active && !disconnecting && !canceling && phase3ChargeCompleted && !phase3Started) {
             startPhase3();
         }
     };
@@ -266,7 +269,8 @@ public class PortalConnectionOverlay extends FrameLayout {
         this.sonarHoldCompleted = false;
         this.connectionStartedPending = false;
         this.phase2Started = false;
-        this.phase2Completed = false;
+        this.phase3ChargeStarted = false;
+        this.phase3ChargeCompleted = false;
         this.firstFrameReceived = false;
         this.phase3Started = false;
         this.disconnectStep1Started = false;
@@ -274,7 +278,7 @@ public class PortalConnectionOverlay extends FrameLayout {
         this.onRevealCompleteAction = onRevealComplete;
 
         // Start visually identical to the app's synced starfield background
-        shaderView.setUniforms(0f, 0f, 1f);
+        shaderView.setUniforms(0f, 0f, 0f, 1f);
 
         boolean landscape = getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE;
         Bitmap snap = PortalShaderView.getHandoffBitmap(landscape);
@@ -446,7 +450,40 @@ public class PortalConnectionOverlay extends FrameLayout {
                     return;
                 }
                 shaderView.setReadyMix(1f);
-                phase2Completed = true;
+                startPhase3Charge();
+            }
+        });
+        activeAnimator.start();
+    }
+
+    /**
+     * Phase 3a — Ready -> Charge transition (ring Highlight glow + sweeping rim arcs).
+     */
+    private void startPhase3Charge() {
+        if (!active || disconnecting || canceling || phase3ChargeStarted) {
+            return;
+        }
+        phase3ChargeStarted = true;
+        cancelActiveAnimator();
+        activeAnimator = ValueAnimator.ofFloat(shaderView.getChargeMix(), 1f);
+        activeAnimator.setDuration(phase3ChargeMs);
+        activeAnimator.setInterpolator(new PathInterpolator(0.22f, 1f, 0.36f, 1f));
+        activeAnimator.addUpdateListener(anim -> shaderView.setChargeMix((float) anim.getAnimatedValue()));
+        activeAnimator.addListener(new AnimatorListenerAdapter() {
+            private boolean canceled = false;
+
+            @Override
+            public void onAnimationCancel(Animator animation) {
+                canceled = true;
+            }
+
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                if (canceled || !active || disconnecting || canceling) {
+                    return;
+                }
+                shaderView.setChargeMix(1f);
+                phase3ChargeCompleted = true;
                 if (firstFrameReceived) {
                     startPhase3();
                 } else {
@@ -466,7 +503,7 @@ public class PortalConnectionOverlay extends FrameLayout {
                 return;
             }
             firstFrameReceived = true;
-            if (phase2Completed && !phase3Started) {
+            if (phase3ChargeCompleted && !phase3Started) {
                 mainHandler.removeCallbacks(firstFrameFallbackRunnable);
                 startPhase3();
             }
@@ -474,7 +511,7 @@ public class PortalConnectionOverlay extends FrameLayout {
     }
 
     /**
-     * Phase 3 — Live Stream Peephole.
+     * Phase 3b — Stream Fade-In (Live Stream Peephole reveal).
      */
     private void startPhase3() {
         if (!active || disconnecting || canceling || phase3Started) {
@@ -592,6 +629,7 @@ public class PortalConnectionOverlay extends FrameLayout {
             cancelButton.animate().alpha(0f).setDuration(180L).start();
 
             final float startPreview = shaderView.getPreviewMix();
+            final float startCharge = shaderView.getChargeMix();
             final float startReady = shaderView.getReadyMix();
             final float startExpand = shaderView.getExpandProgress();
             final Runnable cancel = onCancelAction;
@@ -602,6 +640,7 @@ public class PortalConnectionOverlay extends FrameLayout {
             activeAnimator.addUpdateListener(anim -> {
                 float t = (float) anim.getAnimatedValue();
                 shaderView.setPreviewMix(startPreview * (1f - t));
+                shaderView.setChargeMix(startCharge * (1f - t));
                 shaderView.setReadyMix(startReady * (1f - t));
                 shaderView.setExpandProgress(startExpand + (1f - startExpand) * t);
             });
@@ -618,7 +657,7 @@ public class PortalConnectionOverlay extends FrameLayout {
                     if (innerCanceled) {
                         return;
                     }
-                    shaderView.setUniforms(0f, 0f, 1f);
+                    shaderView.setUniforms(0f, 0f, 0f, 1f);
                     PortalShaderView.captureHandoffFrame(shaderView);
                     if (cancel != null) {
                         cancel.run();
@@ -632,8 +671,8 @@ public class PortalConnectionOverlay extends FrameLayout {
     /**
      * Bidirectional Disconnect / Close Sequence (Live Stream -> App Menu):
      *  - Wait for first transparent GL frame so Step 1 starts smoothly from expand = 1.0
-     *  - Step 1: Iris close over live stream (u_expandProgress 1 -> 0, preview & ready = 1)
-     *  - Step 2: Fade back to starfield (u_previewMix & u_readyMix 1 -> 0)
+     *  - Step 1: Iris close over live stream (u_expandProgress 1 -> 0, preview & charge & ready = 1)
+     *  - Step 2: Fade back to starfield (u_previewMix & u_chargeMix & u_readyMix 1 -> 0)
      *  - Step 3: Iris open to full-screen synced starfield (u_expandProgress 0 -> 1) + capture handoff
      * Keeps the overlay opaque holding the full-screen starfield through Game.finish() so the
      * underlying video SurfaceView never flashes a frame during window teardown.
@@ -657,7 +696,7 @@ public class PortalConnectionOverlay extends FrameLayout {
             this.disconnecting = true;
             this.canceling = false;
             this.disconnectStep1Started = false;
-            shaderView.setUniforms(1f, 1f, 1f);
+            shaderView.setUniforms(1f, 1f, 1f, 1f);
 
             handoffBackdropView.setVisibility(GONE);
             topHudContainer.setVisibility(GONE);
@@ -722,6 +761,7 @@ public class PortalConnectionOverlay extends FrameLayout {
         activeAnimator.addUpdateListener(a -> {
             float v = (float) a.getAnimatedValue();
             shaderView.setPreviewMix(v);
+            shaderView.setChargeMix(v);
             shaderView.setReadyMix(v);
         });
         activeAnimator.addListener(new AnimatorListenerAdapter() {
@@ -738,6 +778,7 @@ public class PortalConnectionOverlay extends FrameLayout {
                     return;
                 }
                 shaderView.setPreviewMix(0f);
+                shaderView.setChargeMix(0f);
                 shaderView.setReadyMix(0f);
                 runDisconnectStep3(onComplete);
             }
@@ -766,7 +807,7 @@ public class PortalConnectionOverlay extends FrameLayout {
                 }
                 // Keep overlay visible at full-screen synced starfield until Game.onStop()
                 // and capture the handoff frame so AppView resumes with zero solid-color flash.
-                shaderView.setUniforms(0f, 0f, 1f);
+                shaderView.setUniforms(0f, 0f, 0f, 1f);
                 PortalShaderView.captureHandoffFrame(shaderView);
                 if (onComplete != null) {
                     onComplete.run();
@@ -798,7 +839,8 @@ public class PortalConnectionOverlay extends FrameLayout {
         sonarHoldCompleted = false;
         connectionStartedPending = false;
         phase2Started = false;
-        phase2Completed = false;
+        phase3ChargeStarted = false;
+        phase3ChargeCompleted = false;
         firstFrameReceived = false;
         phase3Started = false;
         disconnectStep1Started = false;

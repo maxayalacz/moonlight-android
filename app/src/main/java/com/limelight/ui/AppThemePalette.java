@@ -118,6 +118,7 @@ public final class AppThemePalette {
         public int frostedTintAmountPercent; // 0..100 (100 = fully opaque + disables live blur)
         public int cardOutlineThicknessPercent;
         public String bgQuality;
+        public int blurSaturationPercent;
         public int portalParticleBrightnessPercent;
         public int portalParticleSizePercent;
         public int portalParticleDensityPercent;
@@ -126,6 +127,7 @@ public final class AppThemePalette {
         public int portalSonarSpeedPercent;
         public int portalSonarHoldMs;
         public int portalReadyMs;
+        public int portalChargeMs;
         public int portalPreviewFadeMs;
         public int portalPreviewHoldMs;
         public int portalExpandMs;
@@ -140,6 +142,7 @@ public final class AppThemePalette {
             this.name = name;
             this.colors = colors;
             this.blurAmountPercent = PreferenceConfiguration.DEFAULT_BLUR_AMOUNT;
+            this.blurSaturationPercent = PreferenceConfiguration.DEFAULT_BLUR_SATURATION;
             this.frostedTintAmountPercent = colors.isLight ? 76 : PreferenceConfiguration.DEFAULT_FROSTED_TINT_AMOUNT;
             this.cardOutlineThicknessPercent = PreferenceConfiguration.DEFAULT_CARD_OUTLINE_THICKNESS;
             this.bgQuality = PreferenceConfiguration.DEFAULT_BG_QUALITY;
@@ -151,6 +154,7 @@ public final class AppThemePalette {
             this.portalSonarSpeedPercent = PreferenceConfiguration.DEFAULT_PORTAL_SONAR_SPEED;
             this.portalSonarHoldMs = PreferenceConfiguration.DEFAULT_PORTAL_SONAR_HOLD_MS;
             this.portalReadyMs = PreferenceConfiguration.DEFAULT_PORTAL_READY_MS;
+            this.portalChargeMs = PreferenceConfiguration.DEFAULT_PORTAL_CHARGE_MS;
             this.portalPreviewFadeMs = PreferenceConfiguration.DEFAULT_PORTAL_PREVIEW_FADE_MS;
             this.portalPreviewHoldMs = PreferenceConfiguration.DEFAULT_PORTAL_PREVIEW_HOLD_MS;
             this.portalExpandMs = PreferenceConfiguration.DEFAULT_PORTAL_EXPAND_MS;
@@ -179,6 +183,7 @@ public final class AppThemePalette {
             obj.put("particle", hex(colors.particleColor));
             obj.put("ring", hex(colors.ringColor));
             obj.put("blur", blurAmountPercent);
+            obj.put("blurSat", blurSaturationPercent);
             obj.put("tint", frostedTintAmountPercent);
             obj.put("cardOutlinePx", cardOutlineThicknessPercent);
             obj.put("bgQuality", bgQuality != null ? bgQuality : PreferenceConfiguration.DEFAULT_BG_QUALITY);
@@ -190,6 +195,7 @@ public final class AppThemePalette {
             obj.put("sonar", portalSonarSpeedPercent);
             obj.put("sonarHoldMs", portalSonarHoldMs);
             obj.put("readyMs", portalReadyMs);
+            obj.put("chargeMs", portalChargeMs);
             obj.put("fadeMs", portalPreviewFadeMs);
             obj.put("holdMs", portalPreviewHoldMs);
             obj.put("expandMs", portalExpandMs);
@@ -245,6 +251,7 @@ public final class AppThemePalette {
                 }
                 ThemeBundle b = new ThemeBundle(id, name, spec);
                 b.blurAmountPercent = clamp(obj.optInt("blur", PreferenceConfiguration.DEFAULT_BLUR_AMOUNT), 0, 2000);
+                b.blurSaturationPercent = clamp(obj.optInt("blurSat", PreferenceConfiguration.DEFAULT_BLUR_SATURATION), 0, 500);
                 b.frostedTintAmountPercent = clamp(obj.optInt("tint", isLight ? 76 : PreferenceConfiguration.DEFAULT_FROSTED_TINT_AMOUNT), 0, 100);
                 b.cardOutlineThicknessPercent = clamp(obj.optInt("cardOutlinePx", PreferenceConfiguration.DEFAULT_CARD_OUTLINE_THICKNESS), 0, 2000);
                 b.bgQuality = obj.optString("bgQuality", PreferenceConfiguration.DEFAULT_BG_QUALITY);
@@ -256,6 +263,7 @@ public final class AppThemePalette {
                 b.portalSonarSpeedPercent = clamp(obj.optInt("sonar", PreferenceConfiguration.DEFAULT_PORTAL_SONAR_SPEED), 0, 2000);
                 b.portalSonarHoldMs = clamp(obj.optInt("sonarHoldMs", PreferenceConfiguration.DEFAULT_PORTAL_SONAR_HOLD_MS), 0, 30000);
                 b.portalReadyMs = clamp(obj.optInt("readyMs", PreferenceConfiguration.DEFAULT_PORTAL_READY_MS), 0, 30000);
+                b.portalChargeMs = clamp(obj.optInt("chargeMs", PreferenceConfiguration.DEFAULT_PORTAL_CHARGE_MS), 0, 30000);
                 b.portalPreviewFadeMs = clamp(obj.optInt("fadeMs", PreferenceConfiguration.DEFAULT_PORTAL_PREVIEW_FADE_MS), 0, 30000);
                 b.portalPreviewHoldMs = clamp(obj.optInt("holdMs", PreferenceConfiguration.DEFAULT_PORTAL_PREVIEW_HOLD_MS), 0, 30000);
                 b.portalExpandMs = clamp(obj.optInt("expandMs", PreferenceConfiguration.DEFAULT_PORTAL_EXPAND_MS), 0, 30000);
@@ -608,6 +616,7 @@ public final class AppThemePalette {
                 : specFromPreset(current);
         ThemeBundle b = new ThemeBundle(UUID.randomUUID().toString(), current.label, spec);
         b.blurAmountPercent = clamp(cfg.blurAmountPercent, 0, 2000);
+        b.blurSaturationPercent = clamp(cfg.blurSaturationPercent, 0, 500);
         b.frostedTintAmountPercent = current.getEffectiveTintAmount();
         b.cardOutlineThicknessPercent = clamp(cfg.cardOutlineThicknessPercent, 0, 2000);
         b.bgQuality = prefs.getString(PreferenceConfiguration.BG_QUALITY_PREF_STRING, PreferenceConfiguration.DEFAULT_BG_QUALITY);
@@ -619,6 +628,7 @@ public final class AppThemePalette {
         b.portalSonarSpeedPercent = clamp(cfg.portalSonarSpeedPercent, 0, 2000);
         b.portalSonarHoldMs = clamp(cfg.portalSonarHoldMs, 0, 30000);
         b.portalReadyMs = clamp(cfg.portalReadyMs, 0, 30000);
+        b.portalChargeMs = clamp(cfg.portalChargeMs, 0, 30000);
         b.portalPreviewFadeMs = clamp(cfg.portalPreviewFadeMs, 0, 30000);
         b.portalPreviewHoldMs = clamp(cfg.portalPreviewHoldMs, 0, 30000);
         b.portalExpandMs = clamp(cfg.portalExpandMs, 0, 30000);
@@ -649,6 +659,7 @@ public final class AppThemePalette {
         ed.putInt(PREF_CUSTOM_RING, bundle.colors.ringColor | 0xFF000000);
 
         ed.putInt(PreferenceConfiguration.BLUR_AMOUNT_PREF_STRING, clamp(bundle.blurAmountPercent, 0, 2000));
+        ed.putInt(PreferenceConfiguration.BLUR_SATURATION_PREF_STRING, clamp(bundle.blurSaturationPercent, 0, 500));
         ed.putInt(PreferenceConfiguration.FROSTED_TINT_AMOUNT_PREF_STRING, clamp(bundle.frostedTintAmountPercent, 0, 100));
         ed.putInt(PreferenceConfiguration.CARD_OUTLINE_THICKNESS_PREF_STRING, clamp(bundle.cardOutlineThicknessPercent, 0, 2000));
         if (bundle.bgQuality != null) {
@@ -662,6 +673,7 @@ public final class AppThemePalette {
         ed.putInt(PreferenceConfiguration.PORTAL_SONAR_SPEED_PREF_STRING, clamp(bundle.portalSonarSpeedPercent, 0, 2000));
         ed.putInt(PreferenceConfiguration.PORTAL_SONAR_HOLD_MS_PREF_STRING, clamp(bundle.portalSonarHoldMs, 0, 30000));
         ed.putInt(PreferenceConfiguration.PORTAL_READY_MS_PREF_STRING, clamp(bundle.portalReadyMs, 0, 30000));
+        ed.putInt(PreferenceConfiguration.PORTAL_CHARGE_MS_PREF_STRING, clamp(bundle.portalChargeMs, 0, 30000));
         ed.putInt(PreferenceConfiguration.PORTAL_PREVIEW_FADE_MS_PREF_STRING, clamp(bundle.portalPreviewFadeMs, 0, 30000));
         ed.putInt(PreferenceConfiguration.PORTAL_PREVIEW_HOLD_MS_PREF_STRING, clamp(bundle.portalPreviewHoldMs, 0, 30000));
         ed.putInt(PreferenceConfiguration.PORTAL_EXPAND_MS_PREF_STRING, clamp(bundle.portalExpandMs, 0, 30000));
