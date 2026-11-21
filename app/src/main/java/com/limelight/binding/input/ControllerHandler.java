@@ -201,6 +201,11 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
         // consume these. Instead, let's ignore them since that's probably the
         // most likely case.
         defaultContext.ignoreBack = true;
+        defaultContext.type = MoonBridge.LI_CTYPE_PS;
+        this.oscMotionEnabled = prefConfig.gamepadMotionSensors && prefConfig.gamepadMotionSensorsFallbackToDevice;
+        if (this.oscMotionEnabled && deviceSensorManager != null) {
+            defaultContext.sensorManager = deviceSensorManager;
+        }
 
         // Get the initially attached set of gamepads. As each gamepad receives
         // its initial InputEvent, we will move these from this set onto the
@@ -210,6 +215,97 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
 
         // Register ourselves for input device notifications
         inputManager.registerInputDeviceListener(this, null);
+    }
+
+    private boolean oscMotionEnabled = false;
+    private boolean oscArrivalSent = false;
+
+    public boolean isOscMotionSensorsEnabled() {
+        return oscMotionEnabled;
+    }
+
+    public void notifyOscShown() {
+        if (stopped || !oscMotionEnabled) {
+            return;
+        }
+        sendOscControllerArrivalIfNeeded(false);
+    }
+
+    public void setOscMotionSensorsEnabled(boolean enabled) {
+        this.oscMotionEnabled = enabled;
+        if (stopped) {
+            return;
+        }
+        if (enabled && deviceSensorManager != null) {
+            defaultContext.sensorManager = deviceSensorManager;
+            sendOscControllerArrivalIfNeeded(true);
+            defaultContext.enableSensors();
+        } else {
+            defaultContext.disableSensors();
+            defaultContext.sensorManager = null;
+            if (conn != null) {
+                conn.sendControllerMotionEvent((byte) 0, MoonBridge.LI_MOTION_TYPE_GYRO, 0.f, 0.f, 0.f);
+            }
+        }
+    }
+
+    private boolean hasPhysicalControllerZero() {
+        for (int i = 0; i < inputDeviceContexts.size(); i++) {
+            InputDeviceContext dc = inputDeviceContexts.valueAt(i);
+            if (dc.assignedControllerNumber && dc.controllerNumber == 0 && dc.hasJoystickAxes) {
+                return true;
+            }
+        }
+        for (int i = 0; i < usbDeviceContexts.size(); i++) {
+            UsbDeviceContext dc = usbDeviceContexts.valueAt(i);
+            if (dc.assignedControllerNumber && dc.controllerNumber == 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void sendOscControllerArrivalIfNeeded(boolean force) {
+        if (stopped || conn == null || deviceSensorManager == null || !oscMotionEnabled) {
+            return;
+        }
+        if (oscArrivalSent && !force) {
+            return;
+        }
+        if (!prefConfig.forceMotionSensorsFallbackToDevice && hasPhysicalControllerZero()) {
+            return;
+        }
+
+        short capabilities = MoonBridge.LI_CCAP_ANALOG_TRIGGERS | MoonBridge.LI_CCAP_RUMBLE;
+        boolean hasMotion = false;
+        if (deviceSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) != null) {
+            capabilities |= MoonBridge.LI_CCAP_ACCEL;
+            hasMotion = true;
+        }
+        if (deviceSensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE) != null) {
+            capabilities |= MoonBridge.LI_CCAP_GYRO;
+            hasMotion = true;
+        }
+        if (!hasMotion) {
+            return;
+        }
+
+        defaultContext.sensorManager = deviceSensorManager;
+        oscArrivalSent = true;
+        int supportedButtons =
+                ControllerPacket.A_FLAG | ControllerPacket.B_FLAG |
+                ControllerPacket.X_FLAG | ControllerPacket.Y_FLAG |
+                ControllerPacket.UP_FLAG | ControllerPacket.DOWN_FLAG |
+                ControllerPacket.LEFT_FLAG | ControllerPacket.RIGHT_FLAG |
+                ControllerPacket.LB_FLAG | ControllerPacket.RB_FLAG |
+                ControllerPacket.LS_CLK_FLAG | ControllerPacket.RS_CLK_FLAG |
+                ControllerPacket.PLAY_FLAG | ControllerPacket.BACK_FLAG |
+                ControllerPacket.SPECIAL_BUTTON_FLAG | ControllerPacket.TOUCHPAD_FLAG;
+
+        short activeMask = (short) (getActiveControllerMask() | 1);
+        conn.sendControllerArrivalEvent((byte) 0, activeMask, MoonBridge.LI_CTYPE_PS,
+                supportedButtons, capabilities);
+        LimeLog.info("Announced OSC virtual controller with device motion sensors (gyro/accel)");
     }
 
     private static InputDevice.MotionRange getMotionRangeForJoystickAxis(InputDevice dev, int axis) {
@@ -279,6 +375,8 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
         // Unregister our input device callbacks
         inputManager.unregisterInputDeviceListener(this);
 
+        defaultContext.destroy();
+
         for (int i = 0; i < inputDeviceContexts.size(); i++) {
             InputDeviceContext deviceContext = inputDeviceContexts.valueAt(i);
             deviceContext.destroy();
@@ -302,6 +400,7 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
     }
 
     public void disableSensors() {
+        defaultContext.disableSensors();
         for (int i = 0; i < inputDeviceContexts.size(); i++) {
             InputDeviceContext deviceContext = inputDeviceContexts.valueAt(i);
             deviceContext.disableSensors();
@@ -313,6 +412,9 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
             return;
         }
 
+        if (oscMotionEnabled) {
+            defaultContext.enableSensors();
+        }
         for (int i = 0; i < inputDeviceContexts.size(); i++) {
             InputDeviceContext deviceContext = inputDeviceContexts.valueAt(i);
             deviceContext.enableSensors();
@@ -2361,12 +2463,18 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
         // Report rate is restricted to <= 200 Hz without the HIGH_SAMPLING_RATE_SENSORS permission
         reportRateHz = (short) Math.min(200, reportRateHz);
 
-        for (int i = 0; i < inputDeviceContexts.size() + usbDeviceContexts.size(); i++) {
+        int totalPhysical = inputDeviceContexts.size() + usbDeviceContexts.size();
+        for (int i = 0; i < totalPhysical + 1; i++) {
             InputDeviceContext deviceContext;
             if (i < inputDeviceContexts.size()) {
                 deviceContext = inputDeviceContexts.valueAt(i);
-            } else {
+            } else if (i < totalPhysical) {
                 deviceContext = usbDeviceContexts.valueAt(i - inputDeviceContexts.size());
+            } else {
+                if (!oscMotionEnabled) {
+                    continue;
+                }
+                deviceContext = defaultContext;
             }
 
             if (deviceContext.controllerNumber == controllerNumber) {
@@ -2944,6 +3052,8 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
                                short leftStickX, short leftStickY,
                                short rightStickX, short rightStickY,
                                byte leftTrigger, byte rightTrigger) {
+        sendOscControllerArrivalIfNeeded(false);
+
         defaultContext.leftStickX = leftStickX;
         defaultContext.leftStickY = leftStickY;
 

@@ -561,11 +561,23 @@ public class FlowingAuroraView extends View {
             }
         }
 
+        private int rimColor = 0x42FFFFFF;
+
         public void setStrokeWidthPx(float strokeWidthPx) {
             float clamped = Math.max(0f, strokeWidthPx);
             if (Math.abs(this.strokePaint.getStrokeWidth() - clamped) > 0.05f) {
                 this.strokePaint.setStrokeWidth(clamped);
                 invalidateSelf();
+            }
+        }
+
+        public void setRimColor(int color) {
+            if (this.rimColor != color) {
+                this.rimColor = color;
+                if (!isHighlighted) {
+                    this.strokePaint.setColor(color);
+                    invalidateSelf();
+                }
             }
         }
 
@@ -597,12 +609,16 @@ public class FlowingAuroraView extends View {
             }
             if (active != isHighlighted) {
                 isHighlighted = active;
+                View host = hostViewRef.get();
+                AppThemePalette p = host != null
+                        ? AppThemePalette.getCurrent(host.getContext())
+                        : AppThemePalette.MIDNIGHT;
                 if (active) {
-                    tintPaint.setColor(AppThemePalette.withAlpha(AppThemePalette.MIDNIGHT.accent, 0.24f));
-                    strokePaint.setColor(AppThemePalette.withAlpha(AppThemePalette.MIDNIGHT.accentLight, 0.90f));
+                    tintPaint.setColor(AppThemePalette.withAlpha(p.accent, p.isLight ? 0.16f : 0.24f));
+                    strokePaint.setColor(AppThemePalette.withAlpha(p.getNeonAccent(), 0.90f));
                 } else {
                     tintPaint.setColor(frostTintColor);
-                    strokePaint.setColor(0x42FFFFFF);
+                    strokePaint.setColor(rimColor);
                 }
                 invalidateSelf();
                 return true;

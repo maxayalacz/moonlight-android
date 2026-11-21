@@ -263,16 +263,7 @@ public class AnalogStickFree extends VirtualControllerElement {
                 float outlineScale = getOutlineScaleFactor();
                 float strokeW = outlineScale <= 0.01f ? 0f : Math.max(1f, getDefaultStrokeWidth() * outlineScale);
 
-                // Subtle live blurred frosted glass idle zone + dashed boundary ring + center dot
-                android.graphics.Path idleClip = new android.graphics.Path();
-                idleClip.addCircle(cx, cy, radius_complete, android.graphics.Path.Direction.CW);
-                android.graphics.RectF idleBounds = new android.graphics.RectF(
-                        cx - radius_complete, cy - radius_complete, cx + radius_complete, cy + radius_complete);
-                OscLiveBlurHelper blurHelper = virtualController.getLiveBlurHelper();
-                if (blurHelper != null) {
-                    blurHelper.drawLiveBlurForBounds(canvas, this, idleClip, idleBounds, opacityFactor * 0.65f);
-                }
-
+                // Subtle translucent idle zone + dashed boundary ring + center dot
                 paint.setShader(null);
                 paint.setStyle(Paint.Style.FILL);
                 paint.setColor(freeStickWithAlpha(0xFF101624, 0.25f * opacityFactor));
@@ -343,19 +334,9 @@ public class AnalogStickFree extends VirtualControllerElement {
                     case MOVED_IN_DEAD_ZONE:
                     case MOVED_ACTIVE: {
                         if (freeBgFactor > 0.005f) {
-                            android.graphics.Path freeClip = new android.graphics.Path();
-                            freeClip.addCircle(touchStartX, touchStartY, radius_complete, android.graphics.Path.Direction.CW);
-                            android.graphics.RectF freeBounds = new android.graphics.RectF(
-                                    touchStartX - radius_complete, touchStartY - radius_complete,
-                                    touchStartX + radius_complete, touchStartY + radius_complete);
-                            OscLiveBlurHelper blurHelper = virtualController.getLiveBlurHelper();
-                            boolean drewLiveBlur = blurHelper != null
-                                    && blurHelper.drawLiveBlurForBounds(canvas, this, freeClip, freeBounds, freeBgFactor);
-
-                            float tintScale = drewLiveBlur ? 0.50f : 0.85f;
                             paint.setShader(null);
                             paint.setStyle(Paint.Style.FILL);
-                            paint.setColor(freeStickWithAlpha(0xFF101624, freeBgFactor * tintScale));
+                            paint.setColor(freeStickWithAlpha(0xFF101624, freeBgFactor * 0.55f));
                             canvas.drawCircle(touchStartX, touchStartY, radius_complete, paint);
                         }
 
@@ -520,6 +501,7 @@ public class AnalogStickFree extends VirtualControllerElement {
                         click_state = CLICK_STATE.SINGLE;
                         notifyOnClick();
                     }
+                    virtualController.triggerHapticPress();
                     // reset last click timestamp
                     timeLastClick = System.currentTimeMillis();
                     // set item pressed and update
@@ -545,6 +527,9 @@ public class AnalogStickFree extends VirtualControllerElement {
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_POINTER_UP: {
                 if (action == MotionEvent.ACTION_CANCEL || touchID == event.getPointerId(actionIndex)) {
+                    if (isPressed()) {
+                        virtualController.triggerHapticRelease();
+                    }
                     setPressed(false);
                     bIsFingerOnScreen = false;
                 }

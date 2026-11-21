@@ -112,9 +112,6 @@ public class OscLayoutEditorActivity extends AppCompatActivity {
     @Override
     protected void onPause() {
         super.onPause();
-        if (virtualController != null) {
-            virtualController.getLiveBlurHelper().stop();
-        }
     }
 
     @Override

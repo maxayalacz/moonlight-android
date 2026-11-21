@@ -374,9 +374,10 @@ public class GameMenu implements Game.GameMenuCallbacks {
             super(context);
             this.blurController = blurController;
             this.cornerRadiusPx = cornerRadiusPx;
-            this.tintColorWithBlur = 0xAA0C1018;
-            this.tintColorFallback = 0xDE0C1018;
-            this.accentDeepTint = AppThemePalette.withAlpha(palette.surface, 0.24f);
+            int darkBase = palette.isLight ? 0xFF141B29 : palette.background;
+            this.tintColorWithBlur = AppThemePalette.withAlphaInt(darkBase, 0xAA);
+            this.tintColorFallback = AppThemePalette.withAlphaInt(darkBase, 0xDE);
+            this.accentDeepTint = AppThemePalette.withAlpha(palette.isLight ? palette.accent : palette.surface, palette.isLight ? 0.14f : 0.24f);
 
             setWillNotDraw(false);
             setClickable(true);
@@ -979,13 +980,13 @@ public class GameMenu implements Game.GameMenuCallbacks {
                     0, 100, 1, game.getOscOpacity(), "%", palette,
                     game::setOscOpacityLive);
 
-            addDrawerSliderRow(oscContent, ctx, getString(R.string.title_osc_blur_amount),
-                    0, 200, 5, game.getOscBlurAmount(), "%", palette,
-                    game::setOscBlurAmountLive);
-
             addDrawerSliderRow(oscContent, ctx, getString(R.string.title_osc_outline_thickness),
                     0, 250, 5, game.getOscOutlineThickness(), "%", palette,
                     game::setOscOutlineThicknessLive);
+
+            addDrawerToggleRow(oscContent, ctx, getString(R.string.quick_settings_osc_motion),
+                    game.isOscMotionSensorsEnabled(), palette,
+                    game::setOscMotionSensorsLive);
 
             addDrawerToggleRow(oscContent, ctx, getString(R.string.title_checkbox_vibrate_osc),
                     game.isOscVibrateEnabled(), palette,

@@ -462,10 +462,11 @@ public class StreamSettings extends AppCompatActivity {
                                     ? R.drawable.bg_oneui_glass_card_top
                                     : R.drawable.bg_oneui_squircle_card);
                         }
+                        com.limelight.ui.AppThemePalette catPalette = com.limelight.ui.AppThemePalette.getCurrent(itemView.getContext());
                         View title = holder.findViewById(android.R.id.title);
                         if (title instanceof android.widget.TextView) {
                             android.widget.TextView tv = (android.widget.TextView) title;
-                            tv.setTextColor(0xFFFFFFFF);
+                            tv.setTextColor(catPalette.getPrimaryTextColor());
                             tv.setShadowLayer(0f, 0f, 0f, 0);
                         }
                         itemView.setAlpha(1.0f);
@@ -482,11 +483,11 @@ public class StreamSettings extends AppCompatActivity {
                         com.limelight.ui.AppThemePalette palette = com.limelight.ui.AppThemePalette.getCurrent(itemView.getContext());
                         View title = holder.findViewById(android.R.id.title);
                         if (title instanceof android.widget.TextView) {
-                            ((android.widget.TextView) title).setTextColor(0xFFFFFFFF);
+                            ((android.widget.TextView) title).setTextColor(palette.getPrimaryTextColor());
                         }
                         View summary = holder.findViewById(android.R.id.summary);
                         if (summary instanceof android.widget.TextView) {
-                            ((android.widget.TextView) summary).setTextColor(0xB8FFFFFF);
+                            ((android.widget.TextView) summary).setTextColor(palette.getSecondaryTextColor());
                         }
                         itemView.setAlpha(pref.isEnabled() ? 1.0f : 0.45f);
                         applySwitchPalette(itemView, palette);
@@ -1139,6 +1140,39 @@ public class StreamSettings extends AppCompatActivity {
                         startActivity(Intent.createChooser(intent,getString(R.string.pref_save_keyboard_profile)));
                         return false;
                     }
+                });
+            }
+
+            _pref = findPreference(com.limelight.ui.AppThemePalette.PREF_COLOR_SCHEME);
+            if (_pref != null) {
+                _pref.setOnPreferenceChangeListener((preference, newValue) -> {
+                    requireView().post(() -> {
+                        UiHelper.refreshBackdrop(requireActivity());
+                        androidx.recyclerview.widget.RecyclerView rv = getListView();
+                        if (rv != null && rv.getAdapter() != null) {
+                            rv.getAdapter().notifyDataSetChanged();
+                        }
+                    });
+                    return true;
+                });
+            }
+
+            _pref = findPreference("pref_custom_palette");
+            if (_pref != null) {
+                _pref.setOnPreferenceClickListener(preference -> {
+                    com.limelight.ui.CustomPaletteDialog.show(requireActivity(), () -> {
+                        androidx.preference.ListPreference schemePref =
+                                findPreference(com.limelight.ui.AppThemePalette.PREF_COLOR_SCHEME);
+                        if (schemePref != null) {
+                            schemePref.setValue(com.limelight.ui.AppThemePalette.CUSTOM_THEME_KEY);
+                        }
+                        UiHelper.refreshBackdrop(requireActivity());
+                        androidx.recyclerview.widget.RecyclerView rv = getListView();
+                        if (rv != null && rv.getAdapter() != null) {
+                            rv.getAdapter().notifyDataSetChanged();
+                        }
+                    });
+                    return true;
                 });
             }
 

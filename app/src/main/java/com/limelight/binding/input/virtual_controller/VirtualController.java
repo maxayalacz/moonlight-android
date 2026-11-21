@@ -73,24 +73,24 @@ public class VirtualController {
 
     private List<VirtualControllerElement> elements = new ArrayList<>();
 
-    private final OscLiveBlurHelper liveBlurHelper;
-
     private Vibrator vibrator;
 
-    private final VibrationEffect defaultVibrationEffect;
+    private final VibrationEffect pressVibrationEffect;
+    private final VibrationEffect releaseVibrationEffect;
 
     public VirtualController(final ControllerHandler controllerHandler, FrameLayout layout, final Context context) {
         this.controllerHandler = controllerHandler;
         this.frame_layout = layout;
         this.context = context;
         this.handler = new Handler(Looper.getMainLooper());
-        this.liveBlurHelper = new OscLiveBlurHelper(this, context);
 
         this.vibrator = (Vibrator) context.getSystemService(Context.VIBRATOR_SERVICE);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            defaultVibrationEffect = VibrationEffect.createOneShot(10, VibrationEffect.DEFAULT_AMPLITUDE);
+            pressVibrationEffect = VibrationEffect.createOneShot(10, 90);
+            releaseVibrationEffect = VibrationEffect.createOneShot(6, 42);
         } else {
-            defaultVibrationEffect = null;
+            pressVibrationEffect = null;
+            releaseVibrationEffect = null;
         }
 
         buttonConfigure = new Button(context);
@@ -161,17 +161,40 @@ public class VirtualController {
         return visible;
     }
 
-    public OscLiveBlurHelper getLiveBlurHelper() {
-        return liveBlurHelper;
-    }
-
     Handler getHandler() {
         return handler;
     }
 
+    public void triggerHapticPress() {
+        if (vibrator == null || frame_layout == null) {
+            return;
+        }
+        if (!PreferenceConfiguration.readPreferences(context).vibrateOsc) {
+            return;
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && pressVibrationEffect != null) {
+            vibrator.vibrate(pressVibrationEffect);
+        } else {
+            vibrator.vibrate(10);
+        }
+    }
+
+    public void triggerHapticRelease() {
+        if (vibrator == null || frame_layout == null) {
+            return;
+        }
+        if (!PreferenceConfiguration.readPreferences(context).vibrateOsc) {
+            return;
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && releaseVibrationEffect != null) {
+            vibrator.vibrate(releaseVibrationEffect);
+        } else {
+            vibrator.vibrate(5);
+        }
+    }
+
     public void hide() {
         visible = false;
-        liveBlurHelper.stop();
         for (VirtualControllerElement element : elements) {
             element.setVisibility(View.GONE);
         }
@@ -188,7 +211,6 @@ public class VirtualController {
         }
 
         buttonConfigure.setVisibility(configureButtonVisible ? View.VISIBLE : View.GONE);
-        liveBlurHelper.start();
     }
 
     public int switchShowHide() {
@@ -214,7 +236,6 @@ public class VirtualController {
     }
 
     public void removeElements() {
-        liveBlurHelper.stop();
         for (VirtualControllerElement element : elements) {
             frame_layout.removeView(element);
         }
@@ -303,22 +324,6 @@ public class VirtualController {
         handler.removeCallbacks(delayedRetransmitRunnable);
 
         sendControllerInputContextInternal();
-        if (frame_layout != null && PreferenceConfiguration.readPreferences(context).vibrateOsc) {
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                VibrationEffect effect;
-                if (vibrationDuration == 0) {
-                    effect = defaultVibrationEffect;
-                } else {
-                    effect = VibrationEffect.createOneShot(vibrationDuration, vibrationAmplitude);
-                }
-                vibrator.vibrate(effect);
-            } else {
-                if (vibrationDuration == 0) {
-                    vibrationDuration = 10;
-                }
-                vibrator.vibrate(vibrationDuration);
-            }
-        }
         // HACK: GFE sometimes discards gamepad packets when they are received
         // very shortly after another. This can be critical if an axis zeroing packet
         // is lost and causes an analog stick to get stuck. To avoid this, we retransmit

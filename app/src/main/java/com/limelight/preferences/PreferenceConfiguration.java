@@ -87,7 +87,6 @@ public class PreferenceConfiguration {
     public static final String PORTAL_SONAR_SPEED_PREF_STRING = "seekbar_portal_sonar_speed";
     public static final String BLUR_AMOUNT_PREF_STRING = "seekbar_blur_amount";
     public static final String BG_QUALITY_PREF_STRING = "list_bg_quality";
-    public static final String OSC_BLUR_AMOUNT_PREF_STRING = "seekbar_osc_blur_amount";
     public static final String OSC_OUTLINE_THICKNESS_PREF_STRING = "seekbar_osc_outline_thickness";
     public static final String CARD_OUTLINE_THICKNESS_PREF_STRING = "seekbar_card_outline_thickness";
     public static final int DEFAULT_PORTAL_READY_MS = 300;
@@ -103,7 +102,6 @@ public class PreferenceConfiguration {
     public static final int DEFAULT_PORTAL_SONAR_SPEED = 100;
     public static final int DEFAULT_BLUR_AMOUNT = 100;
     public static final String DEFAULT_BG_QUALITY = "720";
-    public static final int DEFAULT_OSC_BLUR_AMOUNT = 100;
     public static final int DEFAULT_OSC_OUTLINE_THICKNESS = 100;
     public static final int DEFAULT_CARD_OUTLINE_THICKNESS = 100;
     private static final String BIND_ALL_USB_STRING = "checkbox_usb_bind_all";

@@ -1174,6 +1174,9 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
         virtualController.setConfigureButtonVisible(false);
         virtualController.refreshLayout();
         virtualController.show();
+        if (controllerHandler != null) {
+            controllerHandler.notifyOscShown();
+        }
     }
 
     private void initkeyBoardLayoutController(){
@@ -1214,6 +1217,9 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
         if (prefConfig.onscreenController) {
             virtualController.refreshLayout();
             virtualController.show();
+            if (controllerHandler != null) {
+                controllerHandler.notifyOscShown();
+            }
         }
     }
 
@@ -4469,20 +4475,28 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
         }
     }
 
-    public int getOscBlurAmount() {
-        return getLiveOverlayPrefs().getInt(
-                PreferenceConfiguration.OSC_BLUR_AMOUNT_PREF_STRING,
-                PreferenceConfiguration.DEFAULT_OSC_BLUR_AMOUNT);
+    public boolean isOscMotionSensorsEnabled() {
+        if (controllerHandler != null) {
+            return controllerHandler.isOscMotionSensorsEnabled();
+        }
+        return prefConfig != null && prefConfig.gamepadMotionSensors && prefConfig.gamepadMotionSensorsFallbackToDevice;
     }
 
-    public void setOscBlurAmountLive(int blurPct) {
-        int clamped = Math.max(0, Math.min(200, blurPct));
-        getLiveOverlayPrefs().edit()
-                .putInt(PreferenceConfiguration.OSC_BLUR_AMOUNT_PREF_STRING, clamped)
-                .apply();
-        if (virtualController != null) {
-            virtualController.getLiveBlurHelper().refreshBlurPreferenceNow();
-            invalidateVirtualControllerElements();
+    public void setOscMotionSensorsLive(boolean enabled) {
+        if (prefConfig != null) {
+            if (enabled) {
+                prefConfig.gamepadMotionSensors = true;
+            }
+            prefConfig.gamepadMotionSensorsFallbackToDevice = enabled;
+        }
+        SharedPreferences.Editor ed = getLiveOverlayPrefs().edit()
+                .putBoolean("checkbox_gamepad_motion_sensors_fallback_to_device", enabled);
+        if (enabled) {
+            ed.putBoolean("checkbox_gamepad_motion_sensors", true);
+        }
+        ed.apply();
+        if (controllerHandler != null) {
+            controllerHandler.setOscMotionSensorsEnabled(enabled);
         }
     }
 

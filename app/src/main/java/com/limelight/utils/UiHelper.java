@@ -175,6 +175,9 @@ public class UiHelper {
         com.limelight.ui.PortalShaderView portal = (portalCandidate instanceof com.limelight.ui.PortalShaderView)
                 ? (com.limelight.ui.PortalShaderView) portalCandidate
                 : null;
+        com.limelight.ui.AppThemePalette palette = com.limelight.ui.AppThemePalette.getCurrent(view.getContext());
+        int themedFrostTint = palette.getFrostedCardTint(frostTintColor);
+        int themedRimColor = palette.getCardRimColor();
         float radiusPx = dpToPx(view.getContext(), cornerRadiusDp);
         boolean isSettingsMenuCard = (activity instanceof com.limelight.preferences.StreamSettings);
         float strokeWidthPx = isSettingsMenuCard
@@ -183,18 +186,22 @@ public class UiHelper {
         if (view.getBackground() instanceof com.limelight.ui.FlowingAuroraView.FrostedCardDrawable) {
             com.limelight.ui.FlowingAuroraView.FrostedCardDrawable existing =
                     (com.limelight.ui.FlowingAuroraView.FrostedCardDrawable) view.getBackground();
-            existing.updateStyle(cornerMode, radiusPx, frostTintColor, aurora, portal);
+            existing.updateStyle(cornerMode, radiusPx, themedFrostTint, aurora, portal);
             existing.setStrokeWidthPx(strokeWidthPx);
+            existing.setRimColor(themedRimColor);
             return true;
         }
-        view.setBackground(new com.limelight.ui.FlowingAuroraView.FrostedCardDrawable(
-                view,
-                aurora,
-                portal,
-                cornerMode,
-                radiusPx,
-                frostTintColor,
-                strokeWidthPx));
+        com.limelight.ui.FlowingAuroraView.FrostedCardDrawable created =
+                new com.limelight.ui.FlowingAuroraView.FrostedCardDrawable(
+                        view,
+                        aurora,
+                        portal,
+                        cornerMode,
+                        radiusPx,
+                        themedFrostTint,
+                        strokeWidthPx);
+        created.setRimColor(themedRimColor);
+        view.setBackground(created);
         return true;
     }
 
@@ -1243,6 +1250,46 @@ public class UiHelper {
             psv.refreshFromPrefs();
             syncHandoffBackdrop(activity, rootView, psv);
             psv.startRendering();
+        }
+        applyPaletteChrome(activity, rootView);
+    }
+
+    public static void applyPaletteChrome(Activity activity, View rootView) {
+        if (activity == null || rootView == null) {
+            return;
+        }
+        com.limelight.ui.AppThemePalette palette = com.limelight.ui.AppThemePalette.getCurrent(activity);
+        if (activity.getWindow() != null) {
+            androidx.core.view.WindowInsetsControllerCompat ctrl =
+                    androidx.core.view.WindowCompat.getInsetsController(activity.getWindow(), activity.getWindow().getDecorView());
+            if (ctrl != null) {
+                ctrl.setAppearanceLightStatusBars(palette.isLight);
+                ctrl.setAppearanceLightNavigationBars(palette.isLight);
+            }
+        }
+        int primaryText = palette.getPrimaryTextColor();
+        View pcToolbar = rootView.findViewById(R.id.pcToolbarContainer);
+        if (pcToolbar != null) {
+            applyLiquidGlassEffect(pcToolbar);
+            tintToolbarChrome(pcToolbar, primaryText);
+        }
+        View appListText = rootView.findViewById(R.id.appListText);
+        if (appListText instanceof android.widget.TextView) {
+            applyLiquidGlassEffect(appListText);
+            ((android.widget.TextView) appListText).setTextColor(primaryText);
+        }
+    }
+
+    private static void tintToolbarChrome(View view, int color) {
+        if (view instanceof android.widget.TextView) {
+            ((android.widget.TextView) view).setTextColor(color);
+        } else if (view instanceof android.widget.ImageView) {
+            ((android.widget.ImageView) view).setColorFilter(color, android.graphics.PorterDuff.Mode.SRC_IN);
+        } else if (view instanceof android.view.ViewGroup) {
+            android.view.ViewGroup vg = (android.view.ViewGroup) view;
+            for (int i = 0; i < vg.getChildCount(); i++) {
+                tintToolbarChrome(vg.getChildAt(i), color);
+            }
         }
     }
 

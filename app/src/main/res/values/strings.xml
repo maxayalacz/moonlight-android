@@ -885,4 +885,9 @@
     <string name="osc_editor_select_hint">Tap a button to select, drag to move, drag handle to scale</string>
     <string name="osc_editor_hide_btn">Hide</string>
     <string name="osc_editor_show_btn">Show</string>
+    <string name="color_scheme_daylight">Frost Daylight (Light)</string>
+    <string name="color_scheme_custom">Custom Palette</string>
+    <string name="title_custom_palette">Customize Color Palette</string>
+    <string name="summary_custom_palette">Choose Dark/Light base, auto-harmonize from an accent, or fine-tune all 6 theme colors with live preview</string>
+    <string name="quick_settings_osc_motion">Device Motion Sensors (Gyro)</string>
 </resources>

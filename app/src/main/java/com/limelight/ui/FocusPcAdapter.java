@@ -190,6 +190,9 @@ public class FocusPcAdapter extends RecyclerView.Adapter<FocusPcAdapter.ViewHold
 
         holder.portal.bind(details, position == activePage);
         holder.nameText.setText(details.name);
+        holder.nameText.setTextColor(palette.getPrimaryTextColor());
+        holder.addressText.setTextColor(palette.getSecondaryTextColor());
+        holder.hintText.setTextColor(palette.getSecondaryTextColor());
 
         String addressText = extractAddress(details);
         if (!addressText.isEmpty()) {
@@ -204,23 +207,23 @@ public class FocusPcAdapter extends RecyclerView.Adapter<FocusPcAdapter.ViewHold
 
         if (details.state == ComputerDetails.State.UNKNOWN) {
             holder.statusText.setText(R.string.focus_mode_status_searching);
-            holder.statusText.setTextColor(0xA6FFFFFF);
+            holder.statusText.setTextColor(palette.getSecondaryTextColor());
             holder.hintText.setText(R.string.focus_mode_tap_options);
         } else if (!isOnline) {
             holder.statusText.setText(R.string.focus_mode_status_offline);
-            holder.statusText.setTextColor(0xCCFF6E6E);
+            holder.statusText.setTextColor(palette.isLight ? 0xFFD92D20 : 0xCCFF6E6E);
             holder.hintText.setText(R.string.focus_mode_tap_options);
         } else if (!isPaired) {
             holder.statusText.setText(R.string.focus_mode_status_unpaired);
-            holder.statusText.setTextColor(0xE6FFD54F);
+            holder.statusText.setTextColor(palette.isLight ? 0xFFB45309 : 0xE6FFD54F);
             holder.hintText.setText(R.string.focus_mode_tap_pair);
         } else if (details.runningGameId != 0) {
             holder.statusText.setText(R.string.focus_mode_status_ingame);
-            holder.statusText.setTextColor(AppThemePalette.withAlpha(palette.highlight, 0.92f));
+            holder.statusText.setTextColor(palette.getNeonAccent());
             holder.hintText.setText(R.string.focus_mode_tap_open);
         } else {
             holder.statusText.setText(R.string.focus_mode_status_online);
-            holder.statusText.setTextColor(AppThemePalette.withAlpha(palette.highlight, 0.92f));
+            holder.statusText.setTextColor(palette.getNeonAccent());
             holder.hintText.setText(R.string.focus_mode_tap_open);
         }
 

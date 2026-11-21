@@ -226,9 +226,10 @@ public class FocusCirclePortalView extends View {
 
     private void ensureStaticShaders(int w, int h, float cx, float cy,
                                      float outerRadius, float innerRadius, float glowMargin) {
+        String paletteSig = palette.key + ":" + palette.accent + ":" + palette.surface + ":" + palette.isLight;
         boolean dimsChanged = (w != cachedW || h != cachedH);
         boolean stateChanged = (statusColor != cachedStatusColor
-                || !palette.key.equals(cachedPaletteKey)
+                || !paletteSig.equals(cachedPaletteKey)
                 || isOnline != cachedOnline
                 || isPressedOrFocused != cachedPressed);
         if (!dimsChanged && !stateChanged) {
@@ -237,9 +238,14 @@ public class FocusCirclePortalView extends View {
         cachedW = w;
         cachedH = h;
         cachedStatusColor = statusColor;
-        cachedPaletteKey = palette.key;
+        cachedPaletteKey = paletteSig;
         cachedOnline = isOnline;
         cachedPressed = isPressedOrFocused;
+
+        onlineIconFilter = new PorterDuffColorFilter(
+                palette.isLight ? 0xEB0F172A : 0xF2FFFFFF, PorterDuff.Mode.SRC_IN);
+        offlineIconFilter = new PorterDuffColorFilter(
+                palette.isLight ? 0x7A334155 : 0x7AFFFFFF, PorterDuff.Mode.SRC_IN);
 
         glowPaint.setShader(new RadialGradient(
                 cx, cy, outerRadius + glowMargin,
@@ -265,16 +271,17 @@ public class FocusCirclePortalView extends View {
                 cy - innerRadius * 0.25f,
                 innerRadius * 1.45f,
                 new int[]{
-                        AppThemePalette.withAlpha(palette.accent, isOnline ? 0.26f : 0.12f),
-                        AppThemePalette.withAlpha(palette.secondary, 0.36f),
-                        AppThemePalette.withAlpha(palette.surface, 0.56f)
+                        AppThemePalette.withAlpha(palette.accent, isOnline ? (palette.isLight ? 0.18f : 0.26f) : 0.10f),
+                        AppThemePalette.withAlpha(palette.secondary, palette.isLight ? 0.22f : 0.36f),
+                        AppThemePalette.withAlpha(palette.surface, palette.isLight ? 0.35f : 0.56f)
                 },
                 new float[]{0.0f, 0.52f, 1.0f},
                 Shader.TileMode.CLAMP));
 
+        frostedTintPaint.setColor(palette.isLight ? 0xB8F8FAFE : 0x56000000);
         vignettePaint.setShader(new RadialGradient(
                 cx, cy, innerRadius,
-                new int[]{0x00000000, 0x52000000},
+                new int[]{0x00000000, palette.isLight ? 0x160F172A : 0x52000000},
                 new float[]{0.58f, 1.0f},
                 Shader.TileMode.CLAMP));
 
@@ -394,8 +401,9 @@ public class FocusCirclePortalView extends View {
             int iconSize = Math.round(innerRadius * 0.62f);
             int half = iconSize / 2;
             innerBadgePaint.setColor(AppThemePalette.withAlpha(
-                    isOnline ? palette.accentLight : 0xFFFFFFFF,
-                    isOnline ? 0.16f : 0.08f));
+                    isOnline ? (palette.isLight ? palette.accent : palette.accentLight)
+                            : (palette.isLight ? 0xFF0F172A : 0xFFFFFFFF),
+                    isOnline ? (palette.isLight ? 0.14f : 0.16f) : 0.08f));
             canvas.drawCircle(cx, cy, innerRadius * 0.44f, innerBadgePaint);
 
             computerDrawable.setBounds(

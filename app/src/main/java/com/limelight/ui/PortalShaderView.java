@@ -87,6 +87,13 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "uniform float u_glowIntensity;\n" +
             "uniform float u_particleBrightness;\n" +
             "uniform float u_sonarSpeed;\n" +
+            "uniform vec3  u_bgEdge;\n" +
+            "uniform vec3  u_bgCenter;\n" +
+            "uniform vec3  u_bgInner;\n" +
+            "uniform vec3  u_particleCol;\n" +
+            "uniform vec3  u_ringCol;\n" +
+            "uniform vec3  u_chargeCol;\n" +
+            "uniform float u_isLight;\n" +
             "\n" +
             "const float PI  = 3.14159265359;\n" +
             "const float TAU = 6.28318530718;\n" +
@@ -108,6 +115,8 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "\n" +
             "vec3 sampleParticles(vec2 uv, float time) {\n" +
             "    vec3 col = vec3(0.0);\n" +
+            "    vec3 pTintA = u_ringCol;\n" +
+            "    vec3 pTintB = u_particleCol;\n" +
             "\n" +
             "    for (int layer = 0; layer < 3; layer++) {\n" +
             "        float fl = float(layer);\n" +
@@ -143,7 +152,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "                float bokeh = smoothstep(radius, radius * 0.15, dist);\n" +
             "                float twinkle = 0.55 + 0.45 * sin(time * (1.8 + rnd.y * 3.0) + rnd.x * TAU);\n" +
             "\n" +
-            "                vec3 pCol = mix(vec3(0.369, 0.420, 1.0), vec3(0.780, 0.847, 1.0), rnd.y);\n" +
+            "                vec3 pCol = mix(pTintA, pTintB, rnd.y);\n" +
             "                col += pCol * bokeh * twinkle * (0.45 - fl * 0.08);\n" +
             "            }\n" +
             "        }\n" +
@@ -168,12 +177,10 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "    float outsideMask = smoothstep(radius - aa, radius + aa, d);\n" +
             "    float insideMask  = 1.0 - outsideMask;\n" +
             "\n" +
-            "    // --- 1. Dark Matte Backdrop & Interior Starfield Base ---\n" +
-            "    vec3 edgeNavy   = vec3(0.071, 0.078, 0.118); // #12141E\n" +
-            "    vec3 centerGlow = vec3(0.110, 0.125, 0.220); // #1C2038\n" +
+            "    // --- 1. Themed Matte Backdrop & Interior Starfield Base ---\n" +
             "    float bgGrad    = exp(-d * 1.9);\n" +
-            "    vec3 outerBg    = mix(edgeNavy, centerGlow, bgGrad);\n" +
-            "    vec3 innerBg    = vec3(0.045, 0.055, 0.110); // Default app background base\n" +
+            "    vec3 outerBg    = mix(u_bgEdge, u_bgCenter, bgGrad);\n" +
+            "    vec3 innerBg    = mix(u_bgInner, u_bgCenter, bgGrad * 0.55);\n" +
             "\n" +
             "    float innerAlpha = 1.0 - clamp(u_previewMix, 0.0, 1.0);\n" +
             "    float bgAlpha    = mix(innerAlpha, 1.0, outsideMask);\n" +
@@ -199,7 +206,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "            float rSonar = radius + phase * 0.22;\n" +
             "            float ring = exp(-abs(d - rSonar) * 65.0);\n" +
             "            float fade = sin(phase * PI) * (1.0 - phase);\n" +
-            "            sonar += vec3(0.32, 0.40, 1.0) * ring * fade * 0.35 * sonarVis;\n" +
+            "            sonar += u_ringCol * ring * fade * 0.35 * sonarVis;\n" +
             "        }\n" +
             "    }\n" +
             "\n" +
@@ -207,10 +214,10 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "    float ringDist = abs(d - radius);\n" +
             "    float breathe  = 1.0 + 0.06 * sin(u_time * 2.6);\n" +
             "\n" +
-            "    vec3 colIdle   = vec3(0.32, 0.38, 1.00);\n" +
-            "    vec3 colReady  = vec3(0.40, 0.36, 1.00);\n" +
-            "    vec3 colCharge = vec3(0.22, 0.71, 1.00);\n" +
-            "    vec3 colCore   = vec3(0.95, 0.97, 1.00);\n" +
+            "    vec3 colIdle   = u_ringCol * 0.90;\n" +
+            "    vec3 colReady  = u_ringCol;\n" +
+            "    vec3 colCharge = u_chargeCol;\n" +
+            "    vec3 colCore   = mix(vec3(0.95, 0.97, 1.00), u_ringCol, u_isLight * 0.35);\n" +
             "\n" +
             "    vec3 haloColor = mix(colIdle, colReady, u_readyMix);\n" +
             "    haloColor      = mix(haloColor, colCharge, u_previewMix);\n" +
@@ -245,7 +252,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "            float lag = fi * 0.045 * (0.4 + 0.6 * u_expandProgress);\n" +
             "            float rShock = max(0.0, radius - lag);\n" +
             "            float w = exp(-abs(d - rShock) * (85.0 - fi * 12.0));\n" +
-            "            vec3 sCol = mix(vec3(0.30, 0.65, 1.0), vec3(0.43, 0.48, 1.0), fi / 3.0);\n" +
+            "            vec3 sCol = mix(u_chargeCol, u_ringCol, fi / 3.0);\n" +
             "            shockwaves += sCol * w * (0.65 / fi) * expandFade;\n" +
             "        }\n" +
             "    }\n" +
@@ -253,7 +260,17 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "    float globalRingFade = 1.0 - smoothstep(0.82, 1.0, u_expandProgress);\n" +
             "    vec3 ringGlow = (sonar + mainRing + arcs + shockwaves) * u_glowIntensity * globalRingFade;\n" +
             "\n" +
-            "    fragColor = vec4(bgColor * bgAlpha + particles + ringGlow, bgAlpha);\n" +
+            "    if (u_isLight > 0.5) {\n" +
+            "        // Light Mode: softly tint motes & ring into airy backdrop when opaque, additive over live stream\n" +
+            "        float pStrength = clamp(max(particles.r, max(particles.g, particles.b)) * 0.85, 0.0, 0.65);\n" +
+            "        vec3 lightBgWithMotes = mix(bgColor, u_particleCol, pStrength);\n" +
+            "        float rStrength = clamp(max(ringGlow.r, max(ringGlow.g, ringGlow.b)) * 0.85, 0.0, 0.92);\n" +
+            "        vec3 lightComposed = mix(lightBgWithMotes, clamp(ringGlow, 0.0, 1.0), rStrength);\n" +
+            "        vec3 overStream = particles * u_previewMix + ringGlow * (1.0 - bgAlpha);\n" +
+            "        fragColor = vec4(lightComposed * bgAlpha + overStream, bgAlpha);\n" +
+            "    } else {\n" +
+            "        fragColor = vec4(bgColor * bgAlpha + particles + ringGlow, bgAlpha);\n" +
+            "    }\n" +
             "}\n";
 
     private static final float[] FULLSCREEN_QUAD = {
@@ -374,6 +391,14 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
         refreshFromPrefs();
     }
 
+    private volatile int uBgEdgeColor = 0xFF12141E;
+    private volatile int uBgCenterColor = 0xFF1C2038;
+    private volatile int uBgInnerColor = 0xFF0C0E1C;
+    private volatile int uParticleRgb = 0xFFC7D8FF;
+    private volatile int uRingRgb = 0xFF5C72FF;
+    private volatile int uChargeRgb = 0xFF38B5FF;
+    private volatile float uIsLight = 0f;
+
     public void refreshFromPrefs() {
         PreferenceConfiguration cfg = PreferenceConfiguration.readPreferences(getContext());
         uPortalScale = Math.max(0.6f, Math.min(1.5f, cfg.portalWindowScalePercent / 100f));
@@ -383,6 +408,21 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
         int blurPct = Math.max(0, Math.min(200, cfg.blurAmountPercent));
         blurRadius = blurPct == 0 ? 0 : Math.max(1, Math.min(10, Math.round(4f * (blurPct / 100f))));
         bgMaxShortEdge = Math.max(0, cfg.bgQualityMaxShortEdge);
+
+        AppThemePalette palette = AppThemePalette.getCurrent(getContext());
+        uIsLight = palette.isLight ? 1f : 0f;
+        if (palette.isLight) {
+            uBgEdgeColor = AppThemePalette.blendColors(palette.background, palette.secondary, 0.35f);
+            uBgCenterColor = palette.surface;
+            uBgInnerColor = palette.background;
+        } else {
+            uBgEdgeColor = palette.background;
+            uBgCenterColor = AppThemePalette.blendColors(palette.surface, palette.secondary, 0.45f);
+            uBgInnerColor = AppThemePalette.blendColors(palette.background, 0xFF060812, 0.30f);
+        }
+        uParticleRgb = palette.particleColor;
+        uRingRgb = palette.ringColor;
+        uChargeRgb = palette.highlight;
     }
 
     /**
@@ -666,6 +706,13 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
         private int uGlowIntensityLoc = -1;
         private int uParticleBrightnessLoc = -1;
         private int uSonarSpeedLoc = -1;
+        private int uBgEdgeLoc = -1;
+        private int uBgCenterLoc = -1;
+        private int uBgInnerLoc = -1;
+        private int uParticleColLoc = -1;
+        private int uRingColLoc = -1;
+        private int uChargeColLoc = -1;
+        private int uIsLightLoc = -1;
 
         // Fullscreen linear blit program for 0.70x background FBO
         private int blitProgram = 0;
@@ -809,12 +856,29 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             GLES30.glUniform1f(uGlowIntensityLoc, uGlowIntensity);
             GLES30.glUniform1f(uParticleBrightnessLoc, uParticleBrightness);
             GLES30.glUniform1f(uSonarSpeedLoc, uSonarSpeed);
+            uploadColor3f(uBgEdgeLoc, uBgEdgeColor);
+            uploadColor3f(uBgCenterLoc, uBgCenterColor);
+            uploadColor3f(uBgInnerLoc, uBgInnerColor);
+            uploadColor3f(uParticleColLoc, uParticleRgb);
+            uploadColor3f(uRingColLoc, uRingRgb);
+            uploadColor3f(uChargeColLoc, uChargeRgb);
+            GLES30.glUniform1f(uIsLightLoc, uIsLight);
 
             quadBuffer.position(0);
             GLES30.glEnableVertexAttribArray(aPosLoc);
             GLES30.glVertexAttribPointer(aPosLoc, 2, GLES30.GL_FLOAT, false, 0, quadBuffer);
             GLES30.glDrawArrays(GLES30.GL_TRIANGLES, 0, 6);
             GLES30.glDisableVertexAttribArray(aPosLoc);
+        }
+
+        private void uploadColor3f(int loc, int argb) {
+            if (loc < 0) {
+                return;
+            }
+            GLES30.glUniform3f(loc,
+                    ((argb >> 16) & 0xFF) / 255f,
+                    ((argb >> 8) & 0xFF) / 255f,
+                    (argb & 0xFF) / 255f);
         }
 
         private void drawBlitTexture(int texId) {
@@ -1051,6 +1115,13 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             uGlowIntensityLoc = GLES30.glGetUniformLocation(program, "u_glowIntensity");
             uParticleBrightnessLoc = GLES30.glGetUniformLocation(program, "u_particleBrightness");
             uSonarSpeedLoc = GLES30.glGetUniformLocation(program, "u_sonarSpeed");
+            uBgEdgeLoc = GLES30.glGetUniformLocation(program, "u_bgEdge");
+            uBgCenterLoc = GLES30.glGetUniformLocation(program, "u_bgCenter");
+            uBgInnerLoc = GLES30.glGetUniformLocation(program, "u_bgInner");
+            uParticleColLoc = GLES30.glGetUniformLocation(program, "u_particleCol");
+            uRingColLoc = GLES30.glGetUniformLocation(program, "u_ringCol");
+            uChargeColLoc = GLES30.glGetUniformLocation(program, "u_chargeCol");
+            uIsLightLoc = GLES30.glGetUniformLocation(program, "u_isLight");
 
             blitPosLoc = GLES30.glGetAttribLocation(blitProgram, "a_pos");
             blitTexLoc = GLES30.glGetUniformLocation(blitProgram, "u_tex");

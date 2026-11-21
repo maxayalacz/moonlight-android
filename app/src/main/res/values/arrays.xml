@@ -215,29 +215,19 @@
 
     <string-array name="color_scheme_names">
         <item>@string/color_scheme_midnight</item>
-        <item>@string/color_scheme_jujo</item>
-        <item>@string/color_scheme_de_boosy</item>
-        <item>@string/color_scheme_shiory_pan</item>
-        <item>@string/color_scheme_lazy_ankui</item>
-        <item>@string/color_scheme_oled</item>
+        <item>@string/color_scheme_daylight</item>
         <item>@string/color_scheme_cyberpunk</item>
         <item>@string/color_scheme_forest</item>
         <item>@string/color_scheme_sunset</item>
-        <item>@string/color_scheme_ember</item>
-        <item>@string/color_scheme_slate</item>
+        <item>@string/color_scheme_custom</item>
     </string-array>
     <string-array name="color_scheme_values" translatable="false">
         <item>midnight</item>
-        <item>jujo</item>
-        <item>deBoosy</item>
-        <item>shioryPan</item>
-        <item>lazyAnkui</item>
-        <item>oled</item>
+        <item>daylight</item>
         <item>cyberpunk</item>
         <item>forest</item>
         <item>sunset</item>
-        <item>ember</item>
-        <item>slate</item>
+        <item>custom</item>
     </string-array>
 
     <string-array name="metaball_sharpness_names">

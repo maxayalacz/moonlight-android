@@ -240,19 +240,10 @@ public class AnalogStick extends VirtualControllerElement {
             float outlineScale = getOutlineScaleFactor();
             float strokeW = outlineScale <= 0.01f ? 0f : Math.max(1f, getDefaultStrokeWidth() * outlineScale);
 
-            // Live blurred stream frosted glass base disc + specular sheen + outer border ring
-            android.graphics.Path baseClip = new android.graphics.Path();
-            baseClip.addCircle(cx, cy, radius_complete, android.graphics.Path.Direction.CW);
-            android.graphics.RectF baseBounds = new android.graphics.RectF(
-                    cx - radius_complete, cy - radius_complete, cx + radius_complete, cy + radius_complete);
-            OscLiveBlurHelper blurHelper = virtualController.getLiveBlurHelper();
-            boolean drewLiveBlur = blurHelper != null
-                    && blurHelper.drawLiveBlurForBounds(canvas, this, baseClip, baseBounds, opacityFactor);
-
-            float tintScale = drewLiveBlur ? 0.40f : 0.70f;
+            // Clean translucent base disc + outer border ring
             paint.setShader(null);
             paint.setStyle(Paint.Style.FILL);
-            paint.setColor(stickWithAlpha(0xFF101624, tintScale * opacityFactor));
+            paint.setColor(stickWithAlpha(0xFF101624, 0.44f * opacityFactor));
             canvas.drawCircle(cx, cy, radius_complete, paint);
 
             if (strokeW > 0.1f) {
@@ -397,6 +388,7 @@ public class AnalogStick extends VirtualControllerElement {
                     click_state = CLICK_STATE.SINGLE;
                     notifyOnClick();
                 }
+                virtualController.triggerHapticPress();
                 // reset last click timestamp
                 timeLastClick = event.getEventTime();
                 // set item pressed and update
@@ -406,6 +398,9 @@ public class AnalogStick extends VirtualControllerElement {
             // up event (revoke touch)
             case MotionEvent.ACTION_CANCEL:
             case MotionEvent.ACTION_UP: {
+                if (isPressed()) {
+                    virtualController.triggerHapticRelease();
+                }
                 setPressed(false);
                 break;
             }

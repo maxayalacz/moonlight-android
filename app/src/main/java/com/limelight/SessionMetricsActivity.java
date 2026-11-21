@@ -138,7 +138,7 @@ public class SessionMetricsActivity extends AppCompatActivity {
         GradientDrawable cardBg = new GradientDrawable();
         cardBg.setShape(GradientDrawable.RECTANGLE);
         cardBg.setCornerRadius(dp(24f));
-        cardBg.setColor(0xC80F1526);
+        cardBg.setColor(palette.isLight ? 0xEA111827 : AppThemePalette.withAlphaInt(palette.surface, 0xD2));
         int outlinePx = Math.round(UiHelper.getCardOutlineWidthPx(this, 1f));
         if (outlinePx > 0) {
             cardBg.setStroke(outlinePx, 0x42FFFFFF);

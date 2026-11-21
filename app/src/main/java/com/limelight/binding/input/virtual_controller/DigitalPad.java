@@ -241,14 +241,9 @@ public class DigitalPad extends VirtualControllerElement {
         dpadPath.close();
 
         rect.set(cx - halfSpan, cy - halfSpan, cx + halfSpan, cy + halfSpan);
-        OscLiveBlurHelper blurHelper = virtualController.getLiveBlurHelper();
-        boolean drewLiveBlur = blurHelper != null
-                && blurHelper.drawLiveBlurForBounds(canvas, this, dpadPath, rect, opacityFactor);
-
-        float tintScale = drewLiveBlur ? 0.42f : 0.72f;
         paint.setShader(null);
         paint.setStyle(Paint.Style.FILL);
-        paint.setColor(dpadWithAlpha(0xFF101624, tintScale * opacityFactor));
+        paint.setColor(dpadWithAlpha(0xFF101624, 0.46f * opacityFactor));
         canvas.drawPath(dpadPath, paint);
 
         if (strokeW > 0.1f) {
@@ -342,28 +337,41 @@ public class DigitalPad extends VirtualControllerElement {
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
             case MotionEvent.ACTION_MOVE: {
-                direction = 0;
+                int prevDirection = direction;
+                int newDirection = 0;
 
                 if (event.getX() < getPercent(getWidth(), 33)) {
-                    direction |= DIGITAL_PAD_DIRECTION_LEFT;
+                    newDirection |= DIGITAL_PAD_DIRECTION_LEFT;
                 }
                 if (event.getX() > getPercent(getWidth(), 66)) {
-                    direction |= DIGITAL_PAD_DIRECTION_RIGHT;
+                    newDirection |= DIGITAL_PAD_DIRECTION_RIGHT;
                 }
                 if (event.getY() > getPercent(getHeight(), 66)) {
-                    direction |= DIGITAL_PAD_DIRECTION_DOWN;
+                    newDirection |= DIGITAL_PAD_DIRECTION_DOWN;
                 }
                 if (event.getY() < getPercent(getHeight(), 33)) {
-                    direction |= DIGITAL_PAD_DIRECTION_UP;
+                    newDirection |= DIGITAL_PAD_DIRECTION_UP;
                 }
-                newDirectionCallback(direction);
-                invalidate();
+                if (newDirection != prevDirection) {
+                    direction = newDirection;
+                    if (newDirection != DIGITAL_PAD_DIRECTION_NO_DIRECTION) {
+                        virtualController.triggerHapticPress();
+                    } else if (prevDirection != DIGITAL_PAD_DIRECTION_NO_DIRECTION) {
+                        virtualController.triggerHapticRelease();
+                    }
+                    newDirectionCallback(direction);
+                    invalidate();
+                }
 
                 return true;
             }
             case MotionEvent.ACTION_CANCEL:
             case MotionEvent.ACTION_UP: {
-                direction = 0;
+                int prevDirection = direction;
+                direction = DIGITAL_PAD_DIRECTION_NO_DIRECTION;
+                if (prevDirection != DIGITAL_PAD_DIRECTION_NO_DIRECTION) {
+                    virtualController.triggerHapticRelease();
+                }
                 newDirectionCallback(direction);
                 invalidate();
 

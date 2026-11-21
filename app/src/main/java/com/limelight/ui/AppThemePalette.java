@@ -2,21 +2,32 @@ package com.limelight.ui;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.graphics.Color;
 
 import androidx.annotation.NonNull;
 import androidx.preference.PreferenceManager;
 
 /**
- * Curated dark-room color palettes ported from jujostream (theme_config.dart).
- * Drives FlowingAuroraView metaballs/plexus/waves, toggle switches, focus glows,
- * and glass accent highlights across the UI.
+ * Color palette system supporting Default Dark (Midnight), Full Light Mode (Frost Daylight),
+ * 3 curated dark themes (Cyberpunk Neon, Emerald Forest, Ember Sunset), and a fully customizable
+ * user palette with Dark/Light base and Auto-Harmonize support.
  */
 public final class AppThemePalette {
     public static final String PREF_COLOR_SCHEME = "list_color_scheme";
     public static final String DEFAULT_THEME_KEY = "midnight";
+    public static final String CUSTOM_THEME_KEY = "custom";
+
+    public static final String PREF_CUSTOM_IS_LIGHT = "custom_palette_is_light";
+    public static final String PREF_CUSTOM_BG = "custom_palette_bg";
+    public static final String PREF_CUSTOM_SURFACE = "custom_palette_surface";
+    public static final String PREF_CUSTOM_ACCENT = "custom_palette_accent";
+    public static final String PREF_CUSTOM_HIGHLIGHT = "custom_palette_highlight";
+    public static final String PREF_CUSTOM_PARTICLE = "custom_palette_particle";
+    public static final String PREF_CUSTOM_RING = "custom_palette_ring";
 
     public final String key;
     public final String label;
+    public final boolean isLight;
     public final int background;
     public final int surface;
     public final int accent;
@@ -26,10 +37,34 @@ public final class AppThemePalette {
     public final int surfaceVariant;
     public final int muted;
     public final int warm;
+    public final int particleColor;
+    public final int ringColor;
+
+    public static final class CustomPaletteSpec {
+        public boolean isLight;
+        public int background;
+        public int surface;
+        public int accent;
+        public int highlight;
+        public int particleColor;
+        public int ringColor;
+
+        public CustomPaletteSpec(boolean isLight, int background, int surface,
+                                 int accent, int highlight, int particleColor, int ringColor) {
+            this.isLight = isLight;
+            this.background = background;
+            this.surface = surface;
+            this.accent = accent;
+            this.highlight = highlight;
+            this.particleColor = particleColor;
+            this.ringColor = ringColor;
+        }
+    }
 
     private AppThemePalette(
             String key,
             String label,
+            boolean isLight,
             int background,
             int surface,
             int accent,
@@ -38,9 +73,12 @@ public final class AppThemePalette {
             int highlight,
             int surfaceVariant,
             int muted,
-            int warm) {
+            int warm,
+            int particleColor,
+            int ringColor) {
         this.key = key;
         this.label = label;
+        this.isLight = isLight;
         this.background = background;
         this.surface = surface;
         this.accent = accent;
@@ -50,210 +88,304 @@ public final class AppThemePalette {
         this.surfaceVariant = surfaceVariant;
         this.muted = muted;
         this.warm = warm;
+        this.particleColor = particleColor;
+        this.ringColor = ringColor;
     }
 
-    public static final AppThemePalette JUJO = new AppThemePalette(
-            "jujo",
-            "JUJO Purple",
-            0xFF0E0E1C,
-            0xFF16192E,
-            0xFF6C3CE1,
-            0xFF9B71F5,
-            0xFF1B3A6B,
-            0xFF00E5FF,
-            0xFF1C1D38,
-            0xFF2D2864,
-            0xFF00B8D4
-    );
-
-    // DeBoosy — charcoal greys with royal violet, slate blue and warm sand accents.
-    // The only credit I ask if you fork my code. Is to keep this pallete colors and name in your version. Its my dedication to my first adopted cat Boo.
-    public static final AppThemePalette DE_BOOSY = new AppThemePalette(
-            "deBoosy",
-            "De Boosy",
-            0xFF121418,
-            0xFF1C1E24,
-            0xFF8161E5,
-            0xFFB29BFF,
-            0xFF5476B3,
-            0xFF95A85A,
-            0xFF282C35,
-            0xFF505661,
-            0xFFD7A26B
-    );
-
-    // ShioryPan — coal black, ember brown, ginger orange and leaf-green contrast.
-    // The only credit I ask if you fork my code. Is to keep this pallete colors and name in your version. Its my dedication to my cat Shiory.
-    public static final AppThemePalette SHIORY_PAN = new AppThemePalette(
-            "shioryPan",
-            "Shiory Pan",
-            0xFF1C1817,
-            0xFF2A221F,
-            0xFFB56347,
-            0xFFD86965,
-            0xFF5A88D8,
-            0xFF567C38,
-            0xFF3C2E28,
-            0xFF493732,
-            0xFFF4D1AF
-    );
-
-    // Lazy Ankui — rich bean browns, warm cream, sleepy sky and peach notes.
-    // The only credit I ask if you fork my code. Is to keep this pallete colors and name in your version. Its my dedication to my second adopted cat Ankui.
-    public static final AppThemePalette LAZY_ANKUI = new AppThemePalette(
-            "lazyAnkui",
-            "Lazy Ankui",
-            0xFF1F1A17,
-            0xFF332D2A,
-            0xFFD0B387,
-            0xFFF3D5BF,
-            0xFFABB5EB,
-            0xFFBDDCA7,
-            0xFF443A35,
-            0xFFBCA98D,
-            0xFFDE8D62
-    );
-
+    // 1. Default Dark — Midnight Blue (original PS Portal cosmic aesthetic)
     public static final AppThemePalette MIDNIGHT = new AppThemePalette(
             "midnight",
-            "Midnight Blue",
+            "Midnight Blue (Default)",
+            false,
             0xFF0D1117,
             0xFF161B27,
-            0xFF1F6FEB,
+            0xFF3B6EF5,
             0xFF58A6FF,
             0xFF1C2C4A,
             0xFF79C0FF,
             0xFF1B2440,
             0xFF193860,
-            0xFF2EA043
+            0xFF2EA043,
+            0xFF8AA8FF,
+            0xFF5C72FF
     );
 
-    public static final AppThemePalette OLED = new AppThemePalette(
-            "oled",
-            "OLED Black",
-            0xFF000000,
-            0xFF0C0C12,
-            0xFF7B3FE4,
-            0xFFB08FFF,
-            0xFF14081F,
-            0xFFE040FB,
-            0xFF110E1E,
-            0xFF29184C,
-            0xFFD040BE
+    // 2. Full Light Mode — Frost Daylight
+    public static final AppThemePalette DAYLIGHT = new AppThemePalette(
+            "daylight",
+            "Frost Daylight (Light)",
+            true,
+            0xFFE7EFFA,
+            0xFFF7FAFF,
+            0xFF2563EB,
+            0xFF3B82F6,
+            0xFFD3E2F7,
+            0xFF0284C7,
+            0xFFEBF2FC,
+            0xFFCBD9EE,
+            0xFF10B981,
+            0xFF4F7CF2,
+            0xFF2563EB
     );
 
+    // 3. Curated Dark #1 — Cyberpunk Neon
     public static final AppThemePalette CYBERPUNK = new AppThemePalette(
             "cyberpunk",
             "Cyberpunk Neon",
-            0xFF080814,
-            0xFF0F0F22,
+            false,
+            0xFF090716,
+            0xFF14102A,
             0xFFFF2D95,
-            0xFFFF7EC7,
-            0xFF0A1F2F,
-            0xFF00FFF5,
-            0xFF151530,
-            0xFF2A0926,
-            0xFFFFE000
+            0xFFFF72C6,
+            0xFF0B2239,
+            0xFF00E5FF,
+            0xFF1B153A,
+            0xFF33113B,
+            0xFFFFE000,
+            0xFF00E5FF,
+            0xFFFF2D95
     );
 
+    // 4. Curated Dark #2 — Emerald Forest
     public static final AppThemePalette FOREST = new AppThemePalette(
             "forest",
-            "Forest",
-            0xFF0A120A,
-            0xFF121E12,
-            0xFF2E7D32,
-            0xFF69BB5E,
-            0xFF1C3A10,
-            0xFFB2FF59,
-            0xFF172B17,
-            0xFF1F3A12,
-            0xFFD4A017
+            "Emerald Forest",
+            false,
+            0xFF07130E,
+            0xFF10221A,
+            0xFF10B981,
+            0xFF4ADE80,
+            0xFF123326,
+            0xFF6EE7B7,
+            0xFF142B22,
+            0xFF1B4332,
+            0xFFF59E0B,
+            0xFF6EE7B7,
+            0xFF10B981
     );
 
+    // 5. Curated Dark #3 — Ember Sunset
     public static final AppThemePalette SUNSET = new AppThemePalette(
             "sunset",
-            "Sunset",
-            0xFF120A04,
-            0xFF1E1008,
-            0xFFE65100,
-            0xFFFF8A3D,
-            0xFF3B1A0A,
-            0xFFFFD740,
-            0xFF281508,
-            0xFF3E200A,
-            0xFFFF5072
+            "Ember Sunset",
+            false,
+            0xFF160B07,
+            0xFF25140D,
+            0xFFF97316,
+            0xFFFB923C,
+            0xFF3E1C10,
+            0xFFFBBF24,
+            0xFF2E1810,
+            0xFF4A2214,
+            0xFFFF5072,
+            0xFFFDBA74,
+            0xFFF97316
     );
 
-    public static final AppThemePalette EMBER = new AppThemePalette(
-            "ember",
-            "Ember",
-            0xFF141F22,
-            0xFF1E2B2F,
-            0xFFFF7F50,
-            0xFFFFAA80,
-            0xFF253538,
-            0xFFFFBF80,
-            0xFF233035,
-            0xFF2E3F44,
-            0xFFFFD86E
-    );
-
-    public static final AppThemePalette SLATE = new AppThemePalette(
-            "slate",
-            "Slate",
-            0xFF2C2F3E,
-            0xFF363A4C,
-            0xFF5C6BC0,
-            0xFF7986CB,
-            0xFF454A60,
-            0xFF9FA8DA,
-            0xFF40455A,
-            0xFF4E5478,
-            0xFFE87F6E
-    );
-
-    private static final AppThemePalette[] ALL = {
+    private static final AppThemePalette[] PRESETS = {
             MIDNIGHT,
-            JUJO,
-            DE_BOOSY,
-            SHIORY_PAN,
-            LAZY_ANKUI,
-            OLED,
+            DAYLIGHT,
             CYBERPUNK,
             FOREST,
-            SUNSET,
-            EMBER,
-            SLATE
+            SUNSET
     };
 
     @NonNull
     public static AppThemePalette fromKey(String key) {
+        if (key != null) {
+            for (AppThemePalette p : PRESETS) {
+                if (p.key.equals(key)) {
+                    return p;
+                }
+            }
+        }
         return MIDNIGHT;
     }
 
     @NonNull
     public static AppThemePalette getCurrent(@NonNull Context context) {
-        return MIDNIGHT;
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+        String key = prefs.getString(PREF_COLOR_SCHEME, DEFAULT_THEME_KEY);
+        if (CUSTOM_THEME_KEY.equals(key)) {
+            return buildCustomPalette(loadCustomSpec(context));
+        }
+        return fromKey(key);
+    }
+
+    @NonNull
+    public static CustomPaletteSpec loadCustomSpec(@NonNull Context context) {
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+        boolean light = prefs.getBoolean(PREF_CUSTOM_IS_LIGHT, false);
+        CustomPaletteSpec defaults = harmonizeFromAccent(0xFF7C3AED, light);
+        return new CustomPaletteSpec(
+                light,
+                prefs.getInt(PREF_CUSTOM_BG, defaults.background),
+                prefs.getInt(PREF_CUSTOM_SURFACE, defaults.surface),
+                prefs.getInt(PREF_CUSTOM_ACCENT, defaults.accent),
+                prefs.getInt(PREF_CUSTOM_HIGHLIGHT, defaults.highlight),
+                prefs.getInt(PREF_CUSTOM_PARTICLE, defaults.particleColor),
+                prefs.getInt(PREF_CUSTOM_RING, defaults.ringColor)
+        );
+    }
+
+    public static void saveCustomSpec(@NonNull Context context, @NonNull CustomPaletteSpec spec) {
+        PreferenceManager.getDefaultSharedPreferences(context)
+                .edit()
+                .putString(PREF_COLOR_SCHEME, CUSTOM_THEME_KEY)
+                .putBoolean(PREF_CUSTOM_IS_LIGHT, spec.isLight)
+                .putInt(PREF_CUSTOM_BG, spec.background | 0xFF000000)
+                .putInt(PREF_CUSTOM_SURFACE, spec.surface | 0xFF000000)
+                .putInt(PREF_CUSTOM_ACCENT, spec.accent | 0xFF000000)
+                .putInt(PREF_CUSTOM_HIGHLIGHT, spec.highlight | 0xFF000000)
+                .putInt(PREF_CUSTOM_PARTICLE, spec.particleColor | 0xFF000000)
+                .putInt(PREF_CUSTOM_RING, spec.ringColor | 0xFF000000)
+                .apply();
+    }
+
+    /**
+     * Derives a cohesive 6-color palette (Background, Surface, Accent, Highlight, Particle, Ring)
+     * from a single primary accent color in either Dark or Light mode.
+     */
+    @NonNull
+    public static CustomPaletteSpec harmonizeFromAccent(int accentColor, boolean isLight) {
+        float[] hsv = new float[3];
+        Color.colorToHSV(accentColor | 0xFF000000, hsv);
+        float hue = hsv[0];
+        float sat = Math.max(0.45f, hsv[1]);
+
+        int bg;
+        int surf;
+        int highlight;
+        int particle;
+        int ring;
+
+        if (isLight) {
+            bg = Color.HSVToColor(new float[]{ hue, Math.min(0.14f, sat * 0.16f), 0.94f });
+            surf = Color.HSVToColor(new float[]{ hue, Math.min(0.06f, sat * 0.08f), 0.99f });
+            highlight = Color.HSVToColor(new float[]{ (hue + 24f) % 360f, Math.min(0.88f, sat), 0.82f });
+            particle = Color.HSVToColor(new float[]{ (hue + 14f) % 360f, Math.min(0.70f, sat * 0.85f), 0.90f });
+            ring = Color.HSVToColor(new float[]{ hue, Math.min(0.85f, sat), 0.88f });
+        } else {
+            bg = Color.HSVToColor(new float[]{ hue, Math.min(0.45f, sat * 0.55f), 0.09f });
+            surf = Color.HSVToColor(new float[]{ hue, Math.min(0.38f, sat * 0.48f), 0.16f });
+            highlight = Color.HSVToColor(new float[]{ (hue + 28f) % 360f, Math.min(0.82f, sat), 0.98f });
+            particle = Color.HSVToColor(new float[]{ (hue + 18f) % 360f, Math.min(0.55f, sat * 0.72f), 1.0f });
+            ring = Color.HSVToColor(new float[]{ hue, Math.min(0.85f, sat), 0.96f });
+        }
+
+        return new CustomPaletteSpec(isLight, bg, surf, accentColor | 0xFF000000, highlight, particle, ring);
+    }
+
+    @NonNull
+    public static AppThemePalette buildCustomPalette(@NonNull CustomPaletteSpec spec) {
+        float[] accentHsv = new float[3];
+        Color.colorToHSV(spec.accent, accentHsv);
+        int accentLight = spec.isLight
+                ? Color.HSVToColor(new float[]{ accentHsv[0], Math.max(0.55f, accentHsv[1]), Math.min(0.86f, Math.max(0.65f, accentHsv[2])) })
+                : Color.HSVToColor(new float[]{ accentHsv[0], Math.max(0.42f, accentHsv[1] * 0.78f), 0.98f });
+
+        int secondary = blendColors(spec.background, spec.accent, spec.isLight ? 0.18f : 0.28f);
+        int surfaceVariant = blendColors(spec.surface, spec.accent, spec.isLight ? 0.10f : 0.14f);
+        int muted = blendColors(spec.surface, spec.background, 0.5f);
+
+        return new AppThemePalette(
+                CUSTOM_THEME_KEY,
+                "Custom",
+                spec.isLight,
+                spec.background | 0xFF000000,
+                spec.surface | 0xFF000000,
+                spec.accent | 0xFF000000,
+                accentLight,
+                secondary,
+                spec.highlight | 0xFF000000,
+                surfaceVariant,
+                muted,
+                0xFF2EA043,
+                spec.particleColor | 0xFF000000,
+                spec.ringColor | 0xFF000000
+        );
+    }
+
+    public int getPrimaryTextColor() {
+        return isLight ? 0xFF0F172A : 0xFFFFFFFF;
+    }
+
+    public int getSecondaryTextColor() {
+        return isLight ? 0xB8334155 : 0xB8FFFFFF;
+    }
+
+    public int getCardRimColor() {
+        return isLight ? 0x300F172A : 0x42FFFFFF;
+    }
+
+    public int getFrostedCardTint(int defaultDarkTint) {
+        if (isLight) {
+            int alpha = (defaultDarkTint >>> 24) & 0xFF;
+            // Light frosted glass needs higher opacity so dark text stays crisp over airy backdrops
+            int lightAlpha = Math.max(0xB8, Math.min(0xE8, alpha + 0x70));
+            return withAlphaInt(surface, lightAlpha);
+        }
+        int alpha = (defaultDarkTint >>> 24) & 0xFF;
+        return withAlphaInt(surface, alpha);
+    }
+
+    public int getDialogSurfaceColor(boolean blurred) {
+        if (isLight) {
+            return withAlphaInt(surface, blurred ? 0xD8 : 0xF2);
+        }
+        return withAlphaInt(background, blurred ? 0xB8 : 0xE6);
+    }
+
+    public int getQuickMenuCardTint(boolean withBlur) {
+        if (isLight) {
+            return withAlphaInt(surface, withBlur ? 0xC4 : 0xEB);
+        }
+        return withAlphaInt(background, withBlur ? 0xAA : 0xDE);
     }
 
     public int getNeonAccent() {
         float[] hsv = new float[3];
-        android.graphics.Color.colorToHSV(accentLight, hsv);
-        if (hsv[1] > 0.05f) {
-            hsv[1] = Math.min(1.0f, Math.max(hsv[1], 0.78f));
+        Color.colorToHSV(isLight ? accent : accentLight, hsv);
+        if (isLight) {
+            if (hsv[1] > 0.05f) {
+                hsv[1] = Math.min(1.0f, Math.max(hsv[1], 0.72f));
+            }
+            hsv[2] = Math.min(0.82f, Math.max(hsv[2], 0.58f));
+        } else {
+            if (hsv[1] > 0.05f) {
+                hsv[1] = Math.min(1.0f, Math.max(hsv[1], 0.78f));
+            }
+            hsv[2] = Math.min(1.0f, Math.max(hsv[2], 0.98f));
         }
-        hsv[2] = Math.min(1.0f, Math.max(hsv[2], 0.98f));
-        return android.graphics.Color.HSVToColor(0xFF, hsv);
+        return Color.HSVToColor(0xFF, hsv);
     }
 
     public int getNeonTextAccent() {
         float[] hsv = new float[3];
-        android.graphics.Color.colorToHSV(accentLight, hsv);
-        if (hsv[1] > 0.05f) {
-            hsv[1] = Math.min(1.0f, Math.max(hsv[1] * 0.95f, 0.52f));
+        Color.colorToHSV(isLight ? accent : accentLight, hsv);
+        if (isLight) {
+            if (hsv[1] > 0.05f) {
+                hsv[1] = Math.min(1.0f, Math.max(hsv[1], 0.70f));
+            }
+            hsv[2] = Math.min(0.75f, Math.max(hsv[2], 0.45f));
+        } else {
+            if (hsv[1] > 0.05f) {
+                hsv[1] = Math.min(1.0f, Math.max(hsv[1] * 0.95f, 0.52f));
+            }
+            hsv[2] = 1.0f;
         }
-        hsv[2] = 1.0f;
-        return android.graphics.Color.HSVToColor(0xFF, hsv);
+        return Color.HSVToColor(0xFF, hsv);
+    }
+
+    public static int blendColors(int c1, int c2, float ratio) {
+        float inv = 1f - ratio;
+        int r = Math.round(Color.red(c1) * inv + Color.red(c2) * ratio);
+        int g = Math.round(Color.green(c1) * inv + Color.green(c2) * ratio);
+        int b = Math.round(Color.blue(c1) * inv + Color.blue(c2) * ratio);
+        return Color.rgb(
+                Math.max(0, Math.min(255, r)),
+                Math.max(0, Math.min(255, g)),
+                Math.max(0, Math.min(255, b)));
     }
 
     public static int withAlpha(int color, float alpha) {
