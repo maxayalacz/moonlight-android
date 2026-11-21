@@ -909,4 +909,12 @@
     <string name="settings_collapse_all">Collapse All</string>
     <string name="settings_option_count_fmt">%1$d options</string>
     <string name="quick_settings_osc_motion">Device Motion Sensors (Gyro)</string>
+    <string name="title_ui_battery_saver">UI Battery Saver Mode</string>
+    <string name="summary_ui_battery_saver">Reduces background starfield FPS to 30, caps FBO to 360p 2-layer LOD, uses static/matte glass blur, and pauses ambient micro-animations</string>
+    <string name="ui_battery_saver_auto">Auto (System Power Saver)</string>
+    <string name="ui_battery_saver_on">Always On</string>
+    <string name="ui_battery_saver_off">Off</string>
+    <string name="ui_battery_saver_short_off">Off</string>
+    <string name="ui_battery_saver_short_auto">Auto</string>
+    <string name="ui_battery_saver_short_on">On</string>
 </resources>

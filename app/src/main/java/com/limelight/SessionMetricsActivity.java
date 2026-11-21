@@ -540,6 +540,30 @@ public class SessionMetricsActivity extends AppCompatActivity {
         if (dismissing || isFinishing()) {
             return;
         }
+        boolean batterySaver = com.limelight.preferences.PreferenceConfiguration.isUiBatterySaverEffective(this);
+        if (batterySaver) {
+            cancelChartAnimators();
+            rootBackdrop.animate().alpha(1f).setDuration(120L).start();
+            cardContainer.animate()
+                    .alpha(1f)
+                    .scaleX(1f)
+                    .scaleY(1f)
+                    .translationY(0f)
+                    .setDuration(140L)
+                    .start();
+            for (int i = 0; i < summaryRow.getChildCount(); i++) {
+                View child = summaryRow.getChildAt(i);
+                child.setAlpha(1f);
+                child.setTranslationY(0f);
+            }
+            for (int i = 0; i < panels.length; i++) {
+                panels[i].setAlpha(1f);
+                panels[i].setTranslationY(0f);
+                charts[i].setDrawProgress(1f);
+            }
+            return;
+        }
+
         PathInterpolator easeOut = new PathInterpolator(0.22f, 1f, 0.36f, 1f);
 
         rootBackdrop.animate()

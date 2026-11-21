@@ -1025,9 +1025,19 @@ public class UiHelper {
         if (w <= 1 || h <= 1 || radius <= 0) {
             return;
         }
-        int[] pix = new int[w * h];
+        int needed = w * h;
+        fastBoxBlur(bitmap, radius, new int[needed], new int[needed]);
+    }
+
+    public static void fastBoxBlur(android.graphics.Bitmap bitmap, int radius, int[] pix, int[] tmp) {
+        int w = bitmap.getWidth();
+        int h = bitmap.getHeight();
+        int needed = w * h;
+        if (w <= 1 || h <= 1 || radius <= 0 || pix == null || tmp == null
+                || pix.length < needed || tmp.length < needed) {
+            return;
+        }
         bitmap.getPixels(pix, 0, w, 0, 0, w, h);
-        int[] tmp = new int[w * h];
         int div = radius * 2 + 1;
         for (int pass = 0; pass < 2; pass++) {
             for (int y = 0; y < h; y++) {
@@ -1158,22 +1168,31 @@ public class UiHelper {
     }
 
     public static void notifyStreamConnecting(Context context) {
+        sStreamActive = true;
+        Activity owner = sActivePortalOwner != null ? sActivePortalOwner.get() : null;
+        if (owner != null) {
+            setPortalBackdropRendering(owner, false);
+        }
         setGameModeStatus(context, true, true);
     }
 
     public static void notifyStreamConnected(Context context) {
+        sStreamActive = true;
         setGameModeStatus(context, true, false);
     }
 
     public static void notifyStreamEnteringPiP(Context context) {
+        sStreamActive = true;
         setGameModeStatus(context, true, true);
     }
 
     public static void notifyStreamExitingPiP(Context context) {
+        sStreamActive = true;
         setGameModeStatus(context, true, false);
     }
 
     public static void notifyStreamEnded(Context context) {
+        sStreamActive = false;
         setGameModeStatus(context, false, false);
     }
 
@@ -1226,6 +1245,8 @@ public class UiHelper {
     }
 
     private static volatile boolean portalLifecycleRegistered = false;
+    private static volatile boolean sStreamActive = false;
+    private static java.lang.ref.WeakReference<Activity> sActivePortalOwner = new java.lang.ref.WeakReference<>(null);
     private static int animGenerationCounter = 0;
 
     private static int nextAnimGeneration() {
@@ -1250,23 +1271,44 @@ public class UiHelper {
 
             @Override
             public void onActivityStarted(Activity a) {
-                setPortalBackdropRendering(a, true);
+                if (a == null || a instanceof Game || a instanceof ExternalDisplayControlActivity) {
+                    return;
+                }
+                if (!sStreamActive && sActivePortalOwner.get() == a) {
+                    setPortalBackdropRendering(a, true);
+                }
             }
 
             @Override
             public void onActivityResumed(Activity a) {
+                if (a == null || a instanceof Game || a instanceof ExternalDisplayControlActivity) {
+                    return;
+                }
+                com.limelight.ui.PortalShaderView.markUserInteraction();
+                Activity prev = sActivePortalOwner.get();
+                if (prev != null && prev != a) {
+                    setPortalBackdropRendering(prev, false);
+                }
+                if (sStreamActive && !(a instanceof SessionMetricsActivity)) {
+                    setPortalBackdropRendering(a, false);
+                    return;
+                }
+                sActivePortalOwner = new java.lang.ref.WeakReference<>(a);
                 setPortalBackdropRendering(a, true);
             }
 
             @Override
             public void onActivityPaused(Activity a) {
-                // Keep starfield alive while visible behind dialogs or translucent SessionMetricsActivity,
-                // and avoid stalling the UI thread during activity handoffs.
+                // Handoff to a new foreground Activity is handled cleanly in onActivityResumed
+                // via sActivePortalOwner so translucent dialogs stay backed while double GL threads are prevented.
             }
 
             @Override
             public void onActivityStopped(Activity a) {
                 setPortalBackdropRendering(a, false);
+                if (sActivePortalOwner.get() == a) {
+                    sActivePortalOwner.clear();
+                }
             }
 
             @Override
@@ -1275,6 +1317,9 @@ public class UiHelper {
             @Override
             public void onActivityDestroyed(Activity a) {
                 setPortalBackdropRendering(a, false);
+                if (sActivePortalOwner.get() == a) {
+                    sActivePortalOwner.clear();
+                }
             }
         });
     }
@@ -1346,6 +1391,12 @@ public class UiHelper {
             return;
         }
 
+        Activity prevOwner = sActivePortalOwner.get();
+        if (prevOwner != null && prevOwner != activity) {
+            setPortalBackdropRendering(prevOwner, false);
+        }
+        sActivePortalOwner = new java.lang.ref.WeakReference<>(activity);
+
         com.limelight.ui.AppThemePalette initPalette = com.limelight.ui.AppThemePalette.getCurrent(activity);
         // Seamless starfield handoff placeholder shown on Frame 0 while GL initializes,
         // automatically hidden the instant PortalShaderView swaps its first live frame.
@@ -1371,7 +1422,12 @@ public class UiHelper {
         contentFrame.addView(starfieldView, 1, new android.widget.FrameLayout.LayoutParams(
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT,
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT));
-        starfieldView.startRendering();
+        contentFrame.getViewTreeObserver().addOnScrollChangedListener(com.limelight.ui.PortalShaderView::markUserInteraction);
+        contentFrame.getViewTreeObserver().addOnGlobalFocusChangeListener((oldFocus, newFocus) ->
+                com.limelight.ui.PortalShaderView.markUserInteraction());
+        if (!sStreamActive || activity instanceof SessionMetricsActivity) {
+            starfieldView.startRendering();
+        }
 
         View fg = getMenuForegroundView(activity);
         if (fg != null) {
@@ -1383,6 +1439,7 @@ public class UiHelper {
         if (activity == null) {
             return;
         }
+        com.limelight.ui.PortalShaderView.markUserInteraction();
         View rootView = activity.findViewById(android.R.id.content);
         if (rootView == null) {
             return;
@@ -1395,8 +1452,10 @@ public class UiHelper {
         if (starfield instanceof com.limelight.ui.PortalShaderView) {
             com.limelight.ui.PortalShaderView psv = (com.limelight.ui.PortalShaderView) starfield;
             psv.refreshFromPrefs();
-            syncHandoffBackdrop(activity, rootView, psv);
-            psv.startRendering();
+            if (!sStreamActive || activity instanceof SessionMetricsActivity) {
+                syncHandoffBackdrop(activity, rootView, psv);
+                psv.startRendering();
+            }
         }
         applyPaletteChrome(activity, rootView);
     }

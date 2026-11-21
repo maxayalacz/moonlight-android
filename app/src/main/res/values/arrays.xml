@@ -274,4 +274,15 @@
         <item>0</item>
     </string-array>
 
+    <string-array name="ui_battery_saver_names">
+        <item>@string/ui_battery_saver_auto</item>
+        <item>@string/ui_battery_saver_on</item>
+        <item>@string/ui_battery_saver_off</item>
+    </string-array>
+    <string-array name="ui_battery_saver_values" translatable="false">
+        <item>auto</item>
+        <item>on</item>
+        <item>off</item>
+    </string-array>
+
 </resources>

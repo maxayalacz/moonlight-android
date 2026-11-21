@@ -26,6 +26,7 @@ import androidx.core.content.ContextCompat;
 import com.limelight.R;
 import com.limelight.nvstream.http.ComputerDetails;
 import com.limelight.nvstream.http.PairingManager;
+import com.limelight.preferences.PreferenceConfiguration;
 
 import java.lang.ref.WeakReference;
 
@@ -148,11 +149,16 @@ public class FocusCirclePortalView extends View {
         }
     }
 
+    private long lastDrawInvalidateMs = 0L;
+
     private boolean shouldAnimate() {
-        return isActivePage
-                && isAttachedToWindow()
-                && getWindowVisibility() == VISIBLE
-                && isShown();
+        if (!isActivePage
+                || !isAttachedToWindow()
+                || getWindowVisibility() != VISIBLE
+                || !isShown()) {
+            return false;
+        }
+        return isDiscovering || !PreferenceConfiguration.isUiBatterySaverEffective(getContext());
     }
 
     private void syncAnimators() {
@@ -171,7 +177,11 @@ public class FocusCirclePortalView extends View {
                     float floatCycle = (now % 5500L) / 5500f;
                     float offsetPx = dp(6f) * (float) Math.sin(floatCycle * Math.PI * 2.0);
                     setTranslationY(offsetPx);
-                    invalidate();
+                    long minInterval = isDiscovering ? 16L : 33L;
+                    if ((now - lastDrawInvalidateMs) >= minInterval) {
+                        lastDrawInvalidateMs = now;
+                        invalidate();
+                    }
                 } else {
                     setTranslationY(0f);
                 }
@@ -180,6 +190,7 @@ public class FocusCirclePortalView extends View {
 
         if (shouldAnimate()) {
             if (!continuousTicker.isStarted()) {
+                lastDrawInvalidateMs = 0L;
                 continuousTicker.start();
             }
         } else {
@@ -187,6 +198,7 @@ public class FocusCirclePortalView extends View {
                 continuousTicker.cancel();
             }
             setTranslationY(0f);
+            invalidate();
         }
     }
 

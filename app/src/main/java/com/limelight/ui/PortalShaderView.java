@@ -42,7 +42,20 @@ import java.util.concurrent.CopyOnWriteArrayList;
 public class PortalShaderView extends TextureView implements TextureView.SurfaceTextureListener {
 
     private static final int OVERLAY_MAX_SHORT_EDGE = 1080;
-    private static final long BLUR_INTERVAL_MS = 16L; // ~60 FPS zero-loop GPU refraction updates
+    private static final long MENU_ACTIVE_FRAME_MS = 16L;
+    private static final long MENU_IDLE_FRAME_MS = 33L;
+    private static final long MENU_IDLE_THRESHOLD_MS = 3000L;
+    private static final long BATTERY_SAVER_FRAME_MS = 33L;
+    private static final int BATTERY_SAVER_BG_SHORT_EDGE = 360;
+    private static final long BLUR_IRIS_INTERVAL_MS = 16L;
+    private static final long BLUR_ACTIVE_INTERVAL_MS = 33L;
+    private static final long BLUR_IDLE_INTERVAL_MS = 66L;
+
+    private static volatile long sLastUserInteractionMs = SystemClock.uptimeMillis();
+
+    public static void markUserInteraction() {
+        sLastUserInteractionMs = SystemClock.uptimeMillis();
+    }
 
     private static final String VERTEX_SHADER_SRC =
             "#version 300 es\n" +
@@ -126,6 +139,10 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "uniform vec3  u_ringCol;\n" +
             "uniform vec3  u_chargeCol;\n" +
             "uniform float u_isLight;\n" +
+            "uniform vec4  u_layerRot[3];\n" +
+            "uniform vec2  u_layerShift[3];\n" +
+            "uniform int   u_maxLayers;\n" +
+            "uniform int   u_maxSubParticles;\n" +
             "\n" +
             "const float PI  = 3.14159265359;\n" +
             "const float TAU = 6.28318530718;\n" +
@@ -134,11 +151,6 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "    vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));\n" +
             "    p3 += dot(p3, p3.yzx + 33.33);\n" +
             "    return fract((p3.xx + p3.yz) * p3.zy);\n" +
-            "}\n" +
-            "\n" +
-            "mat2 rot2d(float a) {\n" +
-            "    float s = sin(a), c = cos(a);\n" +
-            "    return mat2(c, -s, s, c);\n" +
             "}\n" +
             "\n" +
             "float easeInOutCubic(float t) {\n" +
@@ -156,13 +168,12 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "    float bound = min(0.48, max(0.13, 0.13 * sz));\n" +
             "\n" +
             "    for (int layer = 0; layer < 3; layer++) {\n" +
+            "        if (layer >= u_maxLayers) break;\n" +
             "        float fl = float(layer);\n" +
             "        // Constant grid scale so increasing Particle Amount never zooms out!\n" +
             "        float scale = 14.0 + fl * 9.0;\n" +
-            "        float rotSpeed = (0.04 + fl * 0.018) * (layer == 1 ? -1.0 : 1.0);\n" +
-            "\n" +
-            "        vec2 p = rot2d(time * rotSpeed + fl * 1.7) * uv;\n" +
-            "        p += vec2(sin(time * 0.15 + fl), cos(time * 0.12 + fl)) * 0.04;\n" +
+            "        vec4 lr = u_layerRot[layer];\n" +
+            "        vec2 p = mat2(lr.x, lr.y, lr.z, lr.w) * uv + u_layerShift[layer];\n" +
             "        p *= scale;\n" +
             "\n" +
             "        vec2 id = floor(p);\n" +
@@ -174,6 +185,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "                vec2 cellId = id + offs;\n" +
             "\n" +
             "                for (int sub = 0; sub < 6; sub++) {\n" +
+            "                    if (sub >= u_maxSubParticles) break;\n" +
             "                    float fSub = float(sub);\n" +
             "                    float slotProb = clamp(totalExpected - fSub, 0.0, 1.0);\n" +
             "                    if (slotProb <= 0.001) break;\n" +
@@ -189,9 +201,11 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "                    vec2 pos = offs + (rnd - 0.5) * 0.55 + drift;\n" +
             "                    vec2 diff = gv - pos;\n" +
             "                    if (abs(diff.x) > bound || abs(diff.y) > bound) continue;\n" +
-            "                    float dist = length(diff);\n" +
             "\n" +
             "                    float radius = mix(0.035, 0.11, fract(rnd.x * 13.7)) * sz;\n" +
+            "                    float distSq = dot(diff, diff);\n" +
+            "                    if (distSq >= radius * radius) continue;\n" +
+            "                    float dist = sqrt(distSq);\n" +
             "                    float bokeh = smoothstep(radius, radius * 0.15, dist);\n" +
             "                    float twinkle = 0.55 + 0.45 * sin(time * (1.8 + rnd.y * 3.0) + rnd.x * TAU);\n" +
             "\n" +
@@ -210,7 +224,6 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "    vec2 uv = (gl_FragCoord.xy - 0.5 * u_resolution) / minDim;\n" +
             "    vec2 portalUv = uv - u_portalCenterOffset;\n" +
             "    float d = length(portalUv);\n" +
-            "    float angle = atan(portalUv.y, portalUv.x);\n" +
             "\n" +
             "    float halfDiag = length(0.5 * u_resolution / minDim) + length(u_portalCenterOffset);\n" +
             "    float maxRadius = halfDiag + 0.18;\n" +
@@ -242,68 +255,73 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "        particles = sampleParticles(uv, u_time) * particleVis * u_particleBrightness;\n" +
             "    }\n" +
             "\n" +
-            "    // --- 3. Phase 1 Connecting Sonar Ripples Only ---\n" +
-            "    vec3 sonar = vec3(0.0);\n" +
-            "    float sonarVis = (1.0 - u_readyMix) * (1.0 - smoothstep(0.0, 0.45, u_expandProgress));\n" +
-            "    if (sonarVis > 0.001 && d > radius) {\n" +
-            "        for (int i = 0; i < 2; i++) {\n" +
-            "            float phase = fract(u_time * 0.42 * u_sonarSpeed + float(i) * 0.5);\n" +
-            "            float rSonar = radius + phase * 0.22;\n" +
-            "            float ring = exp(-abs(d - rSonar) * 65.0);\n" +
-            "            float fade = sin(phase * PI) * (1.0 - phase);\n" +
-            "            sonar += u_ringCol * ring * fade * 0.35 * sonarVis;\n" +
-            "        }\n" +
-            "    }\n" +
-            "\n" +
-            "    // --- 4. Primary Portal Ring & Sweeping Rim Arcs ---\n" +
-            "    float ringDist = abs(d - radius);\n" +
-            "    float breathe  = 1.0 + 0.06 * sin(u_time * 2.6);\n" +
-            "\n" +
-            "    vec3 colIdle   = u_ringCol * 0.90;\n" +
-            "    vec3 colReady  = u_ringCol;\n" +
-            "    vec3 colCharge = u_chargeCol;\n" +
-            "    vec3 colCore   = mix(vec3(0.95, 0.97, 1.00), u_ringCol, u_isLight * 0.35);\n" +
-            "\n" +
-            "    vec3 haloColor = mix(colIdle, colReady, u_readyMix);\n" +
-            "    haloColor      = mix(haloColor, colCharge, u_previewMix);\n" +
-            "\n" +
-            "    float haloFalloff = mix(15.0, 30.0, u_previewMix);\n" +
-            "    float idleGlow    = exp(-ringDist * 26.0) * 0.65;\n" +
-            "    float readyHalo   = exp(-ringDist * haloFalloff) * mix(0.95, 0.75, u_previewMix) * breathe;\n" +
-            "    float readyCore   = exp(-ringDist * 185.0) * 1.35 * breathe;\n" +
-            "\n" +
-            "    vec3 mainRing = mix(\n" +
-            "        colIdle * idleGlow,\n" +
-            "        haloColor * readyHalo + colCore * readyCore,\n" +
-            "        u_readyMix\n" +
-            "    );\n" +
-            "\n" +
-            "    float chargeVis = u_previewMix * (1.0 - smoothstep(0.6, 1.0, u_expandProgress));\n" +
-            "    vec3 arcs = vec3(0.0);\n" +
-            "    if (chargeVis > 0.001) {\n" +
-            "        float a1 = 0.5 + 0.5 * sin(angle * 2.0 + u_time * 3.4);\n" +
-            "        float a2 = 0.5 + 0.5 * sin(angle * 3.0 - u_time * 2.1 + 1.2);\n" +
-            "        float arcMask = pow(a1, 5.0) + 0.6 * pow(a2, 6.0);\n" +
-            "        float rimBand = exp(-ringDist * 75.0);\n" +
-            "        arcs = mix(colCharge, colCore, 0.45) * rimBand * arcMask * 1.0 * chargeVis;\n" +
-            "    }\n" +
-            "\n" +
-            "    // --- 5. Iris Open/Close Trailing Concentric Shockwaves ---\n" +
-            "    vec3 shockwaves = vec3(0.0);\n" +
-            "    if (u_expandProgress > 0.001) {\n" +
-            "        float expandFade = sin(clamp(u_expandProgress, 0.0, 1.0) * PI);\n" +
-            "        for (int i = 1; i <= 3; i++) {\n" +
-            "            float fi = float(i);\n" +
-            "            float lag = fi * 0.045 * (0.4 + 0.6 * u_expandProgress);\n" +
-            "            float rShock = max(0.0, radius - lag);\n" +
-            "            float w = exp(-abs(d - rShock) * (85.0 - fi * 12.0));\n" +
-            "            vec3 sCol = mix(u_chargeCol, u_ringCol, fi / 3.0);\n" +
-            "            shockwaves += sCol * w * (0.65 / fi) * expandFade;\n" +
-            "        }\n" +
-            "    }\n" +
-            "\n" +
+            "    // --- 3-5. Portal Sonar, Ring & Shockwaves (Skipped completely when iris is fully open) ---\n" +
             "    float globalRingFade = 1.0 - smoothstep(0.82, 1.0, u_expandProgress);\n" +
-            "    vec3 ringGlow = (sonar + mainRing + arcs + shockwaves) * u_glowIntensity * globalRingFade;\n" +
+            "    vec3 ringGlow = vec3(0.0);\n" +
+            "    if (globalRingFade > 0.001 && u_glowIntensity > 0.001) {\n" +
+            "        // --- 3. Phase 1 Connecting Sonar Ripples Only ---\n" +
+            "        vec3 sonar = vec3(0.0);\n" +
+            "        float sonarVis = (1.0 - u_readyMix) * (1.0 - smoothstep(0.0, 0.45, u_expandProgress));\n" +
+            "        if (sonarVis > 0.001 && d > radius) {\n" +
+            "            for (int i = 0; i < 2; i++) {\n" +
+            "                float phase = fract(u_time * 0.42 * u_sonarSpeed + float(i) * 0.5);\n" +
+            "                float rSonar = radius + phase * 0.22;\n" +
+            "                float ring = exp(-abs(d - rSonar) * 65.0);\n" +
+            "                float fade = sin(phase * PI) * (1.0 - phase);\n" +
+            "                sonar += u_ringCol * ring * fade * 0.35 * sonarVis;\n" +
+            "            }\n" +
+            "        }\n" +
+            "\n" +
+            "        // --- 4. Primary Portal Ring & Sweeping Rim Arcs ---\n" +
+            "        float ringDist = abs(d - radius);\n" +
+            "        float breathe  = 1.0 + 0.06 * sin(u_time * 2.6);\n" +
+            "\n" +
+            "        vec3 colIdle   = u_ringCol * 0.90;\n" +
+            "        vec3 colReady  = u_ringCol;\n" +
+            "        vec3 colCharge = u_chargeCol;\n" +
+            "        vec3 colCore   = mix(vec3(0.95, 0.97, 1.00), u_ringCol, u_isLight * 0.35);\n" +
+            "\n" +
+            "        vec3 haloColor = mix(colIdle, colReady, u_readyMix);\n" +
+            "        haloColor      = mix(haloColor, colCharge, u_previewMix);\n" +
+            "\n" +
+            "        float haloFalloff = mix(15.0, 30.0, u_previewMix);\n" +
+            "        float idleGlow    = exp(-ringDist * 26.0) * 0.65;\n" +
+            "        float readyHalo   = exp(-ringDist * haloFalloff) * mix(0.95, 0.75, u_previewMix) * breathe;\n" +
+            "        float readyCore   = exp(-ringDist * 185.0) * 1.35 * breathe;\n" +
+            "\n" +
+            "        vec3 mainRing = mix(\n" +
+            "            colIdle * idleGlow,\n" +
+            "            haloColor * readyHalo + colCore * readyCore,\n" +
+            "            u_readyMix\n" +
+            "        );\n" +
+            "\n" +
+            "        float chargeVis = u_previewMix * (1.0 - smoothstep(0.6, 1.0, u_expandProgress));\n" +
+            "        vec3 arcs = vec3(0.0);\n" +
+            "        if (chargeVis > 0.001) {\n" +
+            "            float angle = atan(portalUv.y, portalUv.x);\n" +
+            "            float a1 = 0.5 + 0.5 * sin(angle * 2.0 + u_time * 3.4);\n" +
+            "            float a2 = 0.5 + 0.5 * sin(angle * 3.0 - u_time * 2.1 + 1.2);\n" +
+            "            float arcMask = pow(a1, 5.0) + 0.6 * pow(a2, 6.0);\n" +
+            "            float rimBand = exp(-ringDist * 75.0);\n" +
+            "            arcs = mix(colCharge, colCore, 0.45) * rimBand * arcMask * 1.0 * chargeVis;\n" +
+            "        }\n" +
+            "\n" +
+            "        // --- 5. Iris Open/Close Trailing Concentric Shockwaves ---\n" +
+            "        vec3 shockwaves = vec3(0.0);\n" +
+            "        if (u_expandProgress > 0.001) {\n" +
+            "            float expandFade = sin(clamp(u_expandProgress, 0.0, 1.0) * PI);\n" +
+            "            for (int i = 1; i <= 3; i++) {\n" +
+            "                float fi = float(i);\n" +
+            "                float lag = fi * 0.045 * (0.4 + 0.6 * u_expandProgress);\n" +
+            "                float rShock = max(0.0, radius - lag);\n" +
+            "                float w = exp(-abs(d - rShock) * (85.0 - fi * 12.0));\n" +
+            "                vec3 sCol = mix(u_chargeCol, u_ringCol, fi / 3.0);\n" +
+            "                shockwaves += sCol * w * (0.65 / fi) * expandFade;\n" +
+            "            }\n" +
+            "        }\n" +
+            "\n" +
+            "        ringGlow = (sonar + mainRing + arcs + shockwaves) * u_glowIntensity * globalRingFade;\n" +
+            "    }\n" +
             "\n" +
             "    if (u_isLight > 0.5) {\n" +
             "        // Light Mode: softly tint motes & ring into airy backdrop when opaque, additive over live stream\n" +
@@ -391,6 +409,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
     private volatile int frostedTintAmountPercent = 35;
     private volatile boolean blurDirty = true;
     private volatile int bgMaxShortEdge = 720;
+    private volatile boolean batterySaverEffective = false;
     private volatile boolean backgroundMode = false;
     private volatile boolean renderingDesired = false;
     private volatile boolean firstFrameDispatched = false;
@@ -473,6 +492,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
     }
 
     public void applyPreviewOverride(@NonNull AppThemePalette.ThemeBundle bundle) {
+        markUserInteraction();
         uPortalScale = Math.max(0.2f, Math.min(20.0f, bundle.portalWindowScalePercent / 100f));
         uGlowIntensity = Math.max(0.0f, Math.min(20.0f, bundle.portalGlowIntensityPercent / 100f));
         uParticleBrightness = Math.max(0.0f, Math.min(20.0f, bundle.portalParticleBrightnessPercent / 100f));
@@ -481,6 +501,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
         uSonarSpeed = Math.max(0.0f, Math.min(20.0f, bundle.portalSonarSpeedPercent / 100f));
         blurAmountPercent = Math.max(0, Math.min(2000, bundle.blurAmountPercent));
         frostedTintAmountPercent = Math.max(0, Math.min(100, bundle.frostedTintAmountPercent));
+        batterySaverEffective = PreferenceConfiguration.isUiBatterySaverEffective(getContext());
         blurDirty = true;
         if (blurAmountPercent <= 0 || frostedTintAmountPercent >= 100) {
             publishedBlurBitmap = null;
@@ -505,6 +526,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
         uSonarSpeed = Math.max(0.0f, Math.min(20.0f, cfg.portalSonarSpeedPercent / 100f));
         blurAmountPercent = Math.max(0, Math.min(2000, cfg.blurAmountPercent));
         frostedTintAmountPercent = palette.getEffectiveTintAmount();
+        batterySaverEffective = cfg.isUiBatterySaverEffective;
         blurDirty = true;
         if (blurAmountPercent <= 0 || frostedTintAmountPercent >= 100) {
             publishedBlurBitmap = null;
@@ -532,6 +554,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
     }
 
     public void setUniforms(float readyMix, float previewMix, float expandProgress) {
+        markUserInteraction();
         this.uReadyMix = readyMix;
         this.uPreviewMix = previewMix;
         this.uExpandProgress = expandProgress;
@@ -774,6 +797,12 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
         private int uRingColLoc = -1;
         private int uChargeColLoc = -1;
         private int uIsLightLoc = -1;
+        private int uLayerRotLoc = -1;
+        private int uLayerShiftLoc = -1;
+        private int uMaxLayersLoc = -1;
+        private int uMaxSubParticlesLoc = -1;
+        private final float[] layerRotBuf = new float[12];
+        private final float[] layerShiftBuf = new float[6];
 
         // Fullscreen linear blit program for scaled background FBO
         private int blitProgram = 0;
@@ -801,6 +830,9 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
         private int blurW = 0;
         private int blurH = 0;
         private ByteBuffer readbackBuf;
+        private final int[] blurPbos = new int[2];
+        private int pboWriteIndex = 0;
+        private boolean pboPrimed = false;
         private final Bitmap[] blurBitmapRing = new Bitmap[3];
         private int blurRingIndex = 0;
         private long lastBlurUpdateMs = 0L;
@@ -847,11 +879,17 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
                     continue;
                 }
 
+                long frameStartMs = SystemClock.uptimeMillis();
                 float sharedTime = getSharedTimeSec();
 
                 int shortEdge = Math.min(w, h);
+                boolean irisTransitioning = (uExpandProgress < 0.999f);
+                boolean saverActive = batterySaverEffective;
                 if (backgroundMode) {
                     int cap = bgMaxShortEdge;
+                    if (saverActive && (cap <= 0 || cap > BATTERY_SAVER_BG_SHORT_EDGE)) {
+                        cap = BATTERY_SAVER_BG_SHORT_EDGE;
+                    }
                     float scale = (cap > 0 && shortEdge > cap) ? (cap / (float) shortEdge) : 1.0f;
                     int fboW = Math.max(1, Math.round(w * scale));
                     int fboH = Math.max(1, Math.round(h * scale));
@@ -869,7 +907,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
                     GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT);
                     drawBlitTexture(bgFboTex);
 
-                    // 3. Update adaptive-resolution GPU blurred refraction bitmap (~60 FPS, zero Java loops)
+                    // 3. Motion-adaptive GPU blurred refraction bitmap (single snapshot in Battery Saver)
                     int blurPct = (frostedTintAmountPercent >= 100) ? 0 : blurAmountPercent;
                     long nowMs = SystemClock.uptimeMillis();
                     if (blurPct <= 0) {
@@ -878,10 +916,26 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
                             mainHandler.post(invalidateFrostedRunnable);
                         }
                         blurDirty = false;
-                    } else if (blurDirty || (!frostedDrawables.isEmpty() && (nowMs - lastBlurUpdateMs) >= BLUR_INTERVAL_MS)) {
-                        blurDirty = false;
-                        lastBlurUpdateMs = nowMs;
-                        updateBlurBitmapOnGlThread(w, h, blurPct);
+                    } else if (saverActive) {
+                        if (blurDirty) {
+                            blurDirty = false;
+                            lastBlurUpdateMs = nowMs;
+                            updateBlurBitmapOnGlThread(w, h, blurPct);
+                        }
+                    } else {
+                        long blurIntervalMs;
+                        if (irisTransitioning) {
+                            blurIntervalMs = BLUR_IRIS_INTERVAL_MS;
+                        } else if ((nowMs - sLastUserInteractionMs) <= 800L) {
+                            blurIntervalMs = BLUR_ACTIVE_INTERVAL_MS;
+                        } else {
+                            blurIntervalMs = BLUR_IDLE_INTERVAL_MS;
+                        }
+                        if (blurDirty || (!frostedDrawables.isEmpty() && (nowMs - lastBlurUpdateMs) >= blurIntervalMs)) {
+                            blurDirty = false;
+                            lastBlurUpdateMs = nowMs;
+                            updateBlurBitmapOnGlThread(w, h, blurPct);
+                        }
                     }
                 } else if (shortEdge > OVERLAY_MAX_SHORT_EDGE) {
                     // Game overlay mode on high-res tablets (>1080p short edge): cap to 1080p FBO
@@ -913,6 +967,26 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
                         break;
                     }
                 }
+
+                if (backgroundMode && !irisTransitioning) {
+                    long targetFrameMs;
+                    if (saverActive) {
+                        targetFrameMs = BATTERY_SAVER_FRAME_MS;
+                    } else if ((SystemClock.uptimeMillis() - sLastUserInteractionMs) > MENU_IDLE_THRESHOLD_MS) {
+                        targetFrameMs = MENU_IDLE_FRAME_MS;
+                    } else {
+                        targetFrameMs = MENU_ACTIVE_FRAME_MS;
+                    }
+                    long elapsedMs = SystemClock.uptimeMillis() - frameStartMs;
+                    long sleepMs = targetFrameMs - elapsedMs;
+                    if (sleepMs > 0L) {
+                        try {
+                            Thread.sleep(sleepMs);
+                        } catch (InterruptedException ignored) {
+                            break;
+                        }
+                    }
+                }
             }
 
             releaseGl();
@@ -942,6 +1016,35 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             uploadColor3f(uRingColLoc, uRingRgb);
             uploadColor3f(uChargeColLoc, uChargeRgb);
             GLES30.glUniform1f(uIsLightLoc, uIsLight);
+
+            for (int layer = 0; layer < 3; layer++) {
+                float fl = layer;
+                float rotSpeed = (0.04f + fl * 0.018f) * (layer == 1 ? -1.0f : 1.0f);
+                double angle = sharedTime * rotSpeed + fl * 1.7;
+                float s = (float) Math.sin(angle);
+                float c = (float) Math.cos(angle);
+                int rIdx = layer * 4;
+                layerRotBuf[rIdx] = c;
+                layerRotBuf[rIdx + 1] = -s;
+                layerRotBuf[rIdx + 2] = s;
+                layerRotBuf[rIdx + 3] = c;
+                int sIdx = layer * 2;
+                layerShiftBuf[sIdx] = (float) Math.sin(sharedTime * 0.15 + fl) * 0.04f;
+                layerShiftBuf[sIdx + 1] = (float) Math.cos(sharedTime * 0.12 + fl) * 0.04f;
+            }
+            if (uLayerRotLoc >= 0) {
+                GLES30.glUniform4fv(uLayerRotLoc, 3, layerRotBuf, 0);
+            }
+            if (uLayerShiftLoc >= 0) {
+                GLES30.glUniform2fv(uLayerShiftLoc, 3, layerShiftBuf, 0);
+            }
+            boolean saver = batterySaverEffective;
+            if (uMaxLayersLoc >= 0) {
+                GLES30.glUniform1i(uMaxLayersLoc, saver ? 2 : 3);
+            }
+            if (uMaxSubParticlesLoc >= 0) {
+                GLES30.glUniform1i(uMaxSubParticlesLoc, saver ? 2 : 6);
+            }
 
             quadBuffer.position(0);
             GLES30.glEnableVertexAttribArray(aPosLoc);
@@ -1052,7 +1155,19 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
                     GLES30.GL_TEXTURE_2D, blurFboTexB, 0);
             GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0);
 
-            readbackBuf = ByteBuffer.allocateDirect(w * h * 4).order(ByteOrder.nativeOrder());
+            int byteSize = w * h * 4;
+            readbackBuf = ByteBuffer.allocateDirect(byteSize).order(ByteOrder.nativeOrder());
+            GLES30.glGenBuffers(2, blurPbos, 0);
+            for (int i = 0; i < 2; i++) {
+                if (blurPbos[i] != 0) {
+                    GLES30.glBindBuffer(GLES30.GL_PIXEL_PACK_BUFFER, blurPbos[i]);
+                    GLES30.glBufferData(GLES30.GL_PIXEL_PACK_BUFFER, byteSize, null, GLES30.GL_STREAM_READ);
+                }
+            }
+            GLES30.glBindBuffer(GLES30.GL_PIXEL_PACK_BUFFER, 0);
+            pboWriteIndex = 0;
+            pboPrimed = false;
+
             for (int i = 0; i < blurBitmapRing.length; i++) {
                 blurBitmapRing[i] = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
             }
@@ -1068,6 +1183,17 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             if (blurPct <= 95) return 96;
             if (blurPct <= 135) return 72;
             return 56;
+        }
+
+        private void syncReadbackFallback(int tw, int th) {
+            readbackBuf.position(0);
+            GLES30.glReadPixels(0, 0, tw, th, GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, readbackBuf);
+            readbackBuf.position(0);
+            Bitmap target = blurBitmapRing[blurRingIndex];
+            blurRingIndex = (blurRingIndex + 1) % blurBitmapRing.length;
+            target.copyPixelsFromBuffer(readbackBuf);
+            publishedBlurBitmap = target;
+            mainHandler.post(invalidateFrostedRunnable);
         }
 
         private void updateBlurBitmapOnGlThread(int viewW, int viewH, int blurPct) {
@@ -1101,17 +1227,45 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
                 drawBlurPass(blurFboTexB, 0f, step / th, isLastVertical ? 1f : 0f);
             }
 
-            // 3. Read back final GPU-blurred FBO off the UI thread & copy directly into triple-buffered Bitmap
-            readbackBuf.position(0);
-            GLES30.glReadPixels(0, 0, tw, th, GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, readbackBuf);
-            GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0);
+            // 3. Double-buffered async GLES 3.0 PBO readback (maps previous frame DMA with zero CPU stall)
+            int writeIdx = pboWriteIndex;
+            int readIdx = 1 - writeIdx;
+            if (blurPbos[0] != 0 && blurPbos[1] != 0) {
+                GLES30.glBindBuffer(GLES30.GL_PIXEL_PACK_BUFFER, blurPbos[writeIdx]);
+                GLES30.glReadPixels(0, 0, tw, th, GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, 0);
+                GLES30.glBindBuffer(GLES30.GL_PIXEL_PACK_BUFFER, 0);
 
-            readbackBuf.position(0);
-            Bitmap target = blurBitmapRing[blurRingIndex];
-            blurRingIndex = (blurRingIndex + 1) % blurBitmapRing.length;
-            target.copyPixelsFromBuffer(readbackBuf);
-            publishedBlurBitmap = target;
-            mainHandler.post(invalidateFrostedRunnable);
+                if (pboPrimed) {
+                    int byteSize = tw * th * 4;
+                    GLES30.glBindBuffer(GLES30.GL_PIXEL_PACK_BUFFER, blurPbos[readIdx]);
+                    java.nio.Buffer mapped = GLES30.glMapBufferRange(
+                            GLES30.GL_PIXEL_PACK_BUFFER, 0, byteSize, GLES30.GL_MAP_READ_BIT);
+                    if (mapped instanceof ByteBuffer) {
+                        ByteBuffer bb = (ByteBuffer) mapped;
+                        bb.order(ByteOrder.nativeOrder());
+                        bb.position(0);
+                        Bitmap target = blurBitmapRing[blurRingIndex];
+                        blurRingIndex = (blurRingIndex + 1) % blurBitmapRing.length;
+                        target.copyPixelsFromBuffer(bb);
+                        GLES30.glUnmapBuffer(GLES30.GL_PIXEL_PACK_BUFFER);
+                        GLES30.glBindBuffer(GLES30.GL_PIXEL_PACK_BUFFER, 0);
+                        publishedBlurBitmap = target;
+                        mainHandler.post(invalidateFrostedRunnable);
+                    } else {
+                        GLES30.glUnmapBuffer(GLES30.GL_PIXEL_PACK_BUFFER);
+                        GLES30.glBindBuffer(GLES30.GL_PIXEL_PACK_BUFFER, 0);
+                        syncReadbackFallback(tw, th);
+                    }
+                } else if (publishedBlurBitmap == null) {
+                    syncReadbackFallback(tw, th);
+                }
+                pboPrimed = true;
+                pboWriteIndex = readIdx;
+                GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0);
+            } else {
+                syncReadbackFallback(tw, th);
+                GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0);
+            }
         }
 
         private void releaseBgFbo() {
@@ -1128,6 +1282,14 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
         }
 
         private void releaseBlurFbo() {
+            GLES30.glBindBuffer(GLES30.GL_PIXEL_PACK_BUFFER, 0);
+            if (blurPbos[0] != 0 || blurPbos[1] != 0) {
+                GLES30.glDeleteBuffers(2, blurPbos, 0);
+                blurPbos[0] = 0;
+                blurPbos[1] = 0;
+            }
+            pboPrimed = false;
+            pboWriteIndex = 0;
             if (blurFbo != 0) {
                 GLES30.glDeleteFramebuffers(1, new int[]{blurFbo}, 0);
                 blurFbo = 0;
@@ -1249,6 +1411,10 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             uRingColLoc = GLES30.glGetUniformLocation(program, "u_ringCol");
             uChargeColLoc = GLES30.glGetUniformLocation(program, "u_chargeCol");
             uIsLightLoc = GLES30.glGetUniformLocation(program, "u_isLight");
+            uLayerRotLoc = GLES30.glGetUniformLocation(program, "u_layerRot");
+            uLayerShiftLoc = GLES30.glGetUniformLocation(program, "u_layerShift");
+            uMaxLayersLoc = GLES30.glGetUniformLocation(program, "u_maxLayers");
+            uMaxSubParticlesLoc = GLES30.glGetUniformLocation(program, "u_maxSubParticles");
 
             blitPosLoc = GLES30.glGetAttribLocation(blitProgram, "a_pos");
             blitTexLoc = GLES30.glGetUniformLocation(blitProgram, "u_tex");

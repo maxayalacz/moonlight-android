@@ -4845,6 +4845,25 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
                 .apply();
     }
 
+    public String getUiBatterySaverMode() {
+        return androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
+                .getString(PreferenceConfiguration.UI_BATTERY_SAVER_PREF_STRING,
+                        PreferenceConfiguration.DEFAULT_UI_BATTERY_SAVER);
+    }
+
+    public void setUiBatterySaverModeLive(String mode) {
+        String normalized = ("on".equals(mode) || "off".equals(mode)) ? mode : "auto";
+        androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
+                .edit()
+                .putString(PreferenceConfiguration.UI_BATTERY_SAVER_PREF_STRING, normalized)
+                .apply();
+        if (prefConfig != null) {
+            prefConfig.uiBatterySaverMode = normalized;
+            prefConfig.isUiBatterySaverEffective =
+                    PreferenceConfiguration.isUiBatterySaverEffective(this, normalized);
+        }
+    }
+
     // 5. On-Screen Full Keyboard live settings
 
     public int getFullKeyboardOpacity() {

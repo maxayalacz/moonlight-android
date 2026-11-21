@@ -201,7 +201,8 @@ public class GameMenu implements Game.GameMenuCallbacks {
      * with zero UI-thread stall. Automatically skipped when live blur is 0% or frosted tint is 100%.
      */
     private static final class StreamBlurController {
-        private static final long CAPTURE_INTERVAL_MS = 16L;
+        private static final long IDLE_CAPTURE_INTERVAL_MS = 25L;
+        private static final long ACTIVE_CAPTURE_INTERVAL_MS = 16L;
 
         private final Activity activity;
         private final Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -210,6 +211,8 @@ public class GameMenu implements Game.GameMenuCallbacks {
         private final List<FrostedStreamCardLayout> cards = new ArrayList<>();
         private final int[] surfaceLoc = new int[2];
         private final Bitmap[] buffers = new Bitmap[3];
+        private int[] scratchPix;
+        private int[] scratchTmp;
 
         private int writeIndex = 0;
         private volatile Bitmap readyBitmap = null;
@@ -220,9 +223,11 @@ public class GameMenu implements Game.GameMenuCallbacks {
 
         private volatile boolean running = false;
         private volatile boolean inFlight = false;
-        private final int blurPct;
-        private final int blurRadius;
-        private final int captureLongEdge;
+        private volatile boolean drawerAnimating = false;
+        private volatile boolean batterySaver = false;
+        private volatile int blurPct;
+        private volatile int blurRadius;
+        private volatile int captureLongEdge;
 
         private final Runnable invalidateCardsRunnable = () -> {
             for (int i = 0; i < cards.size(); i++) {
@@ -240,18 +245,24 @@ public class GameMenu implements Game.GameMenuCallbacks {
                     return;
                 }
                 requestFrameCapture();
-                mainHandler.postDelayed(this, CAPTURE_INTERVAL_MS);
+                long interval = drawerAnimating ? ACTIVE_CAPTURE_INTERVAL_MS : IDLE_CAPTURE_INTERVAL_MS;
+                mainHandler.postDelayed(this, interval);
             }
         };
 
         StreamBlurController(Activity activity) {
             this.activity = activity;
+            recomputeFromPrefs();
+        }
+
+        void recomputeFromPrefs() {
             AppThemePalette palette = AppThemePalette.getCurrent(activity);
             int rawBlurPct = ProfilesManager.getInstance()
                     .getOverlayingSharedPreferences(activity)
                     .getInt(PreferenceConfiguration.BLUR_AMOUNT_PREF_STRING,
                             PreferenceConfiguration.DEFAULT_BLUR_AMOUNT);
-            if (rawBlurPct <= 0 || palette.getEffectiveTintAmount() >= 100) {
+            this.batterySaver = PreferenceConfiguration.isUiBatterySaverEffective(activity);
+            if (batterySaver || rawBlurPct <= 0 || palette.getEffectiveTintAmount() >= 100) {
                 this.blurPct = 0;
                 this.blurRadius = 0;
                 this.captureLongEdge = 160;
@@ -260,6 +271,24 @@ public class GameMenu implements Game.GameMenuCallbacks {
                 this.blurRadius = Math.max(1, Math.min(18, Math.round(5f * (rawBlurPct / 100f))));
                 this.captureLongEdge = chooseCaptureLongEdge(rawBlurPct);
             }
+        }
+
+        void onBatterySaverChanged() {
+            recomputeFromPrefs();
+            if (blurRadius <= 0) {
+                stop();
+            } else if (!running) {
+                start();
+            }
+            mainHandler.post(invalidateCardsRunnable);
+        }
+
+        boolean isBatterySaver() {
+            return batterySaver;
+        }
+
+        void setDrawerAnimating(boolean animating) {
+            this.drawerAnimating = animating;
         }
 
         private static int chooseCaptureLongEdge(int blurPct) {
@@ -290,6 +319,7 @@ public class GameMenu implements Game.GameMenuCallbacks {
         void stop() {
             running = false;
             inFlight = false;
+            drawerAnimating = false;
             mainHandler.removeCallbacks(captureTick);
             mainHandler.removeCallbacks(invalidateCardsRunnable);
             if (workerHandler != null) {
@@ -301,6 +331,8 @@ public class GameMenu implements Game.GameMenuCallbacks {
                 workerThread = null;
             }
             readyBitmap = null;
+            scratchPix = null;
+            scratchTmp = null;
         }
 
         Bitmap getReadyBitmap() {
@@ -360,6 +392,11 @@ public class GameMenu implements Game.GameMenuCallbacks {
                 }
                 readyBitmap = null;
             }
+            final int neededPixels = bw * bh;
+            if (scratchPix == null || scratchPix.length < neededPixels) {
+                scratchPix = new int[neededPixels];
+                scratchTmp = new int[neededPixels];
+            }
 
             final int idx = writeIndex;
             final Bitmap target = buffers[idx];
@@ -370,8 +407,9 @@ public class GameMenu implements Game.GameMenuCallbacks {
                         inFlight = false;
                         return;
                     }
-                    if (blurRadius > 0) {
-                        UiHelper.fastBoxBlur(target, blurRadius);
+                    int radius = blurRadius;
+                    if (radius > 0) {
+                        UiHelper.fastBoxBlur(target, radius, scratchPix, scratchTmp);
                     }
                     surfaceScreenLeft = sl;
                     surfaceScreenTop = st;
@@ -482,7 +520,14 @@ public class GameMenu implements Game.GameMenuCallbacks {
                 drewBlur = true;
             }
 
-            int tintColor = palette.getQuickMenuCardTint(drewBlur || blurController.blurPct <= 0);
+            boolean matteFallback = !drewBlur && blurController.isBatterySaver();
+            int tintColor = palette.getQuickMenuCardTint(drewBlur || (blurController.blurPct <= 0 && !matteFallback));
+            if (matteFallback) {
+                int matteMinAlpha = palette.isLight ? 0xEA : 0xDE;
+                if ((tintColor >>> 24) < matteMinAlpha) {
+                    tintColor = AppThemePalette.withAlphaInt(tintColor, matteMinAlpha);
+                }
+            }
             if ((tintColor >>> 24) > 0) {
                 fillPaint.setColor(tintColor);
                 canvas.drawRect(cardBounds, fillPaint);
@@ -802,6 +847,7 @@ public class GameMenu implements Game.GameMenuCallbacks {
                         .start();
 
                 if (open) {
+                    blurController.setDrawerAnimating(true);
                     sideDrawerCard.setVisibility(View.VISIBLE);
                     sideDrawerCard.animate().cancel();
                     sideDrawerCard.animate()
@@ -810,8 +856,10 @@ public class GameMenu implements Game.GameMenuCallbacks {
                             .setDuration(240L)
                             .setInterpolator(SPRING_EASE)
                             .setUpdateListener(a -> sideDrawerCard.invalidate())
+                            .withEndAction(() -> blurController.setDrawerAnimating(false))
                             .start();
                 } else {
+                    blurController.setDrawerAnimating(true);
                     sideDrawerCard.animate().cancel();
                     sideDrawerCard.animate()
                             .translationX(hiddenOffset)
@@ -820,6 +868,7 @@ public class GameMenu implements Game.GameMenuCallbacks {
                             .setInterpolator(SPRING_EASE)
                             .setUpdateListener(a -> sideDrawerCard.invalidate())
                             .withEndAction(() -> {
+                                blurController.setDrawerAnimating(false);
                                 if (!drawerOpen[0]) {
                                     sideDrawerCard.setVisibility(View.GONE);
                                 }
@@ -835,6 +884,7 @@ public class GameMenu implements Game.GameMenuCallbacks {
             drawerOnRight[0] = !drawerOnRight[0];
             overlayPrefs.edit().putBoolean(PREF_DRAWER_ON_RIGHT, drawerOnRight[0]).apply();
 
+            blurController.setDrawerAnimating(true);
             sideDrawerCard.animate().cancel();
             drawerLp.gravity = (drawerOnRight[0] ? Gravity.END : Gravity.START) | Gravity.CENTER_VERTICAL;
             sideDrawerCard.setLayoutParams(drawerLp);
@@ -848,6 +898,7 @@ public class GameMenu implements Game.GameMenuCallbacks {
                     .setDuration(240L)
                     .setInterpolator(SPRING_EASE)
                     .setUpdateListener(a -> sideDrawerCard.invalidate())
+                    .withEndAction(() -> blurController.setDrawerAnimating(false))
                     .start();
 
             updateQuickMenuShift.run();
@@ -867,7 +918,7 @@ public class GameMenu implements Game.GameMenuCallbacks {
 
         View drawerContent = buildSideSettingsDrawerContent(
                 themedContext, palette, closeDrawerRef[0], swapDrawerSide,
-                refreshMouseTile, refreshCardOutlines);
+                refreshMouseTile, refreshCardOutlines, blurController::onBatterySaverChanged);
         sideDrawerCard.addView(drawerContent, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
@@ -954,7 +1005,8 @@ public class GameMenu implements Game.GameMenuCallbacks {
     private View buildSideSettingsDrawerContent(Context ctx, AppThemePalette palette,
                                                 Runnable onCloseDrawer, Runnable onSwapSide,
                                                 Runnable onMouseModeMayChange,
-                                                Runnable onCardOutlineChanged) {
+                                                Runnable onCardOutlineChanged,
+                                                Runnable onBatterySaverChanged) {
         LinearLayout container = new LinearLayout(ctx);
         container.setOrientation(LinearLayout.VERTICAL);
 
@@ -1171,6 +1223,8 @@ public class GameMenu implements Game.GameMenuCallbacks {
         LinearLayout overlayContent = addAccordionCategory(
                 body, ctx, getString(R.string.quick_settings_section_overlay), palette, sections);
 
+        addDrawerUiBatterySaverRow(overlayContent, ctx, palette, onBatterySaverChanged);
+
         addDrawerSliderRow(overlayContent, ctx, getString(R.string.title_card_outline_thickness),
                 0, 250, 5, game.getCardOutlineThickness(), "%", palette, val -> {
                     game.setCardOutlineThicknessLive(val);
@@ -1317,6 +1371,91 @@ public class GameMenu implements Game.GameMenuCallbacks {
         }
         parent.addView(card, cardLp);
         return content;
+    }
+
+    private void addDrawerUiBatterySaverRow(LinearLayout parent, Context ctx,
+                                            AppThemePalette palette, Runnable onBatterySaverChanged) {
+        LinearLayout block = new LinearLayout(ctx);
+        block.setOrientation(LinearLayout.VERTICAL);
+        block.setPadding(dp(4f), dp(5f), dp(2f), dp(7f));
+
+        TextView label = new TextView(ctx);
+        label.setText(R.string.title_ui_battery_saver);
+        label.setTextColor(palette.getSecondaryTextColor());
+        label.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f);
+        block.addView(label, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        LinearLayout capsule = new LinearLayout(ctx);
+        capsule.setOrientation(LinearLayout.HORIZONTAL);
+        capsule.setPadding(dp(3f), dp(3f), dp(3f), dp(3f));
+        GradientDrawable capsuleBg = new GradientDrawable();
+        capsuleBg.setShape(GradientDrawable.RECTANGLE);
+        capsuleBg.setCornerRadius(dp(13f));
+        capsuleBg.setColor(AppThemePalette.withAlpha(palette.accent, palette.isLight ? 0.10f : 0.14f));
+        capsuleBg.setStroke(Math.max(1, dp(1f)), palette.getDividerColor());
+        capsule.setBackground(capsuleBg);
+
+        final String[] modes = { "off", "auto", "on" };
+        final int[] labels = {
+                R.string.ui_battery_saver_short_off,
+                R.string.ui_battery_saver_short_auto,
+                R.string.ui_battery_saver_short_on
+        };
+        final TextView[] tabs = new TextView[modes.length];
+        final String[] selected = { game.getUiBatterySaverMode() };
+
+        Runnable refreshTabs = () -> {
+            for (int i = 0; i < modes.length; i++) {
+                boolean active = modes[i].equals(selected[0]);
+                TextView tab = tabs[i];
+                if (active) {
+                    GradientDrawable tabBg = new GradientDrawable();
+                    tabBg.setShape(GradientDrawable.RECTANGLE);
+                    tabBg.setCornerRadius(dp(10f));
+                    tabBg.setColor(AppThemePalette.withAlpha(palette.highlight, palette.isLight ? 0.24f : 0.34f));
+                    tabBg.setStroke(Math.max(1, dp(1.1f)), palette.getNeonAccent());
+                    tab.setBackground(tabBg);
+                    tab.setTextColor(palette.getPrimaryTextColor());
+                    tab.setTypeface(Typeface.DEFAULT_BOLD);
+                } else {
+                    tab.setBackground(null);
+                    tab.setTextColor(palette.getSecondaryTextColor());
+                    tab.setTypeface(Typeface.DEFAULT);
+                }
+            }
+        };
+
+        for (int i = 0; i < modes.length; i++) {
+            final String mode = modes[i];
+            TextView tab = new TextView(ctx);
+            tab.setText(labels[i]);
+            tab.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f);
+            tab.setGravity(Gravity.CENTER);
+            tab.setPadding(dp(4f), dp(6f), dp(4f), dp(6f));
+            tab.setFocusable(true);
+            tab.setClickable(true);
+            tab.setOnClickListener(v -> {
+                selected[0] = mode;
+                refreshTabs.run();
+                game.setUiBatterySaverModeLive(mode);
+                if (onBatterySaverChanged != null) {
+                    onBatterySaverChanged.run();
+                }
+            });
+            tabs[i] = tab;
+            capsule.addView(tab, new LinearLayout.LayoutParams(
+                    0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        }
+        refreshTabs.run();
+
+        LinearLayout.LayoutParams capLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        capLp.topMargin = dp(6f);
+        block.addView(capsule, capLp);
+
+        parent.addView(block, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
     }
 
     private void addDrawerKeyboardAlignRow(LinearLayout parent, Context ctx, AppThemePalette palette) {

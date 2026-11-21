@@ -1651,6 +1651,20 @@ public class StreamSettings extends AppCompatActivity {
                 });
             }
 
+            _pref = findPreference(PreferenceConfiguration.UI_BATTERY_SAVER_PREF_STRING);
+            if (_pref != null) {
+                _pref.setOnPreferenceChangeListener((preference, newValue) -> {
+                    requireView().post(() -> {
+                        UiHelper.refreshBackdrop(requireActivity());
+                        androidx.recyclerview.widget.RecyclerView rv = getListView();
+                        if (rv != null && rv.getAdapter() != null) {
+                            rv.getAdapter().notifyDataSetChanged();
+                        }
+                    });
+                    return true;
+                });
+            }
+
             _pref = findPreference("option_edit_osc_layout");
             if (_pref != null) {
                 _pref.setOnPreferenceClickListener(preference -> {

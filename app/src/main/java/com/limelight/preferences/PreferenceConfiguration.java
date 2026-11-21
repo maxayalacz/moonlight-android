@@ -96,6 +96,7 @@ public class PreferenceConfiguration {
     public static final String BG_QUALITY_PREF_STRING = "list_bg_quality";
     public static final String OSC_OUTLINE_THICKNESS_PREF_STRING = "seekbar_osc_outline_thickness";
     public static final String CARD_OUTLINE_THICKNESS_PREF_STRING = "seekbar_card_outline_thickness";
+    public static final String UI_BATTERY_SAVER_PREF_STRING = "list_ui_battery_saver";
     public static final int DEFAULT_PORTAL_READY_MS = 300;
     public static final int DEFAULT_PORTAL_SONAR_HOLD_MS = 600;
     public static final int DEFAULT_PORTAL_PREVIEW_FADE_MS = 400;
@@ -118,6 +119,7 @@ public class PreferenceConfiguration {
     public static final String DEFAULT_BG_QUALITY = "720";
     public static final int DEFAULT_OSC_OUTLINE_THICKNESS = 100;
     public static final int DEFAULT_CARD_OUTLINE_THICKNESS = 100;
+    public static final String DEFAULT_UI_BATTERY_SAVER = "auto";
     private static final String BIND_ALL_USB_STRING = "checkbox_usb_bind_all";
     private static final String MOUSE_EMULATION_STRING = "checkbox_mouse_emulation";
     private static final String REMEMBER_MOUSE_MODE_PREF_STRING = "checkbox_remember_mouse_mode";
@@ -347,6 +349,8 @@ public class PreferenceConfiguration {
     public int bgQualityMaxShortEdge;
     public int oscOutlineThicknessPercent;
     public int cardOutlineThicknessPercent;
+    public String uiBatterySaverMode;
+    public boolean isUiBatterySaverEffective;
     //简化版性能信息
     public boolean enablePerfOverlayLite;
 
@@ -1027,6 +1031,8 @@ private static int getFramePacingValue(Context context) {
         }
         config.oscOutlineThicknessPercent = prefs.getInt(OSC_OUTLINE_THICKNESS_PREF_STRING, DEFAULT_OSC_OUTLINE_THICKNESS);
         config.cardOutlineThicknessPercent = prefs.getInt(CARD_OUTLINE_THICKNESS_PREF_STRING, DEFAULT_CARD_OUTLINE_THICKNESS);
+        config.uiBatterySaverMode = prefs.getString(UI_BATTERY_SAVER_PREF_STRING, DEFAULT_UI_BATTERY_SAVER);
+        config.isUiBatterySaverEffective = isUiBatterySaverEffective(context, config.uiBatterySaverMode);
         config.enablePerfOverlayLite = prefs.getBoolean("checkbox_enable_perf_overlay_lite",DEFAULT_ENABLE_PERF_OVERLAY);
         config.enablePerfOverlayBottom = prefs.getBoolean("checkbox_enable_perf_overlay_bottom",DEFAULT_PERF_OVERLAY_BOTTOM);
         config.bindAllUsb = prefs.getBoolean(BIND_ALL_USB_STRING, DEFAULT_BIND_ALL_USB);
@@ -1144,5 +1150,32 @@ private static int getFramePacingValue(Context context) {
         config.balance_shift = prefs.getInt(BALANCE_SHIFT, 50) / 100f;
 
         return config;
+    }
+
+    public static boolean isUiBatterySaverEffective(Context context) {
+        if (context == null) {
+            return false;
+        }
+        String mode = PreferenceManager.getDefaultSharedPreferences(context)
+                .getString(UI_BATTERY_SAVER_PREF_STRING, DEFAULT_UI_BATTERY_SAVER);
+        return isUiBatterySaverEffective(context, mode);
+    }
+
+    public static boolean isUiBatterySaverEffective(Context context, String mode) {
+        if ("on".equals(mode)) {
+            return true;
+        }
+        if ("off".equals(mode)) {
+            return false;
+        }
+        // "auto" (default): follow Android system Power Saver state
+        if (context != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            try {
+                android.os.PowerManager pm = (android.os.PowerManager) context.getSystemService(Context.POWER_SERVICE);
+                return pm != null && pm.isPowerSaveMode();
+            } catch (Throwable ignored) {
+            }
+        }
+        return false;
     }
 }

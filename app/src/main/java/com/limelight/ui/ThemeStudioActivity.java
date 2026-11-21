@@ -94,6 +94,8 @@ public class ThemeStudioActivity extends AppCompatActivity {
 
     private static final String[] BG_QUALITY_LABELS = { "480p", "720p", "1080p", "Native" };
     private static final String[] BG_QUALITY_VALUES = { "480", "720", "1080", "0" };
+    private static final String[] UI_BATTERY_SAVER_LABELS = { "Off", "Auto", "On" };
+    private static final String[] UI_BATTERY_SAVER_VALUES = { "off", "auto", "on" };
 
     private AppThemePalette.ThemeBundle bundle;
     private String activeSavedId = null;
@@ -156,6 +158,8 @@ public class ThemeStudioActivity extends AppCompatActivity {
     private SliderRow rowCardOutline;
     private TextView bgQualityHeading;
     private TextView[] bgQualityPills;
+    private TextView uiBatterySaverHeading;
+    private TextView[] uiBatterySaverPills;
 
     // Tab 3: Portal FX (Visual shader controls)
     private SliderRow rowParticleBright;
@@ -865,6 +869,38 @@ public class ThemeStudioActivity extends AppCompatActivity {
         }
         col.addView(qRow, qrLp);
 
+        uiBatterySaverHeading = new TextView(this);
+        uiBatterySaverHeading.setText(R.string.title_ui_battery_saver);
+        uiBatterySaverHeading.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f);
+        uiBatterySaverHeading.setTypeface(Typeface.DEFAULT_BOLD);
+        LinearLayout.LayoutParams bshLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        bshLp.topMargin = dp(12f);
+        col.addView(uiBatterySaverHeading, bshLp);
+
+        LinearLayout bsRow = new LinearLayout(this);
+        bsRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams bsrLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        bsrLp.topMargin = dp(8f);
+        uiBatterySaverPills = new TextView[UI_BATTERY_SAVER_LABELS.length];
+        for (int i = 0; i < UI_BATTERY_SAVER_LABELS.length; i++) {
+            final String val = UI_BATTERY_SAVER_VALUES[i];
+            TextView pill = createPillButton(UI_BATTERY_SAVER_LABELS[i]);
+            pill.setOnClickListener(v -> {
+                androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
+                        .edit()
+                        .putString(PreferenceConfiguration.UI_BATTERY_SAVER_PREF_STRING, val)
+                        .apply();
+                refreshAll();
+            });
+            LinearLayout.LayoutParams bpLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            if (i > 0) bpLp.setMarginStart(dp(6f));
+            bsRow.addView(pill, bpLp);
+            uiBatterySaverPills[i] = pill;
+        }
+        col.addView(bsRow, bsrLp);
+
         sv.addView(col);
         return sv;
     }
@@ -1547,6 +1583,14 @@ public class ThemeStudioActivity extends AppCompatActivity {
         for (int i = 0; i < bgQualityPills.length; i++) {
             boolean active = BG_QUALITY_VALUES[i].equals(bundle.bgQuality);
             stylePillButton(bgQualityPills[i], active, p.accent, p.isLight);
+        }
+        uiBatterySaverHeading.setTextColor(p.getPrimaryTextColor());
+        String savedSaverMode = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
+                .getString(PreferenceConfiguration.UI_BATTERY_SAVER_PREF_STRING,
+                        PreferenceConfiguration.DEFAULT_UI_BATTERY_SAVER);
+        for (int i = 0; i < uiBatterySaverPills.length; i++) {
+            boolean active = UI_BATTERY_SAVER_VALUES[i].equals(savedSaverMode);
+            stylePillButton(uiBatterySaverPills[i], active, p.accent, p.isLight);
         }
 
         // Tab 3: Portal FX
