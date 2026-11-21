@@ -194,6 +194,18 @@ public class FocusPcAdapter extends RecyclerView.Adapter<FocusPcAdapter.ViewHold
         holder.addressText.setTextColor(palette.getSecondaryTextColor());
         holder.hintText.setTextColor(palette.getSecondaryTextColor());
 
+        if (holder.moreButton != null) {
+            android.graphics.drawable.GradientDrawable moreBg = new android.graphics.drawable.GradientDrawable();
+            moreBg.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+            moreBg.setColor(palette.getFrostedCardTint(0x64000000));
+            int rimW = Math.round(UiHelper.getCardOutlineWidthPx(context, 1f));
+            if (rimW > 0) {
+                moreBg.setStroke(rimW, palette.getCardRimColor());
+            }
+            holder.moreButton.setBackground(moreBg);
+            holder.moreButton.setColorFilter(palette.getPrimaryTextColor(), android.graphics.PorterDuff.Mode.SRC_IN);
+        }
+
         String addressText = extractAddress(details);
         if (!addressText.isEmpty()) {
             holder.addressText.setVisibility(View.VISIBLE);

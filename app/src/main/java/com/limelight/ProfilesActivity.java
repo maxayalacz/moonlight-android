@@ -48,13 +48,48 @@ public class ProfilesActivity extends AppCompatActivity implements ProfilesManag
         // Register for profile changes
         ProfilesManager.getInstance().addListener(this);
 
+        applyThemeColors();
         updateUI();
+    }
+
+    private void applyThemeColors() {
+        com.limelight.ui.AppThemePalette palette = com.limelight.ui.AppThemePalette.getCurrent(this);
+        int primary = palette.getPrimaryTextColor();
+        int secondary = palette.getSecondaryTextColor();
+
+        View desc = findViewById(R.id.profilesDescription);
+        if (desc instanceof android.widget.TextView) {
+            UiHelper.applyLiquidGlassEffect(desc);
+            ((android.widget.TextView) desc).setTextColor(primary);
+        }
+        if (emptyState instanceof android.view.ViewGroup) {
+            UiHelper.applyLiquidGlassEffect(emptyState);
+            android.view.ViewGroup vg = (android.view.ViewGroup) emptyState;
+            for (int i = 0; i < vg.getChildCount(); i++) {
+                View child = vg.getChildAt(i);
+                if (child instanceof android.widget.TextView) {
+                    ((android.widget.TextView) child).setTextColor(i == 0 ? primary : secondary);
+                }
+            }
+        }
+        FloatingActionButton fab = findViewById(R.id.addProfileFab);
+        if (fab != null) {
+            fab.setStateListAnimator(null);
+            fab.setCompatElevation(0f);
+            fab.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
+                    palette.getFrostedCardTint(0x78000000)));
+            fab.setImageTintList(android.content.res.ColorStateList.valueOf(primary));
+        }
     }
 
     @Override
     protected void onResume() {
         super.onResume();
         UiHelper.refreshBackdrop(this);
+        applyThemeColors();
+        if (adapter != null) {
+            adapter.notifyDataSetChanged();
+        }
         UiHelper.restoreMenuForegroundIfNeeded(this);
     }
 
@@ -67,6 +102,7 @@ public class ProfilesActivity extends AppCompatActivity implements ProfilesManag
     public void onConfigurationChanged(android.content.res.Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
         UiHelper.applyReachabilitySpacing(this);
+        applyThemeColors();
     }
 
     @Override

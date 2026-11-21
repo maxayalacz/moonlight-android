@@ -49,12 +49,28 @@ public class ProfilesAdapter extends RecyclerView.Adapter<ProfilesAdapter.Profil
         SettingsProfile profile = profiles.get(position);
         SettingsProfile activeProfile = profilesManager.getActive();
 
+        com.limelight.ui.AppThemePalette palette = com.limelight.ui.AppThemePalette.getCurrent(context);
+        View cardSurface = holder.itemView.findViewById(R.id.profileCardContent);
+        UiHelper.applyFrostedCardBackground(
+                cardSurface != null ? cardSurface : holder.itemView,
+                com.limelight.ui.FlowingAuroraView.CornerMode.ALL,
+                28f,
+                0x52121826);
+
         holder.profileName.setText(profile.getName());
+        holder.profileName.setTextColor(palette.getPrimaryTextColor());
         holder.profileTimestamp.setText(DateUtils.getRelativeTimeSpanString(
             profile.getModifiedUtc(), System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS));
+        holder.profileTimestamp.setTextColor(palette.getSecondaryTextColor());
 
         boolean isActive = activeProfile != null && activeProfile.getUuid().equals(profile.getUuid());
         holder.profileActive.setChecked(isActive);
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+            holder.profileActive.setButtonTintList(android.content.res.ColorStateList.valueOf(
+                    isActive ? palette.getNeonAccent() : palette.getSecondaryTextColor()));
+        }
+        holder.editProfile.setColorFilter(palette.getPrimaryTextColor(), android.graphics.PorterDuff.Mode.SRC_IN);
+        holder.deleteProfile.setColorFilter(palette.getSecondaryTextColor(), android.graphics.PorterDuff.Mode.SRC_IN);
 
         // Set click listeners
         holder.profileActive.setOnClickListener(v -> {

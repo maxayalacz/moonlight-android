@@ -764,8 +764,8 @@
 
     <string name="backdrop_style_waves">Wave Ribbons (Jujo Ambience)</string>
 
-    <string name="title_color_scheme">Color Scheme</string>
-    <string name="summary_color_scheme">Choose the ambient palette used across backdrops, focus rings, and switches</string>
+    <string name="title_color_scheme">Theme</string>
+    <string name="summary_color_scheme">Choose a built-in preset or one of your saved custom themes</string>
     <string name="color_scheme_midnight">Midnight Blue</string>
     <string name="color_scheme_jujo">JUJO Purple</string>
     <string name="color_scheme_de_boosy">De Boosy</string>
@@ -886,10 +886,22 @@
     <string name="osc_editor_hide_btn">Hide</string>
     <string name="osc_editor_show_btn">Show</string>
     <string name="color_scheme_daylight">Frost Daylight (Light)</string>
-    <string name="color_scheme_custom">Custom Palette</string>
-    <string name="title_custom_palette">Customize Color Palette</string>
-    <string name="summary_custom_palette">Start from any preset, toggle Dark/Light base, auto-harmonize, or customize all 10 theme colors (including text, pop-ups &amp; outlines)</string>
+    <string name="color_scheme_custom">Custom Theme</string>
+    <string name="title_custom_palette">Custom Theme</string>
+    <string name="summary_custom_palette">Open the full-screen Theme Studio for colors, live blur &amp; tint, card outlines, PS Portal FX, and saved themes</string>
     <string name="custom_palette_start_preset">Start from Preset</string>
+    <string name="title_theme_studio">Custom Theme Studio</string>
+    <string name="theme_studio_applied">Theme applied</string>
+    <string name="theme_studio_tint_perf_hint">0% = crystal-clear glass • 100% = fully opaque (automatically disables live blur to save performance)</string>
+    <string name="theme_studio_no_saved_themes">No saved custom themes yet. Tap Save Theme to store your current design or Import from clipboard.</string>
+    <string name="theme_studio_save_title">Save Custom Theme</string>
+    <string name="theme_studio_saved_fmt">Saved \"%1$s\"</string>
+    <string name="theme_studio_loaded_fmt">Loaded \"%1$s\" into preview</string>
+    <string name="theme_studio_updated_fmt">Updated \"%1$s\"</string>
+    <string name="theme_studio_exported_clipboard">Theme copied to clipboard</string>
+    <string name="theme_studio_clipboard_empty">Clipboard is empty</string>
+    <string name="theme_studio_import_invalid">Clipboard does not contain a valid Moonlight theme JSON</string>
+    <string name="theme_studio_imported_fmt">Imported \"%1$s\" into preview</string>
     <string name="settings_title">Settings</string>
     <string name="settings_back">Back</string>
     <string name="settings_search_hint">Search settings…</string>

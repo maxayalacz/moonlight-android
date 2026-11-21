@@ -261,6 +261,13 @@ public class StreamSettings extends AppCompatActivity {
         super.onResume();
         UiHelper.refreshBackdrop(this);
         applySettingsChrome();
+        if (prefsFragment != null) {
+            prefsFragment.refreshThemePreferenceEntries();
+            androidx.recyclerview.widget.RecyclerView rv = prefsFragment.getListView();
+            if (rv != null && rv.getAdapter() != null) {
+                rv.getAdapter().notifyDataSetChanged();
+            }
+        }
         UiHelper.restoreMenuForegroundIfNeeded(this);
     }
 
@@ -620,6 +627,35 @@ public class StreamSettings extends AppCompatActivity {
             applyAccordionVisibility();
         }
 
+        public void refreshThemePreferenceEntries() {
+            if (getContext() == null) {
+                return;
+            }
+            ListPreference schemePref = findPreference(com.limelight.ui.AppThemePalette.PREF_COLOR_SCHEME);
+            if (schemePref == null) {
+                return;
+            }
+            java.util.List<CharSequence> entries = new java.util.ArrayList<>();
+            java.util.List<CharSequence> values = new java.util.ArrayList<>();
+            for (com.limelight.ui.AppThemePalette preset : com.limelight.ui.AppThemePalette.getPresets()) {
+                entries.add(preset.label);
+                values.add(preset.key);
+            }
+            for (com.limelight.ui.AppThemePalette.ThemeBundle saved : com.limelight.ui.AppThemePalette.loadSavedThemes(requireContext())) {
+                entries.add(saved.name);
+                values.add(com.limelight.ui.AppThemePalette.SAVED_THEME_PREFIX + saved.id);
+            }
+            entries.add(getString(R.string.color_scheme_custom));
+            values.add(com.limelight.ui.AppThemePalette.CUSTOM_THEME_KEY);
+
+            schemePref.setEntries(entries.toArray(new CharSequence[0]));
+            schemePref.setEntryValues(values.toArray(new CharSequence[0]));
+            String activeKey = PreferenceManager.getDefaultSharedPreferences(requireContext())
+                    .getString(com.limelight.ui.AppThemePalette.PREF_COLOR_SCHEME,
+                            com.limelight.ui.AppThemePalette.DEFAULT_THEME_KEY);
+            schemePref.setValue(activeKey);
+        }
+
         private static int getCategoryIconRes(String catKey) {
             if (catKey == null) {
                 return R.drawable.ic_settings;
@@ -856,12 +892,13 @@ public class StreamSettings extends AppCompatActivity {
                 private void applyValuePill(@NonNull androidx.preference.PreferenceViewHolder holder,
                                             @NonNull Preference pref,
                                             @NonNull com.limelight.ui.AppThemePalette palette) {
-                    View wf = holder.findViewById(android.R.id.widget_frame);
-                    if (!(wf instanceof ViewGroup)) {
+                    View titleView = holder.findViewById(android.R.id.title);
+                    View summaryView = holder.findViewById(android.R.id.summary);
+                    if (titleView == null || !(titleView.getParent() instanceof ViewGroup)) {
                         return;
                     }
-                    ViewGroup widgetFrame = (ViewGroup) wf;
-                    android.widget.TextView pill = widgetFrame.findViewWithTag("oneui_pref_value_pill");
+                    ViewGroup textColumn = (ViewGroup) titleView.getParent();
+                    android.widget.TextView pill = textColumn.findViewWithTag("oneui_pref_value_pill");
 
                     String pillText = null;
                     if (pref instanceof ListPreference) {
@@ -880,19 +917,41 @@ public class StreamSettings extends AppCompatActivity {
                         return;
                     }
 
-                    Context ctx = widgetFrame.getContext();
+                    Context ctx = textColumn.getContext();
                     if (pill == null) {
                         pill = new android.widget.TextView(ctx);
                         pill.setTag("oneui_pref_value_pill");
                         pill.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 11.5f);
                         pill.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-                        pill.setMaxLines(1);
-                        pill.setEllipsize(TextUtils.TruncateAt.END);
-                        pill.setMaxWidth(Math.round(UiHelper.dpToPx(ctx, 118f)));
+                        pill.setSingleLine(true);
                         int padH = Math.round(UiHelper.dpToPx(ctx, 10f));
-                        int padV = Math.round(UiHelper.dpToPx(ctx, 4.5f));
+                        int padV = Math.round(UiHelper.dpToPx(ctx, 4f));
                         pill.setPadding(padH, padV, padH, padV);
-                        widgetFrame.addView(pill);
+                        textColumn.addView(pill);
+                    }
+
+                    boolean summaryVisible = summaryView != null && summaryView.getVisibility() == View.VISIBLE
+                            && (summaryView instanceof android.widget.TextView)
+                            && !TextUtils.isEmpty(((android.widget.TextView) summaryView).getText());
+
+                    if (textColumn instanceof android.widget.RelativeLayout) {
+                        android.widget.RelativeLayout.LayoutParams rlp = new android.widget.RelativeLayout.LayoutParams(
+                                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                        rlp.addRule(android.widget.RelativeLayout.BELOW,
+                                summaryVisible ? android.R.id.summary : android.R.id.title);
+                        rlp.addRule(android.widget.RelativeLayout.ALIGN_START, android.R.id.title);
+                        rlp.topMargin = Math.round(UiHelper.dpToPx(ctx, 6f));
+                        pill.setLayoutParams(rlp);
+                    } else if (textColumn instanceof android.widget.LinearLayout) {
+                        android.widget.LinearLayout.LayoutParams llp = new android.widget.LinearLayout.LayoutParams(
+                                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                        llp.topMargin = Math.round(UiHelper.dpToPx(ctx, 6f));
+                        pill.setLayoutParams(llp);
+                    } else {
+                        ViewGroup.MarginLayoutParams mlp = new ViewGroup.MarginLayoutParams(
+                                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                        mlp.topMargin = Math.round(UiHelper.dpToPx(ctx, 6f));
+                        pill.setLayoutParams(mlp);
                     }
 
                     int neonAccent = palette.getNeonAccent();
@@ -906,7 +965,6 @@ public class StreamSettings extends AppCompatActivity {
                     pill.setTextColor(neonAccent);
                     pill.setText(pillText);
                     pill.setVisibility(View.VISIBLE);
-                    widgetFrame.setVisibility(View.VISIBLE);
                 }
 
                 private android.graphics.drawable.Drawable buildPillTrackDrawable(
@@ -1564,9 +1622,12 @@ public class StreamSettings extends AppCompatActivity {
                 });
             }
 
+            refreshThemePreferenceEntries();
             _pref = findPreference(com.limelight.ui.AppThemePalette.PREF_COLOR_SCHEME);
             if (_pref != null) {
                 _pref.setOnPreferenceChangeListener((preference, newValue) -> {
+                    String key = newValue != null ? newValue.toString() : com.limelight.ui.AppThemePalette.DEFAULT_THEME_KEY;
+                    com.limelight.ui.AppThemePalette.onThemeKeySelected(requireActivity(), key);
                     requireView().post(() -> {
                         UiHelper.refreshBackdrop(requireActivity());
                         if (getActivity() instanceof StreamSettings) {
@@ -1584,21 +1645,8 @@ public class StreamSettings extends AppCompatActivity {
             _pref = findPreference("pref_custom_palette");
             if (_pref != null) {
                 _pref.setOnPreferenceClickListener(preference -> {
-                    com.limelight.ui.CustomPaletteDialog.show(requireActivity(), () -> {
-                        androidx.preference.ListPreference schemePref =
-                                findPreference(com.limelight.ui.AppThemePalette.PREF_COLOR_SCHEME);
-                        if (schemePref != null) {
-                            schemePref.setValue(com.limelight.ui.AppThemePalette.CUSTOM_THEME_KEY);
-                        }
-                        UiHelper.refreshBackdrop(requireActivity());
-                        if (getActivity() instanceof StreamSettings) {
-                            ((StreamSettings) getActivity()).applySettingsChrome();
-                        }
-                        androidx.recyclerview.widget.RecyclerView rv = getListView();
-                        if (rv != null && rv.getAdapter() != null) {
-                            rv.getAdapter().notifyDataSetChanged();
-                        }
-                    });
+                    Intent intent = new Intent(requireActivity(), com.limelight.ui.ThemeStudioActivity.class);
+                    UiHelper.startMenuActivityWithDepth(requireActivity(), intent);
                     return true;
                 });
             }

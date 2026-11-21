@@ -440,6 +440,15 @@ public class AppView extends AppCompatActivity implements AdapterFragmentCallbac
         if (profilesButton == null) {
             return;
         }
+        com.limelight.ui.AppThemePalette palette = com.limelight.ui.AppThemePalette.getCurrent(this);
+        profilesButton.setStateListAnimator(null);
+        profilesButton.setElevation(0f);
+        profilesButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
+                palette.getFrostedCardTint(0x78000000)));
+        profilesButton.setStrokeColor(android.content.res.ColorStateList.valueOf(palette.getCardRimColor()));
+        profilesButton.setIconTint(android.content.res.ColorStateList.valueOf(palette.getPrimaryTextColor()));
+        profilesButton.setTextColor(palette.getPrimaryTextColor());
+
         String activeProfileName = ProfilesManager.getInstance().getActiveName();
         if (activeProfileName.isEmpty()) {
             profilesButton.shrink();

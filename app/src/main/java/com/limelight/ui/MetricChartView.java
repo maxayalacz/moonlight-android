@@ -90,6 +90,9 @@ public class MetricChartView extends View {
         this.fixedMaxY = fixedMaxY;
         this.shaderWidth = -1;
         this.pathDirty = true;
+        AppThemePalette palette = AppThemePalette.getCurrent(getContext());
+        gridPaint.setColor(palette.getDividerColor());
+        labelPaint.setColor(AppThemePalette.withAlpha(palette.getSecondaryTextColor(), 0.78f));
         invalidate();
     }
 

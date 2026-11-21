@@ -84,8 +84,11 @@ public class PreferenceConfiguration {
     public static final String PORTAL_WINDOW_SCALE_PREF_STRING = "seekbar_portal_window_scale";
     public static final String PORTAL_GLOW_INTENSITY_PREF_STRING = "seekbar_portal_glow_intensity";
     public static final String PORTAL_PARTICLE_BRIGHTNESS_PREF_STRING = "seekbar_portal_particle_brightness";
+    public static final String PORTAL_PARTICLE_SIZE_PREF_STRING = "seekbar_portal_particle_size";
+    public static final String PORTAL_PARTICLE_DENSITY_PREF_STRING = "seekbar_portal_particle_density";
     public static final String PORTAL_SONAR_SPEED_PREF_STRING = "seekbar_portal_sonar_speed";
     public static final String BLUR_AMOUNT_PREF_STRING = "seekbar_blur_amount";
+    public static final String FROSTED_TINT_AMOUNT_PREF_STRING = "seekbar_frosted_tint_amount";
     public static final String BG_QUALITY_PREF_STRING = "list_bg_quality";
     public static final String OSC_OUTLINE_THICKNESS_PREF_STRING = "seekbar_osc_outline_thickness";
     public static final String CARD_OUTLINE_THICKNESS_PREF_STRING = "seekbar_card_outline_thickness";
@@ -99,8 +102,11 @@ public class PreferenceConfiguration {
     public static final int DEFAULT_PORTAL_WINDOW_SCALE = 100;
     public static final int DEFAULT_PORTAL_GLOW_INTENSITY = 100;
     public static final int DEFAULT_PORTAL_PARTICLE_BRIGHTNESS = 100;
+    public static final int DEFAULT_PORTAL_PARTICLE_SIZE = 100;
+    public static final int DEFAULT_PORTAL_PARTICLE_DENSITY = 100;
     public static final int DEFAULT_PORTAL_SONAR_SPEED = 100;
     public static final int DEFAULT_BLUR_AMOUNT = 100;
+    public static final int DEFAULT_FROSTED_TINT_AMOUNT = 35;
     public static final String DEFAULT_BG_QUALITY = "720";
     public static final int DEFAULT_OSC_OUTLINE_THICKNESS = 100;
     public static final int DEFAULT_CARD_OUTLINE_THICKNESS = 100;
@@ -321,8 +327,11 @@ public class PreferenceConfiguration {
     public int portalWindowScalePercent;
     public int portalGlowIntensityPercent;
     public int portalParticleBrightnessPercent;
+    public int portalParticleSizePercent;
+    public int portalParticleDensityPercent;
     public int portalSonarSpeedPercent;
     public int blurAmountPercent;
+    public int frostedTintAmountPercent;
     public int bgQualityMaxShortEdge;
     public int oscOutlineThicknessPercent;
     public int cardOutlineThicknessPercent;
@@ -990,8 +999,11 @@ private static int getFramePacingValue(Context context) {
         config.portalWindowScalePercent = prefs.getInt(PORTAL_WINDOW_SCALE_PREF_STRING, DEFAULT_PORTAL_WINDOW_SCALE);
         config.portalGlowIntensityPercent = prefs.getInt(PORTAL_GLOW_INTENSITY_PREF_STRING, DEFAULT_PORTAL_GLOW_INTENSITY);
         config.portalParticleBrightnessPercent = prefs.getInt(PORTAL_PARTICLE_BRIGHTNESS_PREF_STRING, DEFAULT_PORTAL_PARTICLE_BRIGHTNESS);
+        config.portalParticleSizePercent = prefs.getInt(PORTAL_PARTICLE_SIZE_PREF_STRING, DEFAULT_PORTAL_PARTICLE_SIZE);
+        config.portalParticleDensityPercent = prefs.getInt(PORTAL_PARTICLE_DENSITY_PREF_STRING, DEFAULT_PORTAL_PARTICLE_DENSITY);
         config.portalSonarSpeedPercent = prefs.getInt(PORTAL_SONAR_SPEED_PREF_STRING, DEFAULT_PORTAL_SONAR_SPEED);
         config.blurAmountPercent = prefs.getInt(BLUR_AMOUNT_PREF_STRING, DEFAULT_BLUR_AMOUNT);
+        config.frostedTintAmountPercent = prefs.getInt(FROSTED_TINT_AMOUNT_PREF_STRING, -1);
         try {
             config.bgQualityMaxShortEdge = Integer.parseInt(prefs.getString(BG_QUALITY_PREF_STRING, DEFAULT_BG_QUALITY));
         } catch (NumberFormatException e) {

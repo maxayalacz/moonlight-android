@@ -5,17 +5,34 @@ import android.content.SharedPreferences;
 import android.graphics.Color;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.preference.PreferenceManager;
 
+import com.limelight.preferences.PreferenceConfiguration;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.UUID;
+
 /**
- * Color palette system supporting Default Dark (Midnight), Full Light Mode (Frost Daylight),
- * 3 curated dark themes (Cyberpunk Neon, Emerald Forest, Ember Sunset), and a 10-channel
- * customizable user palette with preset base seeding, Dark/Light base, and Auto-Harmonize.
+ * Full Theme & Palette system supporting:
+ * - 5 built-in presets (Midnight Blue, Frost Daylight Light, Cyberpunk Neon, Emerald Forest, Ember Sunset)
+ * - 10-channel Custom Theme (Accent, Background, Surface, Popup Tint, Primary Text, Secondary Text,
+ *   Card Outline, Highlight, Particles, Ring)
+ * - Frosted Card Tint Amount (0-100%, where 100% is fully opaque and automatically disables live blur)
+ * - Saved Custom Theme bundles (colors + glass/blur/outline + full Portal FX) with clipboard JSON import/export.
  */
 public final class AppThemePalette {
     public static final String PREF_COLOR_SCHEME = "list_color_scheme";
     public static final String DEFAULT_THEME_KEY = "midnight";
     public static final String CUSTOM_THEME_KEY = "custom";
+    public static final String SAVED_THEME_PREFIX = "saved:";
+    public static final String PREF_SAVED_THEMES_JSON = "saved_custom_themes_v1";
 
     public static final String PREF_CUSTOM_IS_LIGHT = "custom_palette_is_light";
     public static final String PREF_CUSTOM_BG = "custom_palette_bg";
@@ -48,6 +65,7 @@ public final class AppThemePalette {
     public final int warm;
     public final int particleColor;
     public final int ringColor;
+    public final int frostedTintAmount; // 0..100 (-1 = use preset balanced default)
 
     public static final class CustomPaletteSpec {
         public boolean isLight;
@@ -88,6 +106,164 @@ public final class AppThemePalette {
         }
     }
 
+    /**
+     * Complete portable theme bundle (colors + glass/blur/outline + Portal FX) used by
+     * ThemeStudioActivity, Saved Custom Themes, and Clipboard JSON Import/Export.
+     */
+    public static final class ThemeBundle {
+        public String id;
+        public String name;
+        public CustomPaletteSpec colors;
+        public int blurAmountPercent;
+        public int frostedTintAmountPercent; // 0..100 (100 = fully opaque + disables live blur)
+        public int cardOutlineThicknessPercent;
+        public String bgQuality;
+        public int portalParticleBrightnessPercent;
+        public int portalParticleSizePercent;
+        public int portalParticleDensityPercent;
+        public int portalGlowIntensityPercent;
+        public int portalWindowScalePercent;
+        public int portalSonarSpeedPercent;
+        public int portalReadyMs;
+        public int portalPreviewFadeMs;
+        public int portalPreviewHoldMs;
+        public int portalExpandMs;
+        public int portalDisconnectMs;
+        public int portalLaunchCloseMs;
+
+        public ThemeBundle(@NonNull String id, @NonNull String name, @NonNull CustomPaletteSpec colors) {
+            this.id = id;
+            this.name = name;
+            this.colors = colors;
+            this.blurAmountPercent = PreferenceConfiguration.DEFAULT_BLUR_AMOUNT;
+            this.frostedTintAmountPercent = colors.isLight ? 76 : PreferenceConfiguration.DEFAULT_FROSTED_TINT_AMOUNT;
+            this.cardOutlineThicknessPercent = PreferenceConfiguration.DEFAULT_CARD_OUTLINE_THICKNESS;
+            this.bgQuality = PreferenceConfiguration.DEFAULT_BG_QUALITY;
+            this.portalParticleBrightnessPercent = PreferenceConfiguration.DEFAULT_PORTAL_PARTICLE_BRIGHTNESS;
+            this.portalParticleSizePercent = PreferenceConfiguration.DEFAULT_PORTAL_PARTICLE_SIZE;
+            this.portalParticleDensityPercent = PreferenceConfiguration.DEFAULT_PORTAL_PARTICLE_DENSITY;
+            this.portalGlowIntensityPercent = PreferenceConfiguration.DEFAULT_PORTAL_GLOW_INTENSITY;
+            this.portalWindowScalePercent = PreferenceConfiguration.DEFAULT_PORTAL_WINDOW_SCALE;
+            this.portalSonarSpeedPercent = PreferenceConfiguration.DEFAULT_PORTAL_SONAR_SPEED;
+            this.portalReadyMs = PreferenceConfiguration.DEFAULT_PORTAL_READY_MS;
+            this.portalPreviewFadeMs = PreferenceConfiguration.DEFAULT_PORTAL_PREVIEW_FADE_MS;
+            this.portalPreviewHoldMs = PreferenceConfiguration.DEFAULT_PORTAL_PREVIEW_HOLD_MS;
+            this.portalExpandMs = PreferenceConfiguration.DEFAULT_PORTAL_EXPAND_MS;
+            this.portalDisconnectMs = PreferenceConfiguration.DEFAULT_PORTAL_DISCONNECT_MS;
+            this.portalLaunchCloseMs = PreferenceConfiguration.DEFAULT_PORTAL_LAUNCH_CLOSE_MS;
+        }
+
+        @NonNull
+        public JSONObject toJsonObject() throws JSONException {
+            JSONObject obj = new JSONObject();
+            obj.put("v", 1);
+            obj.put("id", id != null ? id : UUID.randomUUID().toString());
+            obj.put("name", name != null ? name : "Custom Theme");
+            obj.put("isLight", colors.isLight);
+            obj.put("bg", hex(colors.background));
+            obj.put("surface", hex(colors.surface));
+            obj.put("popup", hex(colors.popupTint));
+            obj.put("accent", hex(colors.accent));
+            obj.put("highlight", hex(colors.highlight));
+            obj.put("textPrimary", hex(colors.primaryText));
+            obj.put("textSecondary", hex(colors.secondaryText));
+            obj.put("outline", hex(colors.cardOutline));
+            obj.put("particle", hex(colors.particleColor));
+            obj.put("ring", hex(colors.ringColor));
+            obj.put("blur", blurAmountPercent);
+            obj.put("tint", frostedTintAmountPercent);
+            obj.put("cardOutlinePx", cardOutlineThicknessPercent);
+            obj.put("bgQuality", bgQuality != null ? bgQuality : PreferenceConfiguration.DEFAULT_BG_QUALITY);
+            obj.put("pBright", portalParticleBrightnessPercent);
+            obj.put("pSize", portalParticleSizePercent);
+            obj.put("pDensity", portalParticleDensityPercent);
+            obj.put("glow", portalGlowIntensityPercent);
+            obj.put("scale", portalWindowScalePercent);
+            obj.put("sonar", portalSonarSpeedPercent);
+            obj.put("readyMs", portalReadyMs);
+            obj.put("fadeMs", portalPreviewFadeMs);
+            obj.put("holdMs", portalPreviewHoldMs);
+            obj.put("expandMs", portalExpandMs);
+            obj.put("discMs", portalDisconnectMs);
+            obj.put("launchMs", portalLaunchCloseMs);
+            return obj;
+        }
+
+        @NonNull
+        public String toJsonString() {
+            try {
+                return toJsonObject().toString();
+            } catch (JSONException e) {
+                return "{}";
+            }
+        }
+
+        @Nullable
+        public static ThemeBundle fromJsonObject(@Nullable JSONObject obj) {
+            if (obj == null) {
+                return null;
+            }
+            try {
+                boolean isLight = obj.optBoolean("isLight", false);
+                int accent = parseColorOr(obj.optString("accent", ""), 0xFF3B6EF5);
+                CustomPaletteSpec def = harmonizeFromAccent(accent, isLight);
+                CustomPaletteSpec spec = new CustomPaletteSpec(
+                        isLight,
+                        parseColorOr(obj.optString("bg", ""), def.background),
+                        parseColorOr(obj.optString("surface", ""), def.surface),
+                        parseColorOr(obj.optString("popup", ""), def.popupTint),
+                        accent,
+                        parseColorOr(obj.optString("highlight", ""), def.highlight),
+                        parseColorOr(obj.optString("textPrimary", ""), def.primaryText),
+                        parseColorOr(obj.optString("textSecondary", ""), def.secondaryText),
+                        parseColorOr(obj.optString("outline", ""), def.cardOutline),
+                        parseColorOr(obj.optString("particle", ""), def.particleColor),
+                        parseColorOr(obj.optString("ring", ""), def.ringColor)
+                );
+                String id = obj.optString("id", "");
+                if (id.trim().isEmpty()) {
+                    id = UUID.randomUUID().toString();
+                }
+                String name = obj.optString("name", "Imported Theme").trim();
+                if (name.isEmpty()) {
+                    name = "Imported Theme";
+                }
+                ThemeBundle b = new ThemeBundle(id, name, spec);
+                b.blurAmountPercent = clamp(obj.optInt("blur", PreferenceConfiguration.DEFAULT_BLUR_AMOUNT), 0, 200);
+                b.frostedTintAmountPercent = clamp(obj.optInt("tint", isLight ? 76 : PreferenceConfiguration.DEFAULT_FROSTED_TINT_AMOUNT), 0, 100);
+                b.cardOutlineThicknessPercent = clamp(obj.optInt("cardOutlinePx", PreferenceConfiguration.DEFAULT_CARD_OUTLINE_THICKNESS), 0, 250);
+                b.bgQuality = obj.optString("bgQuality", PreferenceConfiguration.DEFAULT_BG_QUALITY);
+                b.portalParticleBrightnessPercent = clamp(obj.optInt("pBright", PreferenceConfiguration.DEFAULT_PORTAL_PARTICLE_BRIGHTNESS), 0, 400);
+                b.portalParticleSizePercent = clamp(obj.optInt("pSize", PreferenceConfiguration.DEFAULT_PORTAL_PARTICLE_SIZE), 25, 400);
+                b.portalParticleDensityPercent = clamp(obj.optInt("pDensity", PreferenceConfiguration.DEFAULT_PORTAL_PARTICLE_DENSITY), 25, 400);
+                b.portalGlowIntensityPercent = clamp(obj.optInt("glow", PreferenceConfiguration.DEFAULT_PORTAL_GLOW_INTENSITY), 20, 250);
+                b.portalWindowScalePercent = clamp(obj.optInt("scale", PreferenceConfiguration.DEFAULT_PORTAL_WINDOW_SCALE), 60, 150);
+                b.portalSonarSpeedPercent = clamp(obj.optInt("sonar", PreferenceConfiguration.DEFAULT_PORTAL_SONAR_SPEED), 20, 250);
+                b.portalReadyMs = clamp(obj.optInt("readyMs", PreferenceConfiguration.DEFAULT_PORTAL_READY_MS), 100, 1000);
+                b.portalPreviewFadeMs = clamp(obj.optInt("fadeMs", PreferenceConfiguration.DEFAULT_PORTAL_PREVIEW_FADE_MS), 100, 1200);
+                b.portalPreviewHoldMs = clamp(obj.optInt("holdMs", PreferenceConfiguration.DEFAULT_PORTAL_PREVIEW_HOLD_MS), 0, 2000);
+                b.portalExpandMs = clamp(obj.optInt("expandMs", PreferenceConfiguration.DEFAULT_PORTAL_EXPAND_MS), 150, 1500);
+                b.portalDisconnectMs = clamp(obj.optInt("discMs", PreferenceConfiguration.DEFAULT_PORTAL_DISCONNECT_MS), 300, 2500);
+                b.portalLaunchCloseMs = clamp(obj.optInt("launchMs", PreferenceConfiguration.DEFAULT_PORTAL_LAUNCH_CLOSE_MS), 150, 1200);
+                return b;
+            } catch (Exception e) {
+                return null;
+            }
+        }
+
+        @Nullable
+        public static ThemeBundle fromJsonString(@Nullable String raw) {
+            if (raw == null || raw.trim().isEmpty()) {
+                return null;
+            }
+            try {
+                return fromJsonObject(new JSONObject(raw.trim()));
+            } catch (JSONException e) {
+                return null;
+            }
+        }
+    }
+
     private AppThemePalette(
             String key,
             String label,
@@ -107,7 +283,8 @@ public final class AppThemePalette {
             int muted,
             int warm,
             int particleColor,
-            int ringColor) {
+            int ringColor,
+            int frostedTintAmount) {
         this.key = key;
         this.label = label;
         this.shortLabel = shortLabel;
@@ -127,6 +304,7 @@ public final class AppThemePalette {
         this.warm = warm;
         this.particleColor = particleColor;
         this.ringColor = ringColor;
+        this.frostedTintAmount = frostedTintAmount;
     }
 
     // 1. Default Dark — Midnight Blue (original PS Portal cosmic aesthetic)
@@ -149,7 +327,8 @@ public final class AppThemePalette {
             0xFF193860,
             0xFF2EA043,
             0xFF8AA8FF,
-            0xFF5C72FF
+            0xFF5C72FF,
+            -1
     );
 
     // 2. Full Light Mode — Frost Daylight
@@ -172,7 +351,8 @@ public final class AppThemePalette {
             0xFFCBD9EE,
             0xFF10B981,
             0xFF4F7CF2,
-            0xFF2563EB
+            0xFF2563EB,
+            -1
     );
 
     // 3. Curated Dark #1 — Cyberpunk Neon
@@ -195,7 +375,8 @@ public final class AppThemePalette {
             0xFF33113B,
             0xFFFFE000,
             0xFF00E5FF,
-            0xFFFF2D95
+            0xFFFF2D95,
+            -1
     );
 
     // 4. Curated Dark #2 — Emerald Forest
@@ -218,7 +399,8 @@ public final class AppThemePalette {
             0xFF1B4332,
             0xFFF59E0B,
             0xFF6EE7B7,
-            0xFF10B981
+            0xFF10B981,
+            -1
     );
 
     // 5. Curated Dark #3 — Ember Sunset
@@ -241,7 +423,8 @@ public final class AppThemePalette {
             0xFF4A2214,
             0xFFFF5072,
             0xFFFDBA74,
-            0xFFF97316
+            0xFFF97316,
+            -1
     );
 
     private static final AppThemePalette[] PRESETS = {
@@ -273,10 +456,52 @@ public final class AppThemePalette {
     public static AppThemePalette getCurrent(@NonNull Context context) {
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
         String key = prefs.getString(PREF_COLOR_SCHEME, DEFAULT_THEME_KEY);
-        if (CUSTOM_THEME_KEY.equals(key)) {
-            return buildCustomPalette(loadCustomSpec(context));
+        int savedTint = prefs.getInt(PreferenceConfiguration.FROSTED_TINT_AMOUNT_PREF_STRING, -1);
+
+        if (key != null && key.startsWith(SAVED_THEME_PREFIX)) {
+            String id = key.substring(SAVED_THEME_PREFIX.length());
+            ThemeBundle found = findSavedThemeById(context, id);
+            if (found != null) {
+                return buildCustomPalette(found.colors, key, found.name, found.frostedTintAmountPercent);
+            }
         }
-        return fromKey(key);
+        if (CUSTOM_THEME_KEY.equals(key)) {
+            return buildCustomPalette(loadCustomSpec(context), CUSTOM_THEME_KEY, "Custom", savedTint);
+        }
+        AppThemePalette preset = fromKey(key);
+        if (savedTint >= 0) {
+            return preset.withFrostedTintAmount(savedTint);
+        }
+        return preset;
+    }
+
+    @NonNull
+    public AppThemePalette withFrostedTintAmount(int tintAmount) {
+        return new AppThemePalette(
+                key, label, shortLabel, isLight, background, surface, popupTint,
+                accent, accentLight, secondary, highlight, primaryText, secondaryText,
+                cardOutline, surfaceVariant, muted, warm, particleColor, ringColor,
+                clamp(tintAmount, 0, 100));
+    }
+
+    /**
+     * Returns true when live frosted blur should actively render (blurAmount > 0 AND tint < 100%).
+     * At 100% tint, cards are completely opaque so live blur is skipped to save GPU/CPU performance.
+     */
+    public static boolean isLiveBlurEffective(@NonNull Context context) {
+        PreferenceConfiguration cfg = PreferenceConfiguration.readPreferences(context);
+        if (cfg.blurAmountPercent <= 0) {
+            return false;
+        }
+        AppThemePalette palette = getCurrent(context);
+        return palette.getEffectiveTintAmount() < 100;
+    }
+
+    public int getEffectiveTintAmount() {
+        if (frostedTintAmount >= 0) {
+            return clamp(frostedTintAmount, 0, 100);
+        }
+        return isLight ? 76 : PreferenceConfiguration.DEFAULT_FROSTED_TINT_AMOUNT;
     }
 
     @NonNull
@@ -332,6 +557,184 @@ public final class AppThemePalette {
                 .putInt(PREF_CUSTOM_CARD_OUTLINE, spec.cardOutline | 0xFF000000)
                 .putInt(PREF_CUSTOM_PARTICLE, spec.particleColor | 0xFF000000)
                 .putInt(PREF_CUSTOM_RING, spec.ringColor | 0xFF000000)
+                .apply();
+    }
+
+    /**
+     * Loads the currently active full ThemeBundle (combining current palette + glass + Portal FX prefs).
+     */
+    @NonNull
+    public static ThemeBundle loadActiveBundle(@NonNull Context context) {
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+        PreferenceConfiguration cfg = PreferenceConfiguration.readPreferences(context);
+        AppThemePalette current = getCurrent(context);
+        String key = prefs.getString(PREF_COLOR_SCHEME, DEFAULT_THEME_KEY);
+
+        if (key != null && key.startsWith(SAVED_THEME_PREFIX)) {
+            ThemeBundle saved = findSavedThemeById(context, key.substring(SAVED_THEME_PREFIX.length()));
+            if (saved != null) {
+                return saved;
+            }
+        }
+
+        CustomPaletteSpec spec = CUSTOM_THEME_KEY.equals(key)
+                ? loadCustomSpec(context)
+                : specFromPreset(current);
+        ThemeBundle b = new ThemeBundle(UUID.randomUUID().toString(), current.label, spec);
+        b.blurAmountPercent = clamp(cfg.blurAmountPercent, 0, 200);
+        b.frostedTintAmountPercent = current.getEffectiveTintAmount();
+        b.cardOutlineThicknessPercent = clamp(cfg.cardOutlineThicknessPercent, 0, 250);
+        b.bgQuality = prefs.getString(PreferenceConfiguration.BG_QUALITY_PREF_STRING, PreferenceConfiguration.DEFAULT_BG_QUALITY);
+        b.portalParticleBrightnessPercent = clamp(cfg.portalParticleBrightnessPercent, 0, 400);
+        b.portalParticleSizePercent = clamp(cfg.portalParticleSizePercent, 25, 400);
+        b.portalParticleDensityPercent = clamp(cfg.portalParticleDensityPercent, 25, 400);
+        b.portalGlowIntensityPercent = clamp(cfg.portalGlowIntensityPercent, 20, 250);
+        b.portalWindowScalePercent = clamp(cfg.portalWindowScalePercent, 60, 150);
+        b.portalSonarSpeedPercent = clamp(cfg.portalSonarSpeedPercent, 20, 250);
+        b.portalReadyMs = clamp(cfg.portalReadyMs, 100, 1000);
+        b.portalPreviewFadeMs = clamp(cfg.portalPreviewFadeMs, 100, 1200);
+        b.portalPreviewHoldMs = clamp(cfg.portalPreviewHoldMs, 0, 2000);
+        b.portalExpandMs = clamp(cfg.portalExpandMs, 150, 1500);
+        b.portalDisconnectMs = clamp(cfg.portalDisconnectMs, 300, 2500);
+        b.portalLaunchCloseMs = clamp(cfg.portalLaunchCloseMs, 150, 1200);
+        return b;
+    }
+
+    /**
+     * Applies a full ThemeBundle to SharedPreferences and sets the active theme key.
+     */
+    public static void applyThemeBundle(@NonNull Context context, @NonNull ThemeBundle bundle, @NonNull String targetKey) {
+        SharedPreferences.Editor ed = PreferenceManager.getDefaultSharedPreferences(context).edit();
+        ed.putString(PREF_COLOR_SCHEME, targetKey);
+        ed.putBoolean(PREF_CUSTOM_IS_LIGHT, bundle.colors.isLight);
+        ed.putInt(PREF_CUSTOM_BG, bundle.colors.background | 0xFF000000);
+        ed.putInt(PREF_CUSTOM_SURFACE, bundle.colors.surface | 0xFF000000);
+        ed.putInt(PREF_CUSTOM_POPUP_TINT, bundle.colors.popupTint | 0xFF000000);
+        ed.putInt(PREF_CUSTOM_ACCENT, bundle.colors.accent | 0xFF000000);
+        ed.putInt(PREF_CUSTOM_HIGHLIGHT, bundle.colors.highlight | 0xFF000000);
+        ed.putInt(PREF_CUSTOM_TEXT_PRIMARY, bundle.colors.primaryText | 0xFF000000);
+        ed.putInt(PREF_CUSTOM_TEXT_SECONDARY, bundle.colors.secondaryText | 0xFF000000);
+        ed.putInt(PREF_CUSTOM_CARD_OUTLINE, bundle.colors.cardOutline | 0xFF000000);
+        ed.putInt(PREF_CUSTOM_PARTICLE, bundle.colors.particleColor | 0xFF000000);
+        ed.putInt(PREF_CUSTOM_RING, bundle.colors.ringColor | 0xFF000000);
+
+        ed.putInt(PreferenceConfiguration.BLUR_AMOUNT_PREF_STRING, clamp(bundle.blurAmountPercent, 0, 200));
+        ed.putInt(PreferenceConfiguration.FROSTED_TINT_AMOUNT_PREF_STRING, clamp(bundle.frostedTintAmountPercent, 0, 100));
+        ed.putInt(PreferenceConfiguration.CARD_OUTLINE_THICKNESS_PREF_STRING, clamp(bundle.cardOutlineThicknessPercent, 0, 250));
+        if (bundle.bgQuality != null) {
+            ed.putString(PreferenceConfiguration.BG_QUALITY_PREF_STRING, bundle.bgQuality);
+        }
+        ed.putInt(PreferenceConfiguration.PORTAL_PARTICLE_BRIGHTNESS_PREF_STRING, clamp(bundle.portalParticleBrightnessPercent, 0, 400));
+        ed.putInt(PreferenceConfiguration.PORTAL_PARTICLE_SIZE_PREF_STRING, clamp(bundle.portalParticleSizePercent, 25, 400));
+        ed.putInt(PreferenceConfiguration.PORTAL_PARTICLE_DENSITY_PREF_STRING, clamp(bundle.portalParticleDensityPercent, 25, 400));
+        ed.putInt(PreferenceConfiguration.PORTAL_GLOW_INTENSITY_PREF_STRING, clamp(bundle.portalGlowIntensityPercent, 20, 250));
+        ed.putInt(PreferenceConfiguration.PORTAL_WINDOW_SCALE_PREF_STRING, clamp(bundle.portalWindowScalePercent, 60, 150));
+        ed.putInt(PreferenceConfiguration.PORTAL_SONAR_SPEED_PREF_STRING, clamp(bundle.portalSonarSpeedPercent, 20, 250));
+        ed.putInt(PreferenceConfiguration.PORTAL_READY_MS_PREF_STRING, clamp(bundle.portalReadyMs, 100, 1000));
+        ed.putInt(PreferenceConfiguration.PORTAL_PREVIEW_FADE_MS_PREF_STRING, clamp(bundle.portalPreviewFadeMs, 100, 1200));
+        ed.putInt(PreferenceConfiguration.PORTAL_PREVIEW_HOLD_MS_PREF_STRING, clamp(bundle.portalPreviewHoldMs, 0, 2000));
+        ed.putInt(PreferenceConfiguration.PORTAL_EXPAND_MS_PREF_STRING, clamp(bundle.portalExpandMs, 150, 1500));
+        ed.putInt(PreferenceConfiguration.PORTAL_DISCONNECT_MS_PREF_STRING, clamp(bundle.portalDisconnectMs, 300, 2500));
+        ed.putInt(PreferenceConfiguration.PORTAL_LAUNCH_CLOSE_MS_PREF_STRING, clamp(bundle.portalLaunchCloseMs, 150, 1200));
+        ed.apply();
+    }
+
+    /**
+     * When the user selects a saved theme directly from Settings' Theme list, apply all of its
+     * glass/blur/outline/Portal FX parameters as well.
+     */
+    public static void onThemeKeySelected(@NonNull Context context, @Nullable String key) {
+        if (key != null && key.startsWith(SAVED_THEME_PREFIX)) {
+            ThemeBundle saved = findSavedThemeById(context, key.substring(SAVED_THEME_PREFIX.length()));
+            if (saved != null) {
+                applyThemeBundle(context, saved, key);
+            }
+        } else if (key != null && !CUSTOM_THEME_KEY.equals(key)) {
+            // Built-in preset selected: reset frosted tint to balanced default for that preset's Light/Dark mode
+            AppThemePalette preset = fromKey(key);
+            PreferenceManager.getDefaultSharedPreferences(context)
+                    .edit()
+                    .putInt(PreferenceConfiguration.FROSTED_TINT_AMOUNT_PREF_STRING,
+                            preset.isLight ? 76 : PreferenceConfiguration.DEFAULT_FROSTED_TINT_AMOUNT)
+                    .apply();
+        }
+    }
+
+    @NonNull
+    public static List<ThemeBundle> loadSavedThemes(@NonNull Context context) {
+        List<ThemeBundle> result = new ArrayList<>();
+        String raw = PreferenceManager.getDefaultSharedPreferences(context)
+                .getString(PREF_SAVED_THEMES_JSON, "[]");
+        if (raw == null || raw.trim().isEmpty()) {
+            return result;
+        }
+        try {
+            JSONArray arr = new JSONArray(raw);
+            for (int i = 0; i < arr.length(); i++) {
+                ThemeBundle b = ThemeBundle.fromJsonObject(arr.optJSONObject(i));
+                if (b != null) {
+                    result.add(b);
+                }
+            }
+        } catch (JSONException ignored) {
+        }
+        return result;
+    }
+
+    @Nullable
+    public static ThemeBundle findSavedThemeById(@NonNull Context context, @Nullable String id) {
+        if (id == null || id.isEmpty()) {
+            return null;
+        }
+        for (ThemeBundle b : loadSavedThemes(context)) {
+            if (id.equals(b.id)) {
+                return b;
+            }
+        }
+        return null;
+    }
+
+    public static void saveOrUpdateTheme(@NonNull Context context, @NonNull ThemeBundle bundle) {
+        List<ThemeBundle> list = loadSavedThemes(context);
+        boolean replaced = false;
+        for (int i = 0; i < list.size(); i++) {
+            if (bundle.id != null && bundle.id.equals(list.get(i).id)) {
+                list.set(i, bundle);
+                replaced = true;
+                break;
+            }
+        }
+        if (!replaced) {
+            list.add(0, bundle);
+        }
+        persistSavedThemes(context, list);
+    }
+
+    public static void deleteSavedTheme(@NonNull Context context, @NonNull String id) {
+        List<ThemeBundle> list = loadSavedThemes(context);
+        for (int i = list.size() - 1; i >= 0; i--) {
+            if (id.equals(list.get(i).id)) {
+                list.remove(i);
+            }
+        }
+        persistSavedThemes(context, list);
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+        if ((SAVED_THEME_PREFIX + id).equals(prefs.getString(PREF_COLOR_SCHEME, DEFAULT_THEME_KEY))) {
+            prefs.edit().putString(PREF_COLOR_SCHEME, CUSTOM_THEME_KEY).apply();
+        }
+    }
+
+    private static void persistSavedThemes(@NonNull Context context, @NonNull List<ThemeBundle> list) {
+        JSONArray arr = new JSONArray();
+        for (ThemeBundle b : list) {
+            try {
+                arr.put(b.toJsonObject());
+            } catch (JSONException ignored) {
+            }
+        }
+        PreferenceManager.getDefaultSharedPreferences(context)
+                .edit()
+                .putString(PREF_SAVED_THEMES_JSON, arr.toString())
                 .apply();
     }
 
@@ -394,6 +797,20 @@ public final class AppThemePalette {
 
     @NonNull
     public static AppThemePalette buildCustomPalette(@NonNull CustomPaletteSpec spec) {
+        return buildCustomPalette(spec, CUSTOM_THEME_KEY, "Custom", -1);
+    }
+
+    @NonNull
+    public static AppThemePalette buildCustomPalette(@NonNull CustomPaletteSpec spec, int frostedTintAmount) {
+        return buildCustomPalette(spec, CUSTOM_THEME_KEY, "Custom", frostedTintAmount);
+    }
+
+    @NonNull
+    public static AppThemePalette buildCustomPalette(
+            @NonNull CustomPaletteSpec spec,
+            @NonNull String key,
+            @NonNull String label,
+            int frostedTintAmount) {
         float[] accentHsv = new float[3];
         Color.colorToHSV(spec.accent, accentHsv);
         int accentLight = spec.isLight
@@ -405,9 +822,9 @@ public final class AppThemePalette {
         int muted = blendColors(spec.surface, spec.background, 0.5f);
 
         return new AppThemePalette(
-                CUSTOM_THEME_KEY,
-                "Custom",
-                "Custom",
+                key,
+                label,
+                label,
                 spec.isLight,
                 spec.background | 0xFF000000,
                 spec.surface | 0xFF000000,
@@ -423,7 +840,8 @@ public final class AppThemePalette {
                 muted,
                 0xFF2EA043,
                 spec.particleColor | 0xFF000000,
-                spec.ringColor | 0xFF000000
+                spec.ringColor | 0xFF000000,
+                frostedTintAmount
         );
     }
 
@@ -443,7 +861,15 @@ public final class AppThemePalette {
         return withAlphaInt(cardOutline, isLight ? 0x2A : 0x26);
     }
 
+    /**
+     * Computes frosted card fill tint using the configured Frosted Card Tint Amount (0-100%).
+     * 0% = completely clear glass (alpha 0), 100% = fully opaque solid card (alpha 255).
+     */
     public int getFrostedCardTint(int defaultDarkTint) {
+        if (frostedTintAmount >= 0) {
+            int alpha = Math.round((clamp(frostedTintAmount, 0, 100) / 100f) * 255f);
+            return withAlphaInt(surface, alpha);
+        }
         int alpha = (defaultDarkTint >>> 24) & 0xFF;
         if (isLight) {
             int lightAlpha = Math.max(0xB4, Math.min(0xE8, alpha + 0x68));
@@ -453,6 +879,9 @@ public final class AppThemePalette {
     }
 
     public int getDialogSurfaceColor(boolean blurred) {
+        if (frostedTintAmount >= 100) {
+            return withAlphaInt(popupTint, 0xFF);
+        }
         if (isLight) {
             return withAlphaInt(popupTint, blurred ? 0xCC : 0xF0);
         }
@@ -460,25 +889,27 @@ public final class AppThemePalette {
     }
 
     public int getDialogOverlayTint() {
+        if (frostedTintAmount >= 100) {
+            return withAlphaInt(popupTint, 0xFF);
+        }
         return withAlphaInt(popupTint, isLight ? 0xA8 : 0x78);
     }
 
     public int getQuickMenuCardTint(boolean withBlur) {
+        if (frostedTintAmount >= 100) {
+            return withAlphaInt(popupTint, 0xFF);
+        }
         if (isLight) {
             return withAlphaInt(popupTint, withBlur ? 0xC4 : 0xEB);
         }
         return withAlphaInt(popupTint, withBlur ? 0xA4 : 0xDE);
     }
 
-    /**
-     * Compact signature covering every visible color channel so cached drawables/shaders
-     * invalidate immediately when custom palette values change.
-     */
     @NonNull
     public String getSignature() {
         return key + ":" + isLight + ":" + background + ":" + surface + ":" + popupTint
                 + ":" + accent + ":" + highlight + ":" + primaryText + ":" + secondaryText
-                + ":" + cardOutline + ":" + particleColor + ":" + ringColor;
+                + ":" + cardOutline + ":" + particleColor + ":" + ringColor + ":" + frostedTintAmount;
     }
 
     public int getNeonAccent() {
@@ -534,5 +965,28 @@ public final class AppThemePalette {
     public static int withAlphaInt(int color, int alpha) {
         int a = Math.max(0, Math.min(255, alpha));
         return (a << 24) | (color & 0x00FFFFFF);
+    }
+
+    private static String hex(int color) {
+        return String.format(Locale.US, "#%06X", color & 0x00FFFFFF);
+    }
+
+    private static int parseColorOr(String raw, int fallback) {
+        if (raw == null || raw.trim().isEmpty()) {
+            return fallback;
+        }
+        try {
+            String s = raw.trim();
+            if (!s.startsWith("#")) {
+                s = "#" + s;
+            }
+            return Color.parseColor(s) | 0xFF000000;
+        } catch (IllegalArgumentException e) {
+            return fallback;
+        }
+    }
+
+    private static int clamp(int v, int min, int max) {
+        return Math.max(min, Math.min(max, v));
     }
 }

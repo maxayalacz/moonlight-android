@@ -135,13 +135,14 @@ public class SessionMetricsActivity extends AppCompatActivity {
         cardContainer.setLayoutParams(cardLp);
 
         // Rich frosted glass surface letting live GPU starfield & API 31+ window blur breathe through
+        rootBackdrop.setBackgroundColor(palette.isLight ? 0x550F172A : 0x88060A14);
         GradientDrawable cardBg = new GradientDrawable();
         cardBg.setShape(GradientDrawable.RECTANGLE);
         cardBg.setCornerRadius(dp(24f));
-        cardBg.setColor(palette.isLight ? 0xEA111827 : AppThemePalette.withAlphaInt(palette.surface, 0xD2));
+        cardBg.setColor(palette.getDialogSurfaceColor(true));
         int outlinePx = Math.round(UiHelper.getCardOutlineWidthPx(this, 1f));
         if (outlinePx > 0) {
-            cardBg.setStroke(outlinePx, 0x42FFFFFF);
+            cardBg.setStroke(outlinePx, palette.getCardRimColor());
         }
         cardContainer.setBackground(cardBg);
 
@@ -160,6 +161,7 @@ public class SessionMetricsActivity extends AppCompatActivity {
             scrollView.setOnScrollChangeListener((v, sx, sy, osx, osy) -> resetCountdown());
         }
 
+        themeStaticMetricsChrome(cardContainer, palette);
         populateMetrics(palette);
         prepareAndRunEntranceAnimations(maxCardHeight);
         countdownText.setText(countdown + "s");
@@ -324,20 +326,29 @@ public class SessionMetricsActivity extends AppCompatActivity {
         int avgDecodeRounded = Math.round(sumDecode / (float) count);
         avgBitrateRounded = Math.round(sumBitrate / (float) count);
 
+        int primaryText = palette.getPrimaryTextColor();
+        int secondaryText = palette.getSecondaryTextColor();
+
         TextView appNameView = findViewById(R.id.metricsAppName);
         appNameView.setText(snapshot.appName);
+        appNameView.setTextColor(primaryText);
 
         TextView configView = findViewById(R.id.metricsConfigText);
         configView.setText(buildConfigStrip());
+        configView.setTextColor(secondaryText);
+
+        if (countdownText != null) {
+            countdownText.setTextColor(secondaryText);
+        }
 
         LinearLayout summaryRow = findViewById(R.id.metricsSummaryRow);
         summaryRow.removeAllViews();
-        addSummaryCard(summaryRow, palette, getString(R.string.session_metrics_duration), formatDuration(durationSec), 0xFFFFFFFF, false);
+        addSummaryCard(summaryRow, palette, getString(R.string.session_metrics_duration), formatDuration(durationSec), primaryText, false);
         addSummaryCard(summaryRow, palette, getString(R.string.session_metrics_avg_fps), String.valueOf(avgFpsRounded), FPS_COLOR, false);
         addSummaryCard(summaryRow, palette, getString(R.string.session_metrics_avg_decode), avgDecodeRounded + " ms", DECODE_COLOR, false);
         addSummaryCard(summaryRow, palette, getString(R.string.session_metrics_peak_decode), peakDecode + " ms", peakDecode > 50 ? DROP_COLOR : DECODE_COLOR, false);
         addSummaryCard(summaryRow, palette, getString(R.string.session_metrics_bitrate), avgBitrateRounded + " Mbps", BITRATE_COLOR, false);
-        addSummaryCard(summaryRow, palette, getString(R.string.session_metrics_peak_drop), maxDrop + "%", maxDrop > 5 ? DROP_COLOR : 0xFFFFFFFF, false);
+        addSummaryCard(summaryRow, palette, getString(R.string.session_metrics_peak_drop), maxDrop + "%", maxDrop > 5 ? DROP_COLOR : primaryText, false);
 
         String decoderDisplay = !snapshot.codecLabel.isEmpty()
                 ? snapshot.codecLabel
@@ -370,6 +381,35 @@ public class SessionMetricsActivity extends AppCompatActivity {
         dropChart.setChartData(dropValues, DROP_COLOR, 100f);
     }
 
+    private void themeStaticMetricsChrome(View root, AppThemePalette palette) {
+        if (root == null) {
+            return;
+        }
+        int primary = palette.getPrimaryTextColor();
+        int divider = palette.getDividerColor();
+        if (root instanceof android.widget.ImageView) {
+            ((android.widget.ImageView) root).setColorFilter(primary, android.graphics.PorterDuff.Mode.SRC_IN);
+        } else if (root instanceof TextView) {
+            int id = root.getId();
+            if (id != R.id.metricsFpsBadge && id != R.id.metricsDecodeBadge
+                    && id != R.id.metricsBitrateBadge && id != R.id.metricsDropBadge
+                    && id != R.id.metricsConfigText && id != R.id.metricsCountdownText) {
+                ((TextView) root).setTextColor(primary);
+            }
+        } else if (root instanceof ViewGroup) {
+            ViewGroup vg = (ViewGroup) root;
+            for (int i = 0; i < vg.getChildCount(); i++) {
+                View child = vg.getChildAt(i);
+                if (child.getClass() == View.class && child.getLayoutParams() != null
+                        && child.getLayoutParams().height <= Math.round(dp(2f))) {
+                    child.setBackgroundColor(divider);
+                } else {
+                    themeStaticMetricsChrome(child, palette);
+                }
+            }
+        }
+    }
+
     private void addSummaryCard(
             LinearLayout parent,
             AppThemePalette palette,
@@ -385,13 +425,13 @@ public class SessionMetricsActivity extends AppCompatActivity {
         GradientDrawable bg = new GradientDrawable();
         bg.setShape(GradientDrawable.RECTANGLE);
         bg.setCornerRadius(dp(12f));
-        bg.setColor(AppThemePalette.withAlpha(palette.background, 0.55f));
-        bg.setStroke(Math.max(1, Math.round(dp(0.8f))), 0x1AFFFFFF);
+        bg.setColor(AppThemePalette.withAlpha(palette.background, palette.isLight ? 0.55f : 0.52f));
+        bg.setStroke(Math.max(1, Math.round(dp(0.8f))), palette.getCardRimColor());
         card.setBackground(bg);
 
         TextView labelTv = new TextView(this);
         labelTv.setText(label);
-        labelTv.setTextColor(0x73FFFFFF);
+        labelTv.setTextColor(palette.getSecondaryTextColor());
         labelTv.setTextSize(10f);
         labelTv.setTypeface(Typeface.DEFAULT_BOLD);
         labelTv.setMaxLines(1);
@@ -422,8 +462,8 @@ public class SessionMetricsActivity extends AppCompatActivity {
         GradientDrawable bg = new GradientDrawable();
         bg.setShape(GradientDrawable.RECTANGLE);
         bg.setCornerRadius(dp(14f));
-        bg.setColor(AppThemePalette.withAlpha(palette.background, 0.44f));
-        bg.setStroke(Math.max(1, Math.round(dp(0.8f))), 0x18FFFFFF);
+        bg.setColor(AppThemePalette.withAlpha(palette.background, palette.isLight ? 0.48f : 0.44f));
+        bg.setStroke(Math.max(1, Math.round(dp(0.8f))), palette.getCardRimColor());
         panel.setBackground(bg);
     }
 

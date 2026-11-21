@@ -157,6 +157,12 @@
             android:taskAffinity=""
             android:theme="@style/ExternalDisplayControllerTheme"/>
         <activity
+            android:name=".ui.ThemeStudioActivity"
+            android:exported="false"
+            android:resizeableActivity="true"
+            android:configChanges="mcc|mnc|touchscreen|keyboard|keyboardHidden|navigation|screenLayout|fontScale|uiMode|orientation|screenSize|smallestScreenSize|layoutDirection"
+            android:theme="@style/SettingsTheme" />
+        <activity
             android:name=".preferences.StreamSettings"
             android:resizeableActivity="true"
             android:configChanges="mcc|mnc|touchscreen|keyboard|keyboardHidden|navigation|screenLayout|fontScale|uiMode|orientation|screenSize|smallestScreenSize|layoutDirection"

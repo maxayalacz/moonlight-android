@@ -431,6 +431,8 @@ public class PcView extends AppCompatActivity implements AdapterFragmentCallback
             return;
         }
         AppThemePalette palette = AppThemePalette.getCurrent(this);
+        profilesButton.setStateListAnimator(null);
+        profilesButton.setElevation(0f);
         profilesButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
                 palette.getFrostedCardTint(0x78000000)));
         profilesButton.setStrokeColor(android.content.res.ColorStateList.valueOf(palette.getCardRimColor()));

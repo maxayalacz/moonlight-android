@@ -101,6 +101,8 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "uniform float u_portalScale;\n" +
             "uniform float u_glowIntensity;\n" +
             "uniform float u_particleBrightness;\n" +
+            "uniform float u_particleSize;\n" +
+            "uniform float u_particleDensity;\n" +
             "uniform float u_sonarSpeed;\n" +
             "uniform vec3  u_bgEdge;\n" +
             "uniform vec3  u_bgCenter;\n" +
@@ -132,10 +134,15 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "    vec3 col = vec3(0.0);\n" +
             "    vec3 pTintA = u_ringCol;\n" +
             "    vec3 pTintB = u_particleCol;\n" +
+            "    float dens = clamp(u_particleDensity, 0.25, 4.0);\n" +
+            "    float sz = clamp(u_particleSize, 0.25, 4.0);\n" +
+            "    float gridMul = sqrt(dens);\n" +
+            "    float spawnThreshold = clamp(1.0 - 0.45 * dens, 0.04, 0.89);\n" +
+            "    float bound = max(0.13, 0.13 * sz);\n" +
             "\n" +
             "    for (int layer = 0; layer < 3; layer++) {\n" +
             "        float fl = float(layer);\n" +
-            "        float scale = 14.0 + fl * 9.0;\n" +
+            "        float scale = (14.0 + fl * 9.0) * gridMul;\n" +
             "        float rotSpeed = (0.04 + fl * 0.018) * (layer == 1 ? -1.0 : 1.0);\n" +
             "\n" +
             "        vec2 p = rot2d(time * rotSpeed + fl * 1.7) * uv;\n" +
@@ -151,7 +158,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "                vec2 cellId = id + offs;\n" +
             "                vec2 rnd = hash22(cellId + fl * 37.0);\n" +
             "\n" +
-            "                if (rnd.x < 0.55) continue;\n" +
+            "                if (rnd.x < spawnThreshold) continue;\n" +
             "\n" +
             "                vec2 drift = vec2(\n" +
             "                    sin(time * (0.4 + rnd.y * 0.5) + rnd.x * TAU),\n" +
@@ -160,10 +167,10 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "\n" +
             "                vec2 pos = offs + (rnd - 0.5) * 0.55 + drift;\n" +
             "                vec2 diff = gv - pos;\n" +
-            "                if (abs(diff.x) > 0.12 || abs(diff.y) > 0.12) continue;\n" +
+            "                if (abs(diff.x) > bound || abs(diff.y) > bound) continue;\n" +
             "                float dist = length(diff);\n" +
             "\n" +
-            "                float radius = mix(0.035, 0.11, fract(rnd.x * 13.7));\n" +
+            "                float radius = mix(0.035, 0.11, fract(rnd.x * 13.7)) * sz;\n" +
             "                float bokeh = smoothstep(radius, radius * 0.15, dist);\n" +
             "                float twinkle = 0.55 + 0.45 * sin(time * (1.8 + rnd.y * 3.0) + rnd.x * TAU);\n" +
             "\n" +
@@ -352,8 +359,11 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
     private volatile float uPortalScale = 1f;
     private volatile float uGlowIntensity = 1f;
     private volatile float uParticleBrightness = 1f;
+    private volatile float uParticleSize = 1f;
+    private volatile float uParticleDensity = 1f;
     private volatile float uSonarSpeed = 1f;
     private volatile int blurAmountPercent = 100;
+    private volatile int frostedTintAmountPercent = 35;
     private volatile boolean blurDirty = true;
     private volatile int bgMaxShortEdge = 720;
     private volatile boolean backgroundMode = false;
@@ -416,24 +426,10 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
     private volatile float uIsLight = 0f;
 
     public int getBlurAmountPercent() {
-        return blurAmountPercent;
+        return frostedTintAmountPercent >= 100 ? 0 : blurAmountPercent;
     }
 
-    public void refreshFromPrefs() {
-        PreferenceConfiguration cfg = PreferenceConfiguration.readPreferences(getContext());
-        uPortalScale = Math.max(0.6f, Math.min(1.5f, cfg.portalWindowScalePercent / 100f));
-        uGlowIntensity = Math.max(0.2f, Math.min(2.0f, cfg.portalGlowIntensityPercent / 100f));
-        uParticleBrightness = Math.max(0.0f, Math.min(2.0f, cfg.portalParticleBrightnessPercent / 100f));
-        uSonarSpeed = Math.max(0.2f, Math.min(2.5f, cfg.portalSonarSpeedPercent / 100f));
-        blurAmountPercent = Math.max(0, Math.min(200, cfg.blurAmountPercent));
-        blurDirty = true;
-        if (blurAmountPercent == 0) {
-            publishedBlurBitmap = null;
-            mainHandler.post(invalidateFrostedRunnable);
-        }
-        bgMaxShortEdge = Math.max(0, cfg.bgQualityMaxShortEdge);
-
-        AppThemePalette palette = AppThemePalette.getCurrent(getContext());
+    private void applyPaletteUniforms(@NonNull AppThemePalette palette) {
         uIsLight = palette.isLight ? 1f : 0f;
         if (palette.isLight) {
             uBgEdgeColor = AppThemePalette.blendColors(palette.background, palette.secondary, 0.35f);
@@ -447,6 +443,48 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
         uParticleRgb = palette.particleColor;
         uRingRgb = palette.ringColor;
         uChargeRgb = palette.highlight;
+    }
+
+    public void applyPreviewOverride(@NonNull AppThemePalette.ThemeBundle bundle) {
+        uPortalScale = Math.max(0.6f, Math.min(1.5f, bundle.portalWindowScalePercent / 100f));
+        uGlowIntensity = Math.max(0.2f, Math.min(2.5f, bundle.portalGlowIntensityPercent / 100f));
+        uParticleBrightness = Math.max(0.0f, Math.min(4.0f, bundle.portalParticleBrightnessPercent / 100f));
+        uParticleSize = Math.max(0.25f, Math.min(4.0f, bundle.portalParticleSizePercent / 100f));
+        uParticleDensity = Math.max(0.25f, Math.min(4.0f, bundle.portalParticleDensityPercent / 100f));
+        uSonarSpeed = Math.max(0.2f, Math.min(2.5f, bundle.portalSonarSpeedPercent / 100f));
+        blurAmountPercent = Math.max(0, Math.min(200, bundle.blurAmountPercent));
+        frostedTintAmountPercent = Math.max(0, Math.min(100, bundle.frostedTintAmountPercent));
+        blurDirty = true;
+        if (blurAmountPercent <= 0 || frostedTintAmountPercent >= 100) {
+            publishedBlurBitmap = null;
+            mainHandler.post(invalidateFrostedRunnable);
+        }
+        try {
+            bgMaxShortEdge = Math.max(0, Integer.parseInt(bundle.bgQuality));
+        } catch (Exception e) {
+            bgMaxShortEdge = 720;
+        }
+        applyPaletteUniforms(AppThemePalette.buildCustomPalette(bundle.colors, bundle.frostedTintAmountPercent));
+    }
+
+    public void refreshFromPrefs() {
+        PreferenceConfiguration cfg = PreferenceConfiguration.readPreferences(getContext());
+        AppThemePalette palette = AppThemePalette.getCurrent(getContext());
+        uPortalScale = Math.max(0.6f, Math.min(1.5f, cfg.portalWindowScalePercent / 100f));
+        uGlowIntensity = Math.max(0.2f, Math.min(2.5f, cfg.portalGlowIntensityPercent / 100f));
+        uParticleBrightness = Math.max(0.0f, Math.min(4.0f, cfg.portalParticleBrightnessPercent / 100f));
+        uParticleSize = Math.max(0.25f, Math.min(4.0f, cfg.portalParticleSizePercent / 100f));
+        uParticleDensity = Math.max(0.25f, Math.min(4.0f, cfg.portalParticleDensityPercent / 100f));
+        uSonarSpeed = Math.max(0.2f, Math.min(2.5f, cfg.portalSonarSpeedPercent / 100f));
+        blurAmountPercent = Math.max(0, Math.min(200, cfg.blurAmountPercent));
+        frostedTintAmountPercent = palette.getEffectiveTintAmount();
+        blurDirty = true;
+        if (blurAmountPercent <= 0 || frostedTintAmountPercent >= 100) {
+            publishedBlurBitmap = null;
+            mainHandler.post(invalidateFrostedRunnable);
+        }
+        bgMaxShortEdge = Math.max(0, cfg.bgQualityMaxShortEdge);
+        applyPaletteUniforms(palette);
     }
 
     /**
@@ -502,7 +540,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
 
     @Nullable
     public Bitmap getBlurredBitmap() {
-        if (blurAmountPercent <= 0) {
+        if (blurAmountPercent <= 0 || frostedTintAmountPercent >= 100) {
             return null;
         }
         Bitmap bmp = publishedBlurBitmap;
@@ -693,6 +731,8 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
         private int uPortalScaleLoc = -1;
         private int uGlowIntensityLoc = -1;
         private int uParticleBrightnessLoc = -1;
+        private int uParticleSizeLoc = -1;
+        private int uParticleDensityLoc = -1;
         private int uSonarSpeedLoc = -1;
         private int uBgEdgeLoc = -1;
         private int uBgCenterLoc = -1;
@@ -799,7 +839,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
                     drawBlitTexture(bgFboTex);
 
                     // 3. Periodically update adaptive-resolution GPU blurred refraction bitmap (~15 FPS)
-                    int blurPct = blurAmountPercent;
+                    int blurPct = (frostedTintAmountPercent >= 100) ? 0 : blurAmountPercent;
                     long nowMs = SystemClock.uptimeMillis();
                     if (blurPct <= 0) {
                         if (publishedBlurBitmap != null) {
@@ -858,6 +898,8 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             GLES30.glUniform1f(uPortalScaleLoc, uPortalScale);
             GLES30.glUniform1f(uGlowIntensityLoc, uGlowIntensity);
             GLES30.glUniform1f(uParticleBrightnessLoc, uParticleBrightness);
+            GLES30.glUniform1f(uParticleSizeLoc, uParticleSize);
+            GLES30.glUniform1f(uParticleDensityLoc, uParticleDensity);
             GLES30.glUniform1f(uSonarSpeedLoc, uSonarSpeed);
             uploadColor3f(uBgEdgeLoc, uBgEdgeColor);
             uploadColor3f(uBgCenterLoc, uBgCenterColor);
@@ -1172,6 +1214,8 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             uPortalScaleLoc = GLES30.glGetUniformLocation(program, "u_portalScale");
             uGlowIntensityLoc = GLES30.glGetUniformLocation(program, "u_glowIntensity");
             uParticleBrightnessLoc = GLES30.glGetUniformLocation(program, "u_particleBrightness");
+            uParticleSizeLoc = GLES30.glGetUniformLocation(program, "u_particleSize");
+            uParticleDensityLoc = GLES30.glGetUniformLocation(program, "u_particleDensity");
             uSonarSpeedLoc = GLES30.glGetUniformLocation(program, "u_sonarSpeed");
             uBgEdgeLoc = GLES30.glGetUniformLocation(program, "u_bgEdge");
             uBgCenterLoc = GLES30.glGetUniformLocation(program, "u_bgCenter");
