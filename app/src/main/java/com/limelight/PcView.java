@@ -142,6 +142,7 @@ public class PcView extends AppCompatActivity implements AdapterFragmentCallback
         if (completeOnCreateCalled) {
             // Reinitialize views just in case orientation changed
             initializeViews();
+            UiHelper.applyPaletteChrome(this, findViewById(android.R.id.content));
         }
 
         refreshProfileButton();
@@ -429,6 +430,13 @@ public class PcView extends AppCompatActivity implements AdapterFragmentCallback
         if (profilesButton == null) {
             return;
         }
+        AppThemePalette palette = AppThemePalette.getCurrent(this);
+        profilesButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
+                palette.getFrostedCardTint(0x78000000)));
+        profilesButton.setStrokeColor(android.content.res.ColorStateList.valueOf(palette.getCardRimColor()));
+        profilesButton.setIconTint(android.content.res.ColorStateList.valueOf(palette.getPrimaryTextColor()));
+        profilesButton.setTextColor(palette.getPrimaryTextColor());
+
         String activeProfileName = ProfilesManager.getInstance().getActiveName();
         if (activeProfileName.isEmpty()) {
             profilesButton.shrink();

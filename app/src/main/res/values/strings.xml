@@ -888,6 +888,13 @@
     <string name="color_scheme_daylight">Frost Daylight (Light)</string>
     <string name="color_scheme_custom">Custom Palette</string>
     <string name="title_custom_palette">Customize Color Palette</string>
-    <string name="summary_custom_palette">Choose Dark/Light base, auto-harmonize from an accent, or fine-tune all 6 theme colors with live preview</string>
+    <string name="summary_custom_palette">Start from any preset, toggle Dark/Light base, auto-harmonize, or customize all 10 theme colors (including text, pop-ups &amp; outlines)</string>
+    <string name="custom_palette_start_preset">Start from Preset</string>
+    <string name="settings_title">Settings</string>
+    <string name="settings_back">Back</string>
+    <string name="settings_search_hint">Search settings…</string>
+    <string name="settings_expand_all">Expand All</string>
+    <string name="settings_collapse_all">Collapse All</string>
+    <string name="settings_option_count_fmt">%1$d options</string>
     <string name="quick_settings_osc_motion">Device Motion Sensors (Gyro)</string>
 </resources>

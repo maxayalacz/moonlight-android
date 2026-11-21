@@ -106,36 +106,41 @@ public class UiHelper {
         float radiusPx = dpToPx(context, cornerRadiusDp);
         int restStroke = Math.round(getCardOutlineWidthPx(context, 1f));
         int activeStroke = Math.max(restStroke, Math.round(dpToPx(context, 1.5f)));
+        com.limelight.ui.AppThemePalette palette = com.limelight.ui.AppThemePalette.getCurrent(context);
+        int rim = palette.getCardRimColor();
+        int neon = palette.getNeonAccent();
+        int pressedFill = com.limelight.ui.AppThemePalette.withAlpha(palette.accent, palette.isLight ? 0.14f : 0.22f);
+        int focusFill = com.limelight.ui.AppThemePalette.withAlpha(palette.accent, palette.isLight ? 0.10f : 0.16f);
 
         android.graphics.drawable.StateListDrawable sld = new android.graphics.drawable.StateListDrawable();
 
         GradientDrawable pressed = new GradientDrawable();
         pressed.setShape(GradientDrawable.RECTANGLE);
         pressed.setCornerRadius(radiusPx);
-        pressed.setColor(0x2A29354C);
-        pressed.setStroke(activeStroke, 0x88FFFFFF);
+        pressed.setColor(pressedFill);
+        pressed.setStroke(activeStroke, com.limelight.ui.AppThemePalette.withAlpha(neon, 0.85f));
         sld.addState(new int[]{android.R.attr.state_pressed}, pressed);
 
         GradientDrawable focused = new GradientDrawable();
         focused.setShape(GradientDrawable.RECTANGLE);
         focused.setCornerRadius(radiusPx);
-        focused.setColor(0x22263248);
-        focused.setStroke(activeStroke, 0xAAFFFFFF);
+        focused.setColor(focusFill);
+        focused.setStroke(activeStroke, com.limelight.ui.AppThemePalette.withAlpha(neon, 0.92f));
         sld.addState(new int[]{android.R.attr.state_focused}, focused);
 
         GradientDrawable selected = new GradientDrawable();
         selected.setShape(GradientDrawable.RECTANGLE);
         selected.setCornerRadius(radiusPx);
-        selected.setColor(0x1E232F44);
-        selected.setStroke(activeStroke, 0x80FFFFFF);
+        selected.setColor(focusFill);
+        selected.setStroke(activeStroke, com.limelight.ui.AppThemePalette.withAlpha(neon, 0.78f));
         sld.addState(new int[]{android.R.attr.state_selected}, selected);
 
         GradientDrawable hovered = new GradientDrawable();
         hovered.setShape(GradientDrawable.RECTANGLE);
         hovered.setCornerRadius(radiusPx);
-        hovered.setColor(0x16202B3F);
+        hovered.setColor(com.limelight.ui.AppThemePalette.withAlpha(palette.accent, 0.08f));
         if (restStroke > 0) {
-            hovered.setStroke(restStroke, 0x5EFFFFFF);
+            hovered.setStroke(restStroke, com.limelight.ui.AppThemePalette.withAlpha(rim, 0.75f));
         }
         sld.addState(new int[]{android.R.attr.state_hovered}, hovered);
 
@@ -144,7 +149,7 @@ public class UiHelper {
         idle.setCornerRadius(radiusPx);
         idle.setColor(android.graphics.Color.TRANSPARENT);
         if (restStroke > 0) {
-            idle.setStroke(restStroke, 0x36FFFFFF);
+            idle.setStroke(restStroke, rim);
         }
         sld.addState(new int[]{}, idle);
 
@@ -321,13 +326,25 @@ public class UiHelper {
             prefsContainer.setLayoutParams(lp);
         }
 
-        View streamSettings = activity.findViewById(R.id.stream_settings);
-        if (streamSettings != null) {
-            streamSettings.setPadding(
-                    horizontalMargin,
-                    headerTitleTop,
-                    horizontalMargin,
-                    streamSettings.getPaddingBottom());
+        View settingsHeaderBar = activity.findViewById(R.id.settingsHeaderBar);
+        if (settingsHeaderBar != null && settingsHeaderBar.getLayoutParams() instanceof android.view.ViewGroup.MarginLayoutParams) {
+            android.view.ViewGroup.MarginLayoutParams lp = (android.view.ViewGroup.MarginLayoutParams) settingsHeaderBar.getLayoutParams();
+            lp.topMargin = reachabilityTop;
+            settingsHeaderBar.setLayoutParams(lp);
+            View settingsRoot = activity.findViewById(R.id.settingsRootContainer);
+            if (settingsRoot != null) {
+                settingsRoot.setPadding(horizontalMargin, settingsRoot.getPaddingTop(),
+                        horizontalMargin, settingsRoot.getPaddingBottom());
+            }
+        } else {
+            View streamSettings = activity.findViewById(R.id.stream_settings);
+            if (streamSettings != null) {
+                streamSettings.setPadding(
+                        horizontalMargin,
+                        headerTitleTop,
+                        horizontalMargin,
+                        streamSettings.getPaddingBottom());
+            }
         }
     }
 
@@ -369,11 +386,14 @@ public class UiHelper {
             builder.setTitle(title);
         }
 
+        final com.limelight.ui.AppThemePalette menuPalette = com.limelight.ui.AppThemePalette.getCurrent(activity);
+        final int itemTextColor = menuPalette.getPrimaryTextColor();
         final android.widget.ArrayAdapter<PopupMenuItem> adapter =
                 new android.widget.ArrayAdapter<PopupMenuItem>(themedContext, R.layout.oneui_game_menu_item, items) {
                     @Override
                     public android.view.View getView(int position, android.view.View convertView, android.view.ViewGroup parent) {
                         TextView tv = (TextView) super.getView(position, convertView, parent);
+                        tv.setTextColor(itemTextColor);
                         PopupMenuItem item = getItem(position);
                         if (item != null) {
                             if (item.checkable) {
@@ -408,14 +428,22 @@ public class UiHelper {
         return dialog;
     }
 
+    private static GradientDrawable createDialogSquircleDrawable(Context context, boolean blurred) {
+        com.limelight.ui.AppThemePalette palette = com.limelight.ui.AppThemePalette.getCurrent(context);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setShape(GradientDrawable.RECTANGLE);
+        bg.setCornerRadius(dpToPx(context, ONEUI_DIALOG_SQUIRCLE_RADIUS_DP));
+        bg.setColor(palette.getDialogSurfaceColor(blurred));
+        int strokePx = Math.round(getCardOutlineWidthPx(context, 1f));
+        if (strokePx > 0) {
+            bg.setStroke(strokePx, palette.getCardRimColor());
+        }
+        return bg;
+    }
+
     /**
-     * Styles a dialog as a One UI 9 blurred squircle card.
-     *
-     * Combines Window.setBackgroundBlurRadius (when supported by the WM/SurfaceFlinger)
-     * with an in-dialog squircle-clipped blurred backdrop (RenderEffect on API 31+,
-     * downscaled box blur on older APIs, and PixelCopy for SurfaceView in GameActivity)
-     * so localized blur strictly within the dialog/popup bounds is always visible on
-     * One UI and other OEM ROMs.
+     * Styles a dialog as a One UI 9 blurred squircle card using the active theme palette's
+     * Popup Tint, Card Outline, Primary/Secondary Text, and global Blur Amount.
      */
     public static void styleDialogSquircle(final android.app.Dialog dialog) {
         if (dialog == null) {
@@ -432,16 +460,98 @@ public class UiHelper {
         final View decorView = window.getDecorView();
         decorView.setClipToOutline(true);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            window.setBackgroundDrawableResource(R.drawable.bg_oneui_dialog_squircle);
+            window.setBackgroundDrawable(createDialogSquircleDrawable(dialog.getContext(), true));
             decorView.setRenderEffect(null);
             applyBoundedWindowBlur(window, dialog.getContext());
         } else {
-            window.setBackgroundDrawableResource(R.drawable.bg_oneui_dialog_squircle_opaque);
+            window.setBackgroundDrawable(createDialogSquircleDrawable(dialog.getContext(), false));
         }
         clearOpaquePanelBackgrounds(decorView);
         attachDialogBackdropBlur(dialog, decorView);
         applyDialogButtonPalette(dialog);
+        applyDialogTextPalette(dialog, decorView);
         animateDialogEntranceIfNeeded(dialog, decorView);
+    }
+
+    private static void applyDialogTextPalette(final android.app.Dialog dialog, final View decorView) {
+        if (dialog == null || decorView == null) {
+            return;
+        }
+        Context ctx = dialog.getContext();
+        com.limelight.ui.AppThemePalette palette = com.limelight.ui.AppThemePalette.getCurrent(ctx);
+        int primaryText = palette.getPrimaryTextColor();
+        int secondaryText = palette.getSecondaryTextColor();
+        int accent = palette.getNeonAccent();
+
+        int alertTitleId = ctx.getResources().getIdentifier("alertTitle", "id", ctx.getPackageName());
+        int androidTitleId = ctx.getResources().getIdentifier("alertTitle", "id", "android");
+        int[] titleIds = { alertTitleId, androidTitleId, android.R.id.title };
+        for (int id : titleIds) {
+            if (id != 0) {
+                View v = decorView.findViewById(id);
+                if (v instanceof TextView) {
+                    ((TextView) v).setTextColor(primaryText);
+                }
+            }
+        }
+        View msg = decorView.findViewById(android.R.id.message);
+        if (msg instanceof TextView) {
+            ((TextView) msg).setTextColor(secondaryText);
+        }
+
+        // Theme standard AlertDialog ListViews (e.g. ListPreference radio lists) & EditTexts
+        View list = decorView.findViewById(android.R.id.list);
+        if (!(list instanceof android.widget.ListView)) {
+            int selListId = ctx.getResources().getIdentifier("select_dialog_listview", "id", ctx.getPackageName());
+            if (selListId != 0) {
+                list = decorView.findViewById(selListId);
+            }
+        }
+        if (list instanceof android.widget.ListView) {
+            android.widget.ListView lv = (android.widget.ListView) list;
+            lv.setDivider(new android.graphics.drawable.ColorDrawable(palette.getDividerColor()));
+            lv.setDividerHeight(Math.max(1, Math.round(dpToPx(ctx, 0.75f))));
+            tintDialogListChildren(lv, primaryText, accent);
+            lv.setOnHierarchyChangeListener(new android.view.ViewGroup.OnHierarchyChangeListener() {
+                @Override
+                public void onChildViewAdded(View parent, View child) {
+                    tintDialogListChildren(child, primaryText, accent);
+                }
+
+                @Override
+                public void onChildViewRemoved(View parent, View child) {}
+            });
+        }
+
+        View edit = decorView.findViewById(android.R.id.edit);
+        if (edit instanceof android.widget.EditText) {
+            android.widget.EditText et = (android.widget.EditText) edit;
+            et.setTextColor(primaryText);
+            et.setHintTextColor(secondaryText);
+        }
+    }
+
+    private static void tintDialogListChildren(View view, int primaryText, int accent) {
+        if (view instanceof android.widget.CheckedTextView) {
+            android.widget.CheckedTextView ctv = (android.widget.CheckedTextView) view;
+            ctv.setTextColor(primaryText);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                ctv.setCheckMarkTintList(android.content.res.ColorStateList.valueOf(accent));
+            }
+        } else if (view instanceof android.widget.CompoundButton) {
+            android.widget.CompoundButton cb = (android.widget.CompoundButton) view;
+            cb.setTextColor(primaryText);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                cb.setButtonTintList(android.content.res.ColorStateList.valueOf(accent));
+            }
+        } else if (view instanceof TextView) {
+            ((TextView) view).setTextColor(primaryText);
+        } else if (view instanceof android.view.ViewGroup) {
+            android.view.ViewGroup vg = (android.view.ViewGroup) view;
+            for (int i = 0; i < vg.getChildCount(); i++) {
+                tintDialogListChildren(vg.getChildAt(i), primaryText, accent);
+            }
+        }
     }
 
     private static void animateDialogEntranceIfNeeded(final android.app.Dialog dialog, final View decorView) {
@@ -583,14 +693,21 @@ public class UiHelper {
         final long[] lastCaptureMs = { 0L };
         final android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
 
+        final int blurPct = Math.max(0, Math.min(200,
+                PreferenceConfiguration.readPreferences(activity).blurAmountPercent));
+
+        // Adaptive capture scale: higher res when blur is low/off, lower res when blur is heavy
+        final float captureScale = blurPct == 0 ? 0.50f
+                : (blurPct <= 35 ? 0.42f : (blurPct <= 80 ? 0.30f : 0.22f));
+
         final Runnable ensureBuffers = () -> {
             int dialogW = decorView.getWidth();
             int dialogH = decorView.getHeight();
             if (dialogW <= 0 || dialogH <= 0) {
                 return;
             }
-            int bw = Math.max(1, Math.round(dialogW * 0.25f));
-            int bh = Math.max(1, Math.round(dialogH * 0.25f));
+            int bw = Math.max(1, Math.round(dialogW * captureScale));
+            int bh = Math.max(1, Math.round(dialogH * captureScale));
             if (buffers[0] == null || bufferSize[0] != bw || bufferSize[1] != bh) {
                 buffers[0] = android.graphics.Bitmap.createBitmap(bw, bh, android.graphics.Bitmap.Config.ARGB_8888);
                 buffers[1] = android.graphics.Bitmap.createBitmap(bw, bh, android.graphics.Bitmap.Config.ARGB_8888);
@@ -653,13 +770,13 @@ public class UiHelper {
 
                 final boolean fullCoverage = (interLeft == dialogLoc[0] && interTop == dialogLoc[1]
                         && interRight == dialogLoc[0] + dialogW && interBottom == dialogLoc[1] + dialogH);
-                final int subW = Math.max(1, Math.round((interRight - interLeft) * 0.25f));
-                final int subH = Math.max(1, Math.round((interBottom - interTop) * 0.25f));
+                final int subW = Math.max(1, Math.round((interRight - interLeft) * captureScale));
+                final int subH = Math.max(1, Math.round((interBottom - interTop) * captureScale));
                 final android.graphics.Bitmap copyDest = fullCoverage
                         ? target
                         : android.graphics.Bitmap.createBitmap(subW, subH, android.graphics.Bitmap.Config.ARGB_8888);
-                final float dstLeft = (interLeft - dialogLoc[0]) * 0.25f;
-                final float dstTop = (interTop - dialogLoc[1]) * 0.25f;
+                final float dstLeft = (interLeft - dialogLoc[0]) * captureScale;
+                final float dstTop = (interTop - dialogLoc[1]) * captureScale;
 
                 inFlight[0] = true;
                 try {
@@ -677,7 +794,7 @@ public class UiHelper {
                                         c.drawBitmap(copyDest, dstLeft, dstTop, null);
                                         copyDest.recycle();
                                     }
-                                    applyBitmapToDialogBackdrop(decorView, target);
+                                    applyBitmapToDialogBackdrop(decorView, target, blurPct);
                                     bufferIndex[0] = 1 - idx;
                                 } else if (!fullCoverage) {
                                     copyDest.recycle();
@@ -715,6 +832,16 @@ public class UiHelper {
             return;
         }
 
+        // Menu screens: when API 31+ cross-window blur is active (or blurPct == 0), let SurfaceFlinger
+        // composite the live themed PortalShaderView directly through our translucent squircle window
+        // so there is zero stale background bleed and 60fps real-time transparency!
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            WindowManager wm = activity.getSystemService(WindowManager.class);
+            if (blurPct == 0 || (wm != null && wm.isCrossWindowBlurEnabled())) {
+                return;
+            }
+        }
+
         final View activityDecor = activity.getWindow().getDecorView();
         final Runnable captureActivityFrame = () -> {
             if (stopped[0] || activity.isFinishing() || !decorView.isAttachedToWindow()) {
@@ -728,18 +855,17 @@ public class UiHelper {
             int idx = bufferIndex[0];
             android.graphics.Bitmap target = buffers[idx];
             int[] dialogLoc = new int[2];
-            int[] activityLoc = new int[2];
             decorView.getLocationOnScreen(dialogLoc);
-            activityDecor.getLocationOnScreen(activityLoc);
-            int offsetX = dialogLoc[0] - activityLoc[0];
-            int offsetY = dialogLoc[1] - activityLoc[1];
 
-            target.eraseColor(0xFF0B0E1C);
+            // Seed with active theme background (never hardcoded #0B0E1C)
+            com.limelight.ui.AppThemePalette palette = com.limelight.ui.AppThemePalette.getCurrent(activity);
+            target.eraseColor(palette.background | 0xFF000000);
             android.graphics.Canvas canvas = new android.graphics.Canvas(target);
             View portalCandidate = activityDecor.findViewWithTag("oneui_portal_starfield_bg");
             if (portalCandidate instanceof com.limelight.ui.PortalShaderView
                     && portalCandidate.getWidth() > 0 && portalCandidate.getHeight() > 0) {
-                android.graphics.Bitmap portalBmp = ((com.limelight.ui.PortalShaderView) portalCandidate).getBlurredBitmap();
+                com.limelight.ui.PortalShaderView portal = (com.limelight.ui.PortalShaderView) portalCandidate;
+                android.graphics.Bitmap portalBmp = portal.getBlurredBitmap();
                 if (portalBmp != null && !portalBmp.isRecycled()) {
                     int[] portalLoc = new int[2];
                     portalCandidate.getLocationOnScreen(portalLoc);
@@ -759,10 +885,18 @@ public class UiHelper {
                     }
                 }
             }
-            canvas.scale(0.25f, 0.25f);
-            canvas.translate(-offsetX, -offsetY);
-            activityDecor.draw(canvas);
-            applyBitmapToDialogBackdrop(decorView, target);
+            // Draw ONLY the foreground menu layer (not activityDecor's opaque windowBackground)
+            View fgView = getMenuForegroundView(activity);
+            if (fgView != null && fgView.getVisibility() == View.VISIBLE) {
+                int[] fgLoc = new int[2];
+                fgView.getLocationOnScreen(fgLoc);
+                canvas.save();
+                canvas.scale(captureScale, captureScale);
+                canvas.translate(fgLoc[0] - dialogLoc[0], fgLoc[1] - dialogLoc[1]);
+                fgView.draw(canvas);
+                canvas.restore();
+            }
+            applyBitmapToDialogBackdrop(decorView, target, blurPct);
             bufferIndex[0] = 1 - idx;
             lastCaptureMs[0] = android.os.SystemClock.uptimeMillis();
         };
@@ -821,12 +955,14 @@ public class UiHelper {
         return null;
     }
 
-    private static void applyBitmapToDialogBackdrop(View decorView, android.graphics.Bitmap bitmap) {
+    private static void applyBitmapToDialogBackdrop(View decorView, android.graphics.Bitmap bitmap, int blurPct) {
         if (!(decorView instanceof android.view.ViewGroup)) {
             return;
         }
         android.view.ViewGroup group = (android.view.ViewGroup) decorView;
         Context ctx = decorView.getContext();
+        com.limelight.ui.AppThemePalette palette = com.limelight.ui.AppThemePalette.getCurrent(ctx);
+        int overlayTint = palette.getDialogOverlayTint();
 
         android.widget.ImageView backdrop = group.findViewWithTag("oneui_dialog_blur_backdrop");
         if (backdrop == null) {
@@ -841,13 +977,19 @@ public class UiHelper {
                     android.view.ViewGroup.LayoutParams.MATCH_PARENT));
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                float radiusPx = dpToPx(ctx, 22f);
-                RenderEffect blur = RenderEffect.createBlurEffect(radiusPx, radiusPx, Shader.TileMode.CLAMP);
-                RenderEffect tinted = RenderEffect.createColorFilterEffect(
-                        new PorterDuffColorFilter(0x73141820, PorterDuff.Mode.SRC_OVER), blur);
-                backdrop.setRenderEffect(tinted);
+                float radiusDp = 22f * (blurPct / 100f);
+                if (radiusDp > 0.5f) {
+                    float radiusPx = dpToPx(ctx, Math.min(38f, radiusDp));
+                    RenderEffect blur = RenderEffect.createBlurEffect(radiusPx, radiusPx, Shader.TileMode.CLAMP);
+                    RenderEffect tinted = RenderEffect.createColorFilterEffect(
+                            new PorterDuffColorFilter(overlayTint, PorterDuff.Mode.SRC_OVER), blur);
+                    backdrop.setRenderEffect(tinted);
+                } else {
+                    backdrop.setRenderEffect(null);
+                    backdrop.setColorFilter(overlayTint, PorterDuff.Mode.SRC_OVER);
+                }
             } else {
-                backdrop.setColorFilter(0x73141820, PorterDuff.Mode.SRC_OVER);
+                backdrop.setColorFilter(overlayTint, PorterDuff.Mode.SRC_OVER);
             }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -857,7 +999,7 @@ public class UiHelper {
                     border.setShape(GradientDrawable.RECTANGLE);
                     border.setColor(android.graphics.Color.TRANSPARENT);
                     border.setCornerRadius(dpToPx(ctx, ONEUI_DIALOG_SQUIRCLE_RADIUS_DP));
-                    border.setStroke(dialogStroke, 0x33FFFFFF);
+                    border.setStroke(dialogStroke, palette.getCardRimColor());
                     decorView.setForeground(border);
                 } else {
                     decorView.setForeground(null);
@@ -866,8 +1008,9 @@ public class UiHelper {
             decorView.setClipToOutline(true);
         }
 
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
-            fastBoxBlur(bitmap, 6);
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S && blurPct > 0) {
+            int boxRadius = Math.max(1, Math.min(10, Math.round(6f * (blurPct / 100f))));
+            fastBoxBlur(bitmap, boxRadius);
         }
         backdrop.setImageBitmap(bitmap);
     }
@@ -925,20 +1068,17 @@ public class UiHelper {
     @androidx.annotation.RequiresApi(api = Build.VERSION_CODES.S)
     private static void applyBoundedWindowBlur(final Window window, Context context) {
         final WindowManager wm = context.getSystemService(WindowManager.class);
-        final int blurRadiusPx = (int) dpToPx(context, ONEUI_BLUR_RADIUS_DP);
+        int blurPct = Math.max(0, Math.min(200,
+                PreferenceConfiguration.readPreferences(context).blurAmountPercent));
+        final int blurRadiusPx = blurPct <= 0 ? 0
+                : Math.max(1, Math.round(dpToPx(context, Math.min(48f, ONEUI_BLUR_RADIUS_DP * (blurPct / 100f)))));
         final java.util.function.Consumer<Boolean> updateBlur = enabled -> {
-            window.setBackgroundDrawableResource(enabled
-                    ? R.drawable.bg_oneui_dialog_squircle
-                    : R.drawable.bg_oneui_dialog_squircle_opaque);
+            boolean useBlurredStyle = enabled || blurRadiusPx == 0;
+            window.setBackgroundDrawable(createDialogSquircleDrawable(context, useBlurredStyle));
             window.setBackgroundBlurRadius(enabled ? blurRadiusPx : 0);
         };
 
         boolean blurEnabled = wm != null && wm.isCrossWindowBlurEnabled();
-        if (wm == null) {
-            LimeLog.warning("OneUI: WindowManager unavailable, using opaque dialog surface");
-        } else if (!blurEnabled) {
-            LimeLog.info("OneUI: cross-window blur is disabled by the system, using opaque dialog surface");
-        }
         updateBlur.accept(blurEnabled);
 
         final View decorView = window.getDecorView();
@@ -1200,12 +1340,13 @@ public class UiHelper {
             return;
         }
 
+        com.limelight.ui.AppThemePalette initPalette = com.limelight.ui.AppThemePalette.getCurrent(activity);
         // Seamless starfield handoff placeholder shown on Frame 0 while GL initializes,
         // automatically hidden the instant PortalShaderView swaps its first live frame.
         final android.widget.ImageView handoffView = new android.widget.ImageView(activity);
         handoffView.setTag("oneui_portal_handoff_bg");
         handoffView.setScaleType(android.widget.ImageView.ScaleType.CENTER_CROP);
-        handoffView.setBackgroundColor(0xFF0B0E1C);
+        handoffView.setBackgroundColor(initPalette.background | 0xFF000000);
         handoffView.setClickable(false);
         handoffView.setFocusable(false);
         handoffView.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
@@ -1260,12 +1401,21 @@ public class UiHelper {
         }
         com.limelight.ui.AppThemePalette palette = com.limelight.ui.AppThemePalette.getCurrent(activity);
         if (activity.getWindow() != null) {
+            if (!(activity instanceof Game || activity instanceof ExternalDisplayControlActivity
+                    || activity instanceof com.limelight.SessionMetricsActivity)) {
+                activity.getWindow().setBackgroundDrawable(
+                        new android.graphics.drawable.ColorDrawable(palette.background | 0xFF000000));
+            }
             androidx.core.view.WindowInsetsControllerCompat ctrl =
                     androidx.core.view.WindowCompat.getInsetsController(activity.getWindow(), activity.getWindow().getDecorView());
             if (ctrl != null) {
                 ctrl.setAppearanceLightStatusBars(palette.isLight);
                 ctrl.setAppearanceLightNavigationBars(palette.isLight);
             }
+        }
+        View handoff = rootView.findViewWithTag("oneui_portal_handoff_bg");
+        if (handoff != null) {
+            handoff.setBackgroundColor(palette.background | 0xFF000000);
         }
         int primaryText = palette.getPrimaryTextColor();
         View pcToolbar = rootView.findViewById(R.id.pcToolbarContainer);
@@ -1277,6 +1427,19 @@ public class UiHelper {
         if (appListText instanceof android.widget.TextView) {
             applyLiquidGlassEffect(appListText);
             ((android.widget.TextView) appListText).setTextColor(primaryText);
+        }
+        View noPcFound = rootView.findViewById(R.id.no_pc_found_layout);
+        if (noPcFound != null) {
+            applyLiquidGlassEffect(noPcFound);
+            tintToolbarChrome(noPcFound, primaryText);
+        }
+        View manualPcText = rootView.findViewById(R.id.manuallyAddPcText);
+        if (manualPcText instanceof android.widget.TextView) {
+            ((android.widget.TextView) manualPcText).setTextColor(primaryText);
+        }
+        View profilesDesc = rootView.findViewById(R.id.profilesDescription);
+        if (profilesDesc instanceof android.widget.TextView) {
+            ((android.widget.TextView) profilesDesc).setTextColor(primaryText);
         }
     }
 
@@ -1620,6 +1783,7 @@ public class UiHelper {
 
         attachFlowingAuroraBackground(activity, rootView);
         applyReachabilitySpacing(activity);
+        applyPaletteChrome(activity, rootView);
         applyMenuImmersiveMode(activity);
 
         // Re-apply sticky immersive mode whenever this menu regains window focus

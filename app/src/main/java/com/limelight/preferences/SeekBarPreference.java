@@ -24,6 +24,7 @@ public class SeekBarPreference extends Preference
     private AlertDialog dialog;
     private SeekBar seekBar;
     private TextView valueText;
+    private TextView splashText;
     private final Context context;
 
     private final String dialogMessage;
@@ -70,17 +71,25 @@ public class SeekBarPreference extends Preference
         seekbarMax = maxValue - minValue;
     }
 
-    protected AlertDialog getDialog() {
-        if (dialog != null) {
-            return dialog;
+    public String getFormattedValue() {
+        int val = shouldPersist() ? getPersistedInt(defaultValue) : currentValue;
+        String formatted;
+        if (divisor != 1) {
+            formatted = String.format((Locale) null, "%.1f", val / (float) divisor);
+        } else {
+            formatted = String.valueOf(val);
         }
+        return suffix == null ? formatted : formatted.concat(suffix.length() > 1 ? " " + suffix : suffix);
+    }
 
+    protected AlertDialog getDialog() {
+        // Recreate each time so current palette/blur/popup tint are always reflected cleanly
         LinearLayout.LayoutParams params;
         LinearLayout layout = new LinearLayout(context);
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(6, 6, 6, 6);
 
-        TextView splashText = new TextView(context);
+        splashText = new TextView(context);
         splashText.setPadding(30, 10, 30, 10);
         if (dialogMessage != null) {
             splashText.setText(dialogMessage);
@@ -175,18 +184,11 @@ public class SeekBarPreference extends Preference
     @Override
     public CharSequence getSummary() {
         CharSequence baseSummary = super.getSummary();
-        int val = shouldPersist() ? getPersistedInt(defaultValue) : currentValue;
-        String formatted;
-        if (divisor != 1) {
-            formatted = String.format((Locale) null, "%.1f", val / (float) divisor);
-        } else {
-            formatted = String.valueOf(val);
-        }
-        String valueDisplay = suffix == null ? formatted : formatted.concat(suffix.length() > 1 ? " " + suffix : suffix);
+        String valueDisplay = getFormattedValue();
         if (baseSummary == null || baseSummary.length() == 0) {
             return valueDisplay;
         }
-        return baseSummary + "  •  " + valueDisplay;
+        return baseSummary;
     }
 
     private void applyNeonSliderStyle() {
@@ -196,9 +198,13 @@ public class SeekBarPreference extends Preference
         com.limelight.ui.AppThemePalette palette = com.limelight.ui.AppThemePalette.getCurrent(context);
         int neonAccent = palette.getNeonAccent();
 
+        if (splashText != null) {
+            splashText.setTextColor(palette.getSecondaryTextColor());
+        }
         valueText.setTextColor(neonAccent);
         valueText.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-        valueText.setShadowLayer(10f, 0f, 0f, com.limelight.ui.AppThemePalette.withAlpha(neonAccent, 0.55f));
+        valueText.setShadowLayer(palette.isLight ? 0f : 10f, 0f, 0f,
+                com.limelight.ui.AppThemePalette.withAlpha(neonAccent, 0.55f));
 
         int trackH = Math.max(4, Math.round(UiHelper.dpToPx(context, 4f)));
         float trackR = trackH * 0.5f;
@@ -206,7 +212,7 @@ public class SeekBarPreference extends Preference
         android.graphics.drawable.GradientDrawable bgTrack = new android.graphics.drawable.GradientDrawable();
         bgTrack.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
         bgTrack.setCornerRadius(trackR);
-        bgTrack.setColor(0x2EFFFFFF);
+        bgTrack.setColor(palette.isLight ? 0x260F172A : 0x2EFFFFFF);
         bgTrack.setSize(-1, trackH);
 
         android.graphics.drawable.GradientDrawable activeTrack = new android.graphics.drawable.GradientDrawable();
@@ -235,7 +241,8 @@ public class SeekBarPreference extends Preference
         thumb.setShape(android.graphics.drawable.GradientDrawable.OVAL);
         thumb.setSize(thumbSize, thumbSize);
         thumb.setColor(neonAccent);
-        thumb.setStroke(Math.max(2, Math.round(UiHelper.dpToPx(context, 2f))), 0xFFFFFFFF);
+        thumb.setStroke(Math.max(2, Math.round(UiHelper.dpToPx(context, 2f))),
+                palette.isLight ? palette.surface : 0xFFFFFFFF);
 
         seekBar.setProgressDrawable(layers);
         seekBar.setThumb(thumb);

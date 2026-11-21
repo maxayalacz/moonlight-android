@@ -74,6 +74,15 @@ public class StreamSettings extends AppCompatActivity {
     private int previousDisplayPixelCount;
 
     private SettingsFragment prefsFragment;
+    private View settingsHeaderBar;
+    private View settingsSearchBar;
+    private android.widget.ImageButton settingsBackButton;
+    private android.widget.TextView settingsHeaderTitle;
+    private android.widget.TextView settingsProfileSubtitle;
+    private android.widget.TextView settingsToggleAllButton;
+    private android.widget.ImageView settingsSearchIcon;
+    private EditText settingsSearchInput;
+    private android.widget.ImageButton settingsSearchClear;
 
     // HACK for Android 9
     static DisplayCutout displayCutoutP;
@@ -90,6 +99,15 @@ public class StreamSettings extends AppCompatActivity {
         getSupportFragmentManager().beginTransaction().replace(
                 R.id.stream_settings, prefsFragment
         ).commitAllowingStateLoss();
+        if (settingsSearchInput != null && settingsSearchInput.getText() != null
+                && settingsSearchInput.getText().length() > 0) {
+            final String q = settingsSearchInput.getText().toString();
+            settingsSearchInput.post(() -> {
+                if (prefsFragment != null) {
+                    prefsFragment.applySearchQuery(q);
+                }
+            });
+        }
     }
 
     @Override
@@ -102,6 +120,7 @@ public class StreamSettings extends AppCompatActivity {
         UiHelper.setLocale(this);
 
         setContentView(R.layout.activity_stream_settings);
+        setupSettingsHeader();
         UiHelper.applyReachabilitySpacing(this);
 
         getSupportFragmentManager().registerFragmentLifecycleCallbacks(
@@ -116,12 +135,132 @@ public class StreamSettings extends AppCompatActivity {
                 }, true);
 
         UiHelper.notifyNewRootView(this);
+        applySettingsChrome();
+    }
+
+    private void setupSettingsHeader() {
+        settingsHeaderBar = findViewById(R.id.settingsHeaderBar);
+        settingsSearchBar = findViewById(R.id.settingsSearchBar);
+        settingsBackButton = findViewById(R.id.settingsBackButton);
+        settingsHeaderTitle = findViewById(R.id.settingsHeaderTitle);
+        settingsProfileSubtitle = findViewById(R.id.settingsProfileSubtitle);
+        settingsToggleAllButton = findViewById(R.id.settingsToggleAllButton);
+        settingsSearchIcon = findViewById(R.id.settingsSearchIcon);
+        settingsSearchInput = findViewById(R.id.settingsSearchInput);
+        settingsSearchClear = findViewById(R.id.settingsSearchClear);
+
+        if (settingsBackButton != null) {
+            settingsBackButton.setOnClickListener(v -> onBackPressed());
+        }
+        if (settingsToggleAllButton != null) {
+            settingsToggleAllButton.setOnClickListener(v -> {
+                if (prefsFragment != null) {
+                    prefsFragment.toggleAllCategories();
+                    updateToggleAllButtonLabel();
+                }
+            });
+        }
+        if (settingsSearchClear != null) {
+            settingsSearchClear.setOnClickListener(v -> {
+                if (settingsSearchInput != null) {
+                    settingsSearchInput.setText("");
+                }
+            });
+        }
+        if (settingsSearchInput != null) {
+            settingsSearchInput.addTextChangedListener(new android.text.TextWatcher() {
+                @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+                @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+
+                @Override
+                public void afterTextChanged(android.text.Editable s) {
+                    String q = s != null ? s.toString() : "";
+                    if (settingsSearchClear != null) {
+                        settingsSearchClear.setVisibility(q.isEmpty() ? View.GONE : View.VISIBLE);
+                    }
+                    if (prefsFragment != null) {
+                        prefsFragment.applySearchQuery(q);
+                        updateToggleAllButtonLabel();
+                    }
+                }
+            });
+        }
+    }
+
+    public void updateToggleAllButtonLabel() {
+        if (settingsToggleAllButton == null || prefsFragment == null) {
+            return;
+        }
+        boolean allExpanded = prefsFragment.areAllCategoriesExpanded();
+        settingsToggleAllButton.setText(allExpanded
+                ? R.string.settings_collapse_all
+                : R.string.settings_expand_all);
+    }
+
+    public void applySettingsChrome() {
+        com.limelight.ui.AppThemePalette palette = com.limelight.ui.AppThemePalette.getCurrent(this);
+        int primaryText = palette.getPrimaryTextColor();
+        int secondaryText = palette.getSecondaryTextColor();
+        int neonAccent = palette.getNeonAccent();
+
+        if (settingsHeaderBar != null) {
+            UiHelper.applyFrostedCardBackground(
+                    settingsHeaderBar,
+                    com.limelight.ui.FlowingAuroraView.CornerMode.ALL,
+                    24f,
+                    0x5C121826);
+        }
+        if (settingsSearchBar != null) {
+            UiHelper.applyFrostedCardBackground(
+                    settingsSearchBar,
+                    com.limelight.ui.FlowingAuroraView.CornerMode.ALL,
+                    22f,
+                    0x4E121826);
+        }
+        if (settingsBackButton != null) {
+            settingsBackButton.setColorFilter(primaryText, android.graphics.PorterDuff.Mode.SRC_IN);
+        }
+        if (settingsHeaderTitle != null) {
+            settingsHeaderTitle.setTextColor(primaryText);
+        }
+        if (settingsProfileSubtitle != null) {
+            String activeProfile = ProfilesManager.getInstance().getActiveName();
+            if (activeProfile != null && !activeProfile.isEmpty()) {
+                settingsProfileSubtitle.setText(activeProfile);
+                settingsProfileSubtitle.setTextColor(neonAccent);
+                settingsProfileSubtitle.setVisibility(View.VISIBLE);
+            } else {
+                settingsProfileSubtitle.setVisibility(View.GONE);
+            }
+        }
+        if (settingsToggleAllButton != null) {
+            android.graphics.drawable.GradientDrawable pill = new android.graphics.drawable.GradientDrawable();
+            pill.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
+            pill.setCornerRadius(UiHelper.dpToPx(this, 999f));
+            pill.setColor(com.limelight.ui.AppThemePalette.withAlpha(palette.accent, palette.isLight ? 0.14f : 0.22f));
+            pill.setStroke(Math.max(1, Math.round(UiHelper.dpToPx(this, 1f))),
+                    com.limelight.ui.AppThemePalette.withAlpha(neonAccent, 0.55f));
+            settingsToggleAllButton.setBackground(pill);
+            settingsToggleAllButton.setTextColor(neonAccent);
+        }
+        if (settingsSearchIcon != null) {
+            settingsSearchIcon.setColorFilter(secondaryText, android.graphics.PorterDuff.Mode.SRC_IN);
+        }
+        if (settingsSearchClear != null) {
+            settingsSearchClear.setColorFilter(secondaryText, android.graphics.PorterDuff.Mode.SRC_IN);
+        }
+        if (settingsSearchInput != null) {
+            settingsSearchInput.setTextColor(primaryText);
+            settingsSearchInput.setHintTextColor(secondaryText);
+        }
+        updateToggleAllButtonLabel();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
         UiHelper.refreshBackdrop(this);
+        applySettingsChrome();
         UiHelper.restoreMenuForegroundIfNeeded(this);
     }
 
@@ -147,6 +286,7 @@ public class StreamSettings extends AppCompatActivity {
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
         UiHelper.applyReachabilitySpacing(this);
+        applySettingsChrome();
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             Display.Mode mode = getActiveDisplay(StreamSettings.this, previousPrefs).getMode();
@@ -344,6 +484,181 @@ public class StreamSettings extends AppCompatActivity {
                     .apply();
         }
 
+        private final java.util.Set<String> expandedCategories = new java.util.HashSet<>();
+        private final java.util.Map<Preference, Boolean> basePrefVisibility = new java.util.IdentityHashMap<>();
+        private final java.util.Map<String, Integer> categoryOptionCounts = new java.util.HashMap<>();
+        private String searchQuery = "";
+
+        private void captureBaseVisibilityAndCollapseAll() {
+            PreferenceScreen screen = getPreferenceScreen();
+            if (screen == null) {
+                return;
+            }
+            basePrefVisibility.clear();
+            categoryOptionCounts.clear();
+            for (int i = 0; i < screen.getPreferenceCount(); i++) {
+                Preference p = screen.getPreference(i);
+                if (p instanceof PreferenceCategory) {
+                    PreferenceCategory cat = (PreferenceCategory) p;
+                    int visibleCount = 0;
+                    for (int j = 0; j < cat.getPreferenceCount(); j++) {
+                        Preference child = cat.getPreference(j);
+                        boolean naturallyVisible = child.isVisible();
+                        basePrefVisibility.put(child, naturallyVisible);
+                        if (naturallyVisible) {
+                            visibleCount++;
+                        }
+                    }
+                    if (cat.getKey() != null) {
+                        categoryOptionCounts.put(cat.getKey(), visibleCount);
+                    }
+                }
+            }
+            applyAccordionVisibility();
+        }
+
+        private void applyAccordionVisibility() {
+            PreferenceScreen screen = getPreferenceScreen();
+            if (screen == null) {
+                return;
+            }
+            String q = searchQuery != null ? searchQuery.trim().toLowerCase(java.util.Locale.ROOT) : "";
+            boolean searching = !q.isEmpty();
+
+            for (int i = 0; i < screen.getPreferenceCount(); i++) {
+                Preference p = screen.getPreference(i);
+                if (!(p instanceof PreferenceCategory)) {
+                    continue;
+                }
+                PreferenceCategory cat = (PreferenceCategory) p;
+                String catKey = cat.getKey() != null ? cat.getKey() : String.valueOf(i);
+                String catTitle = cat.getTitle() != null ? cat.getTitle().toString().toLowerCase(java.util.Locale.ROOT) : "";
+                boolean catTitleMatches = searching && catTitle.contains(q);
+                boolean expanded = expandedCategories.contains(catKey);
+
+                int naturalCount = 0;
+                int matchedCount = 0;
+                for (int j = 0; j < cat.getPreferenceCount(); j++) {
+                    Preference child = cat.getPreference(j);
+                    Boolean baseVis = basePrefVisibility.get(child);
+                    boolean naturallyVisible = (baseVis != null) ? baseVis : child.isVisible();
+                    if (!naturallyVisible) {
+                        child.setVisible(false);
+                        continue;
+                    }
+                    naturalCount++;
+                    if (searching) {
+                        String t = child.getTitle() != null ? child.getTitle().toString().toLowerCase(java.util.Locale.ROOT) : "";
+                        String s = child.getSummary() != null ? child.getSummary().toString().toLowerCase(java.util.Locale.ROOT) : "";
+                        boolean match = catTitleMatches || t.contains(q) || s.contains(q);
+                        child.setVisible(match);
+                        if (match) {
+                            matchedCount++;
+                        }
+                    } else {
+                        child.setVisible(expanded);
+                    }
+                }
+
+                if (searching) {
+                    cat.setVisible(matchedCount > 0);
+                    categoryOptionCounts.put(catKey, matchedCount);
+                } else {
+                    cat.setVisible(naturalCount > 0);
+                    categoryOptionCounts.put(catKey, naturalCount);
+                }
+            }
+
+            androidx.recyclerview.widget.RecyclerView rv = getListView();
+            if (rv != null && rv.getAdapter() != null) {
+                rv.getAdapter().notifyDataSetChanged();
+            }
+            if (getActivity() instanceof StreamSettings) {
+                ((StreamSettings) getActivity()).updateToggleAllButtonLabel();
+            }
+        }
+
+        public void applySearchQuery(String query) {
+            this.searchQuery = query != null ? query : "";
+            applyAccordionVisibility();
+        }
+
+        public boolean areAllCategoriesExpanded() {
+            PreferenceScreen screen = getPreferenceScreen();
+            if (screen == null) {
+                return false;
+            }
+            int visibleCats = 0;
+            int expandedCount = 0;
+            for (int i = 0; i < screen.getPreferenceCount(); i++) {
+                Preference p = screen.getPreference(i);
+                if (p instanceof PreferenceCategory && p.isVisible()) {
+                    visibleCats++;
+                    if (p.getKey() != null && expandedCategories.contains(p.getKey())) {
+                        expandedCount++;
+                    }
+                }
+            }
+            return visibleCats > 0 && expandedCount >= visibleCats;
+        }
+
+        public void toggleAllCategories() {
+            PreferenceScreen screen = getPreferenceScreen();
+            if (screen == null) {
+                return;
+            }
+            boolean collapse = areAllCategoriesExpanded();
+            expandedCategories.clear();
+            if (!collapse) {
+                for (int i = 0; i < screen.getPreferenceCount(); i++) {
+                    Preference p = screen.getPreference(i);
+                    if (p instanceof PreferenceCategory && p.getKey() != null && p.isVisible()) {
+                        expandedCategories.add(p.getKey());
+                    }
+                }
+            }
+            applyAccordionVisibility();
+        }
+
+        private static int getCategoryIconRes(String catKey) {
+            if (catKey == null) {
+                return R.drawable.ic_settings;
+            }
+            switch (catKey) {
+                case "category_ui_settings":
+                    return R.drawable.ic_palette;
+                case "category_portal_animation":
+                    return R.drawable.ic_focus_mode;
+                case "category_video_settings":
+                    return R.drawable.ic_computer;
+                case "category_audio_settings":
+                    return R.drawable.ic_audio;
+                case "category_perf_monitor_settings":
+                    return R.drawable.ic_qm_perf_stats;
+                case "category_gamepad_settings":
+                    return R.drawable.ic_qm_osc;
+                case "category_input_settings":
+                    return R.drawable.ic_qm_mouse_multitouch;
+                case "category_onscreen_controls":
+                    return R.drawable.ic_qm_osc;
+                case "category_onscreen_keyboard":
+                    return R.drawable.ic_qm_keyboard;
+                case "category_virtual_trackpad_settings":
+                    return R.drawable.ic_qm_mouse_trackpad_natural;
+                case "category_special_key_layout":
+                    return R.drawable.ic_keyboard_setting;
+                case "category_host_settings":
+                    return R.drawable.ic_computer;
+                case "category_general_settings":
+                    return R.drawable.ic_language;
+                case "category_advanced_settings":
+                    return R.drawable.ic_lime_layer;
+                case "category_settings_misc":
+                default:
+                    return R.drawable.ic_settings;
+            }
+        }
+
         @NonNull
         @Override
         public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
@@ -358,16 +673,15 @@ public class StreamSettings extends AppCompatActivity {
             setDivider(null);
             final androidx.recyclerview.widget.RecyclerView rv = getListView();
             if (rv != null) {
-                final int sidePad = (int) UiHelper.dpToPx(requireContext(), 8f);
-                final int bottomPad = (int) UiHelper.dpToPx(requireContext(), 24f);
-                final int cardGap = (int) UiHelper.dpToPx(requireContext(), 14f);
+                final int sidePad = (int) UiHelper.dpToPx(requireContext(), 4f);
+                final int bottomPad = (int) UiHelper.dpToPx(requireContext(), 28f);
+                final int cardGap = (int) UiHelper.dpToPx(requireContext(), 10f);
                 final int dividerInset = (int) UiHelper.dpToPx(requireContext(), 18f);
                 final android.graphics.Paint dividerPaint = new android.graphics.Paint();
-                dividerPaint.setColor(0x1EFFFFFF);
                 dividerPaint.setStrokeWidth(Math.max(1f, UiHelper.dpToPx(requireContext(), 0.75f)));
 
                 rv.setClipToPadding(false);
-                rv.setPadding(sidePad, rv.getPaddingTop(), sidePad, bottomPad);
+                rv.setPadding(sidePad, (int) UiHelper.dpToPx(requireContext(), 2f), sidePad, bottomPad);
                 rv.addItemDecoration(new androidx.recyclerview.widget.RecyclerView.ItemDecoration() {
                     @Override
                     public void getItemOffsets(@NonNull android.graphics.Rect outRect, @NonNull View item,
@@ -386,9 +700,6 @@ public class StreamSettings extends AppCompatActivity {
                         Preference pref = adapter.getItem(pos);
                         if (pref instanceof PreferenceCategory && pos > 0) {
                             outRect.top = cardGap;
-                        } else if (pos == 0 && pref != null
-                                && pref.getClass().getSimpleName().contains("SearchPreference")) {
-                            outRect.bottom = cardGap;
                         }
                     }
 
@@ -400,6 +711,8 @@ public class StreamSettings extends AppCompatActivity {
                         if (!(rawAdapter instanceof androidx.preference.PreferenceGroupAdapter)) {
                             return;
                         }
+                        com.limelight.ui.AppThemePalette divPalette = com.limelight.ui.AppThemePalette.getCurrent(parent.getContext());
+                        dividerPaint.setColor(divPalette.getDividerColor());
                         androidx.preference.PreferenceGroupAdapter adapter =
                                 (androidx.preference.PreferenceGroupAdapter) rawAdapter;
                         for (int i = 0; i < parent.getChildCount(); i++) {
@@ -411,8 +724,7 @@ public class StreamSettings extends AppCompatActivity {
                             }
                             Preference pref = adapter.getItem(pos);
                             Preference nextPref = adapter.getItem(pos + 1);
-                            if (pref == null || pref instanceof PreferenceCategory
-                                    || pref.getClass().getSimpleName().contains("SearchPreference")) {
+                            if (pref == null) {
                                 continue;
                             }
                             if (nextPref != null && !(nextPref instanceof PreferenceCategory)) {
@@ -441,46 +753,92 @@ public class StreamSettings extends AppCompatActivity {
                     if (pref == null) {
                         return;
                     }
-                    if (pref.getClass().getSimpleName().contains("SearchPreference")) {
-                        if (!UiHelper.applyFrostedCardBackground(
-                                itemView,
-                                com.limelight.ui.FlowingAuroraView.CornerMode.ALL,
-                                28f,
-                                0x4A121826)) {
-                            itemView.setBackgroundResource(R.drawable.bg_oneui_floating_pill);
-                        }
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                            itemView.setElevation(UiHelper.dpToPx(itemView.getContext(), 6f));
-                        }
-                    } else if (pref instanceof PreferenceCategory) {
+                    com.limelight.ui.AppThemePalette palette = com.limelight.ui.AppThemePalette.getCurrent(itemView.getContext());
+                    if (pref instanceof PreferenceCategory) {
+                        PreferenceCategory cat = (PreferenceCategory) pref;
+                        String catKey = cat.getKey();
                         boolean hasChildren = nextPref != null && !(nextPref instanceof PreferenceCategory);
+                        boolean searching = searchQuery != null && !searchQuery.trim().isEmpty();
+                        boolean isExpanded = searching || (catKey != null && expandedCategories.contains(catKey));
+
                         com.limelight.ui.FlowingAuroraView.CornerMode mode = hasChildren
                                 ? com.limelight.ui.FlowingAuroraView.CornerMode.TOP
                                 : com.limelight.ui.FlowingAuroraView.CornerMode.ALL;
-                        if (!UiHelper.applyFrostedCardBackground(itemView, mode, 28f, 0x5C121826)) {
+                        if (!UiHelper.applyFrostedCardBackground(itemView, mode, 24f, isExpanded ? 0x64121826 : 0x54121826)) {
                             itemView.setBackgroundResource(hasChildren
                                     ? R.drawable.bg_oneui_glass_card_top
                                     : R.drawable.bg_oneui_squircle_card);
                         }
-                        com.limelight.ui.AppThemePalette catPalette = com.limelight.ui.AppThemePalette.getCurrent(itemView.getContext());
+
+                        int neonAccent = palette.getNeonAccent();
+                        View iconBg = holder.findViewById(R.id.categoryIconBg);
+                        if (iconBg != null) {
+                            android.graphics.drawable.GradientDrawable badge = new android.graphics.drawable.GradientDrawable();
+                            badge.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
+                            badge.setCornerRadius(UiHelper.dpToPx(itemView.getContext(), 12f));
+                            badge.setColor(com.limelight.ui.AppThemePalette.withAlpha(
+                                    palette.accent, isExpanded ? (palette.isLight ? 0.22f : 0.30f) : (palette.isLight ? 0.12f : 0.18f)));
+                            badge.setStroke(Math.max(1, Math.round(UiHelper.dpToPx(itemView.getContext(), 1f))),
+                                    com.limelight.ui.AppThemePalette.withAlpha(neonAccent, isExpanded ? 0.65f : 0.32f));
+                            iconBg.setBackground(badge);
+                        }
+                        View iconView = holder.findViewById(R.id.categoryIcon);
+                        if (iconView instanceof android.widget.ImageView) {
+                            android.widget.ImageView iv = (android.widget.ImageView) iconView;
+                            iv.setImageResource(getCategoryIconRes(catKey));
+                            iv.setColorFilter(isExpanded ? neonAccent : palette.getPrimaryTextColor(),
+                                    android.graphics.PorterDuff.Mode.SRC_IN);
+                        }
+
                         View title = holder.findViewById(android.R.id.title);
                         if (title instanceof android.widget.TextView) {
                             android.widget.TextView tv = (android.widget.TextView) title;
-                            tv.setTextColor(catPalette.getPrimaryTextColor());
+                            tv.setTextColor(palette.getPrimaryTextColor());
                             tv.setShadowLayer(0f, 0f, 0f, 0);
                         }
+
+                        View countView = holder.findViewById(R.id.categoryCountBadge);
+                        if (countView instanceof android.widget.TextView) {
+                            int count = (catKey != null && categoryOptionCounts.containsKey(catKey))
+                                    ? categoryOptionCounts.get(catKey)
+                                    : cat.getPreferenceCount();
+                            ((android.widget.TextView) countView).setText(
+                                    itemView.getContext().getString(R.string.settings_option_count_fmt, count));
+                            ((android.widget.TextView) countView).setTextColor(palette.getSecondaryTextColor());
+                        }
+
+                        View chevron = holder.findViewById(R.id.categoryChevron);
+                        if (chevron instanceof android.widget.ImageView) {
+                            android.widget.ImageView chev = (android.widget.ImageView) chevron;
+                            chev.setColorFilter(isExpanded ? neonAccent : palette.getSecondaryTextColor(),
+                                    android.graphics.PorterDuff.Mode.SRC_IN);
+                            chev.setRotation(isExpanded ? 180f : 0f);
+                        }
+
+                        itemView.setClickable(true);
+                        itemView.setFocusable(true);
+                        itemView.setOnClickListener(v -> {
+                            if (catKey == null || searching) {
+                                return;
+                            }
+                            if (expandedCategories.contains(catKey)) {
+                                expandedCategories.remove(catKey);
+                            } else {
+                                expandedCategories.add(catKey);
+                            }
+                            applyAccordionVisibility();
+                        });
                         itemView.setAlpha(1.0f);
                     } else {
                         boolean isLastInCard = nextPref == null || nextPref instanceof PreferenceCategory;
                         com.limelight.ui.FlowingAuroraView.CornerMode mode = isLastInCard
                                 ? com.limelight.ui.FlowingAuroraView.CornerMode.BOTTOM
                                 : com.limelight.ui.FlowingAuroraView.CornerMode.MIDDLE;
-                        if (!UiHelper.applyFrostedCardBackground(itemView, mode, 28f, 0x52121826)) {
+                        if (!UiHelper.applyFrostedCardBackground(itemView, mode, 24f, 0x4E121826)) {
                             itemView.setBackgroundResource(isLastInCard
                                     ? R.drawable.bg_oneui_glass_card_bottom
                                     : R.drawable.bg_oneui_glass_card_middle);
                         }
-                        com.limelight.ui.AppThemePalette palette = com.limelight.ui.AppThemePalette.getCurrent(itemView.getContext());
                         View title = holder.findViewById(android.R.id.title);
                         if (title instanceof android.widget.TextView) {
                             ((android.widget.TextView) title).setTextColor(palette.getPrimaryTextColor());
@@ -491,10 +849,68 @@ public class StreamSettings extends AppCompatActivity {
                         }
                         itemView.setAlpha(pref.isEnabled() ? 1.0f : 0.45f);
                         applySwitchPalette(itemView, palette);
+                        applyValuePill(holder, pref, palette);
                     }
                 }
 
-                private android.graphics.drawable.Drawable buildPillTrackDrawable(Context ctx, int neonAccent) {
+                private void applyValuePill(@NonNull androidx.preference.PreferenceViewHolder holder,
+                                            @NonNull Preference pref,
+                                            @NonNull com.limelight.ui.AppThemePalette palette) {
+                    View wf = holder.findViewById(android.R.id.widget_frame);
+                    if (!(wf instanceof ViewGroup)) {
+                        return;
+                    }
+                    ViewGroup widgetFrame = (ViewGroup) wf;
+                    android.widget.TextView pill = widgetFrame.findViewWithTag("oneui_pref_value_pill");
+
+                    String pillText = null;
+                    if (pref instanceof ListPreference) {
+                        CharSequence entry = ((ListPreference) pref).getEntry();
+                        if (entry != null && entry.length() > 0) {
+                            pillText = entry.toString();
+                        }
+                    } else if (pref instanceof SeekBarPreference) {
+                        pillText = ((SeekBarPreference) pref).getFormattedValue();
+                    }
+
+                    if (pillText == null) {
+                        if (pill != null) {
+                            pill.setVisibility(View.GONE);
+                        }
+                        return;
+                    }
+
+                    Context ctx = widgetFrame.getContext();
+                    if (pill == null) {
+                        pill = new android.widget.TextView(ctx);
+                        pill.setTag("oneui_pref_value_pill");
+                        pill.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 11.5f);
+                        pill.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+                        pill.setMaxLines(1);
+                        pill.setEllipsize(TextUtils.TruncateAt.END);
+                        pill.setMaxWidth(Math.round(UiHelper.dpToPx(ctx, 118f)));
+                        int padH = Math.round(UiHelper.dpToPx(ctx, 10f));
+                        int padV = Math.round(UiHelper.dpToPx(ctx, 4.5f));
+                        pill.setPadding(padH, padV, padH, padV);
+                        widgetFrame.addView(pill);
+                    }
+
+                    int neonAccent = palette.getNeonAccent();
+                    android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+                    bg.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
+                    bg.setCornerRadius(UiHelper.dpToPx(ctx, 999f));
+                    bg.setColor(com.limelight.ui.AppThemePalette.withAlpha(palette.accent, palette.isLight ? 0.14f : 0.22f));
+                    bg.setStroke(Math.max(1, Math.round(UiHelper.dpToPx(ctx, 1f))),
+                            com.limelight.ui.AppThemePalette.withAlpha(neonAccent, 0.45f));
+                    pill.setBackground(bg);
+                    pill.setTextColor(neonAccent);
+                    pill.setText(pillText);
+                    pill.setVisibility(View.VISIBLE);
+                    widgetFrame.setVisibility(View.VISIBLE);
+                }
+
+                private android.graphics.drawable.Drawable buildPillTrackDrawable(
+                        Context ctx, com.limelight.ui.AppThemePalette palette, int neonAccent) {
                     int w = Math.round(UiHelper.dpToPx(ctx, 52f));
                     int h = Math.round(UiHelper.dpToPx(ctx, 30f));
                     float radius = h * 0.5f;
@@ -504,15 +920,16 @@ public class StreamSettings extends AppCompatActivity {
                     checked.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
                     checked.setSize(w, h);
                     checked.setCornerRadius(radius);
-                    checked.setColor(com.limelight.ui.AppThemePalette.withAlpha(neonAccent, 0.28f));
+                    checked.setColor(com.limelight.ui.AppThemePalette.withAlpha(neonAccent, palette.isLight ? 0.22f : 0.28f));
                     checked.setStroke(strokeW, neonAccent);
 
                     android.graphics.drawable.GradientDrawable unchecked = new android.graphics.drawable.GradientDrawable();
                     unchecked.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
                     unchecked.setSize(w, h);
                     unchecked.setCornerRadius(radius);
-                    unchecked.setColor(0x2E0B101B);
-                    unchecked.setStroke(strokeW, 0xE0FFFFFF);
+                    unchecked.setColor(palette.isLight ? 0x1A0F172A : 0x2E0B101B);
+                    unchecked.setStroke(strokeW, com.limelight.ui.AppThemePalette.withAlpha(
+                            palette.cardOutline, palette.isLight ? 0.72f : 0.75f));
 
                     android.graphics.drawable.StateListDrawable stateList = new android.graphics.drawable.StateListDrawable();
                     stateList.addState(new int[]{android.R.attr.state_checked}, checked);
@@ -541,10 +958,14 @@ public class StreamSettings extends AppCompatActivity {
                     return layer;
                 }
 
-                private android.graphics.drawable.Drawable buildPillThumbDrawable(Context ctx, int neonAccent) {
+                private android.graphics.drawable.Drawable buildPillThumbDrawable(
+                        Context ctx, com.limelight.ui.AppThemePalette palette, int neonAccent) {
+                    int uncheckedThumb = palette.isLight
+                            ? com.limelight.ui.AppThemePalette.withAlpha(palette.getSecondaryTextColor(), 0.85f)
+                            : 0xFFD0D5DD;
                     android.graphics.drawable.StateListDrawable stateList = new android.graphics.drawable.StateListDrawable();
                     stateList.addState(new int[]{android.R.attr.state_checked}, buildInsetThumbBall(ctx, neonAccent));
-                    stateList.addState(new int[]{}, buildInsetThumbBall(ctx, 0xFFD0D5DD));
+                    stateList.addState(new int[]{}, buildInsetThumbBall(ctx, uncheckedThumb));
                     return stateList;
                 }
 
@@ -554,8 +975,8 @@ public class StreamSettings extends AppCompatActivity {
                         SwitchCompat sw = (SwitchCompat) root;
                         sw.setThumbTintList(null);
                         sw.setTrackTintList(null);
-                        sw.setTrackDrawable(buildPillTrackDrawable(sw.getContext(), neonAccent));
-                        sw.setThumbDrawable(buildPillThumbDrawable(sw.getContext(), neonAccent));
+                        sw.setTrackDrawable(buildPillTrackDrawable(sw.getContext(), palette, neonAccent));
+                        sw.setThumbDrawable(buildPillThumbDrawable(sw.getContext(), palette, neonAccent));
                         sw.setSwitchMinWidth(Math.round(UiHelper.dpToPx(sw.getContext(), 52f)));
                         sw.setThumbTextPadding(0);
                         sw.setSplitTrack(false);
@@ -566,8 +987,8 @@ public class StreamSettings extends AppCompatActivity {
                             sw.setThumbTintList(null);
                             sw.setTrackTintList(null);
                         }
-                        sw.setTrackDrawable(buildPillTrackDrawable(sw.getContext(), neonAccent));
-                        sw.setThumbDrawable(buildPillThumbDrawable(sw.getContext(), neonAccent));
+                        sw.setTrackDrawable(buildPillTrackDrawable(sw.getContext(), palette, neonAccent));
+                        sw.setThumbDrawable(buildPillThumbDrawable(sw.getContext(), palette, neonAccent));
                         sw.setSwitchMinWidth(Math.round(UiHelper.dpToPx(sw.getContext(), 52f)));
                         sw.setThumbTextPadding(0);
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
@@ -1148,6 +1569,9 @@ public class StreamSettings extends AppCompatActivity {
                 _pref.setOnPreferenceChangeListener((preference, newValue) -> {
                     requireView().post(() -> {
                         UiHelper.refreshBackdrop(requireActivity());
+                        if (getActivity() instanceof StreamSettings) {
+                            ((StreamSettings) getActivity()).applySettingsChrome();
+                        }
                         androidx.recyclerview.widget.RecyclerView rv = getListView();
                         if (rv != null && rv.getAdapter() != null) {
                             rv.getAdapter().notifyDataSetChanged();
@@ -1167,6 +1591,9 @@ public class StreamSettings extends AppCompatActivity {
                             schemePref.setValue(com.limelight.ui.AppThemePalette.CUSTOM_THEME_KEY);
                         }
                         UiHelper.refreshBackdrop(requireActivity());
+                        if (getActivity() instanceof StreamSettings) {
+                            ((StreamSettings) getActivity()).applySettingsChrome();
+                        }
                         androidx.recyclerview.widget.RecyclerView rv = getListView();
                         if (rv != null && rv.getAdapter() != null) {
                             rv.getAdapter().notifyDataSetChanged();
@@ -1295,6 +1722,9 @@ public class StreamSettings extends AppCompatActivity {
                     }
                 });
             }
+
+            // Start with all 15 categories cleanly collapsed in accordion mode
+            captureBaseVisibilityAndCollapseAll();
         }
 
         private void removeEntryFromListAndSetValue(String resolutionPrefString, String entryToRemove, String nextDefault) {

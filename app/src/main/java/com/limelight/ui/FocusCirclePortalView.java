@@ -226,7 +226,7 @@ public class FocusCirclePortalView extends View {
 
     private void ensureStaticShaders(int w, int h, float cx, float cy,
                                      float outerRadius, float innerRadius, float glowMargin) {
-        String paletteSig = palette.key + ":" + palette.accent + ":" + palette.surface + ":" + palette.isLight;
+        String paletteSig = palette.getSignature();
         boolean dimsChanged = (w != cachedW || h != cachedH);
         boolean stateChanged = (statusColor != cachedStatusColor
                 || !paletteSig.equals(cachedPaletteKey)
@@ -243,9 +243,9 @@ public class FocusCirclePortalView extends View {
         cachedPressed = isPressedOrFocused;
 
         onlineIconFilter = new PorterDuffColorFilter(
-                palette.isLight ? 0xEB0F172A : 0xF2FFFFFF, PorterDuff.Mode.SRC_IN);
+                AppThemePalette.withAlpha(palette.getPrimaryTextColor(), 0.94f), PorterDuff.Mode.SRC_IN);
         offlineIconFilter = new PorterDuffColorFilter(
-                palette.isLight ? 0x7A334155 : 0x7AFFFFFF, PorterDuff.Mode.SRC_IN);
+                AppThemePalette.withAlpha(palette.getSecondaryTextColor(), 0.60f), PorterDuff.Mode.SRC_IN);
 
         glowPaint.setShader(new RadialGradient(
                 cx, cy, outerRadius + glowMargin,
@@ -278,7 +278,7 @@ public class FocusCirclePortalView extends View {
                 new float[]{0.0f, 0.52f, 1.0f},
                 Shader.TileMode.CLAMP));
 
-        frostedTintPaint.setColor(palette.isLight ? 0xB8F8FAFE : 0x56000000);
+        frostedTintPaint.setColor(palette.getFrostedCardTint(0x56000000));
         vignettePaint.setShader(new RadialGradient(
                 cx, cy, innerRadius,
                 new int[]{0x00000000, palette.isLight ? 0x160F172A : 0x52000000},
