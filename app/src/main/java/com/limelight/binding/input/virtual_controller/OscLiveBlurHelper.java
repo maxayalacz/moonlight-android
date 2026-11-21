@@ -26,7 +26,9 @@ import java.util.List;
  * D-pad, and analog sticks a genuine live frosted-glass backdrop over the streaming video.
  */
 public class OscLiveBlurHelper {
-    private static final int CAPTURE_LONG_EDGE = 160;
+    private static final int CAPTURE_LONG_EDGE_CRISP = 560;
+    private static final int CAPTURE_LONG_EDGE_MID = 320;
+    private static final int CAPTURE_LONG_EDGE_HEAVY = 220;
     private static final long CAPTURE_INTERVAL_MS = 50L; // ~20 FPS
     private static final long PREF_REFRESH_INTERVAL_MS = 1000L;
 
@@ -50,7 +52,9 @@ public class OscLiveBlurHelper {
 
     private boolean running = false;
     private boolean inFlight = false;
+    private int cachedBlurPct = 100;
     private int cachedBlurRadius = 4;
+    private int cachedCaptureLongEdge = CAPTURE_LONG_EDGE_MID;
     private long lastPrefRefreshMs = 0L;
 
     private final Runnable captureTick = new Runnable() {
@@ -75,11 +79,32 @@ public class OscLiveBlurHelper {
             return;
         }
         lastPrefRefreshMs = now;
-        int blurPct = com.limelight.profiles.ProfilesManager.getInstance()
+        int blurPct = Math.max(0, Math.min(200, com.limelight.profiles.ProfilesManager.getInstance()
                 .getOverlayingSharedPreferences(context)
                 .getInt(com.limelight.preferences.PreferenceConfiguration.OSC_BLUR_AMOUNT_PREF_STRING,
-                        com.limelight.preferences.PreferenceConfiguration.DEFAULT_OSC_BLUR_AMOUNT);
-        cachedBlurRadius = Math.max(0, Math.min(10, Math.round(4f * (blurPct / 100f))));
+                        com.limelight.preferences.PreferenceConfiguration.DEFAULT_OSC_BLUR_AMOUNT)));
+        cachedBlurPct = blurPct;
+
+        // Higher capture resolution at low blur prevents coarse downscale fuzziness;
+        // smoothly step down resolution at heavy blur to keep CPU cost minimal.
+        if (blurPct <= 40) {
+            cachedCaptureLongEdge = CAPTURE_LONG_EDGE_CRISP;
+        } else if (blurPct <= 100) {
+            float t = (blurPct - 40f) / 60f;
+            cachedCaptureLongEdge = Math.round(CAPTURE_LONG_EDGE_CRISP + (CAPTURE_LONG_EDGE_MID - CAPTURE_LONG_EDGE_CRISP) * t);
+        } else {
+            float t = (blurPct - 100f) / 100f;
+            cachedCaptureLongEdge = Math.round(CAPTURE_LONG_EDGE_MID + (CAPTURE_LONG_EDGE_HEAVY - CAPTURE_LONG_EDGE_MID) * t);
+        }
+
+        if (blurPct == 0) {
+            cachedBlurRadius = 0;
+        } else {
+            // Perceptual curve: 1-35% gives ultra-fine crisp frost (radius 1-2 on 560px buffer),
+            // 100% gives medium frost (radius ~4 on 320px), 200% gives rich deep blur (radius 9 on 220px).
+            double norm = blurPct / 200.0;
+            cachedBlurRadius = Math.max(1, Math.min(10, (int) Math.round(0.6 + 8.4 * Math.pow(norm, 1.35))));
+        }
     }
 
     /**
@@ -139,20 +164,23 @@ public class OscLiveBlurHelper {
             return;
         }
 
+        refreshBlurPreferenceIfNeeded(false);
+
         final int sw = surfaceView.getWidth();
         final int sh = surfaceView.getHeight();
         surfaceView.getLocationOnScreen(surfaceLoc);
         final int sl = surfaceLoc[0];
         final int st = surfaceLoc[1];
 
+        int longEdge = Math.min(Math.max(sw, sh), Math.max(120, cachedCaptureLongEdge));
         int bw;
         int bh;
         if (sw >= sh) {
-            bw = CAPTURE_LONG_EDGE;
-            bh = Math.max(16, Math.round(CAPTURE_LONG_EDGE * (sh / (float) sw)));
+            bw = longEdge;
+            bh = Math.max(16, Math.round(longEdge * (sh / (float) sw)));
         } else {
-            bh = CAPTURE_LONG_EDGE;
-            bw = Math.max(16, Math.round(CAPTURE_LONG_EDGE * (sw / (float) sh)));
+            bh = longEdge;
+            bw = Math.max(16, Math.round(longEdge * (sw / (float) sh)));
         }
 
         if (buffers[0] == null || buffers[0].getWidth() != bw || buffers[0].getHeight() != bh) {
@@ -170,7 +198,6 @@ public class OscLiveBlurHelper {
                 if (!running || copyResult != PixelCopy.SUCCESS) {
                     return;
                 }
-                refreshBlurPreferenceIfNeeded(false);
                 int blurRadius = cachedBlurRadius;
                 if (blurRadius > 0) {
                     UiHelper.fastBoxBlur(target, blurRadius);

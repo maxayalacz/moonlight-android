@@ -68,7 +68,7 @@ public class VirtualController {
 
     private Button buttonConfigure = null;
     private boolean visible = false;
-    private boolean configureButtonVisible = true;
+    private boolean configureButtonVisible = false;
     private OnLayoutEditedListener layoutEditedListener = null;
 
     private List<VirtualControllerElement> elements = new ArrayList<>();

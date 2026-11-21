@@ -139,7 +139,10 @@ public class SessionMetricsActivity extends AppCompatActivity {
         cardBg.setShape(GradientDrawable.RECTANGLE);
         cardBg.setCornerRadius(dp(24f));
         cardBg.setColor(0xC80F1526);
-        cardBg.setStroke(Math.max(1, Math.round(dp(1f))), 0x42FFFFFF);
+        int outlinePx = Math.round(UiHelper.getCardOutlineWidthPx(this, 1f));
+        if (outlinePx > 0) {
+            cardBg.setStroke(outlinePx, 0x42FFFFFF);
+        }
         cardContainer.setBackground(cardBg);
 
         rootBackdrop.setOnClickListener(v -> dismissSmoothly());

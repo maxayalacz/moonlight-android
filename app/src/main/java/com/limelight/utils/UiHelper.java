@@ -83,6 +83,74 @@ public class UiHelper {
         }
     }
 
+    public static float getCardOutlineScaleFactor(Context context) {
+        if (context == null) {
+            return 1.0f;
+        }
+        int pct = com.limelight.profiles.ProfilesManager.getInstance()
+                .getOverlayingSharedPreferences(context)
+                .getInt(PreferenceConfiguration.CARD_OUTLINE_THICKNESS_PREF_STRING,
+                        PreferenceConfiguration.DEFAULT_CARD_OUTLINE_THICKNESS);
+        return Math.max(0f, Math.min(2.5f, pct / 100f));
+    }
+
+    public static float getCardOutlineWidthPx(Context context, float baseDp) {
+        float scale = getCardOutlineScaleFactor(context);
+        if (scale <= 0.01f) {
+            return 0f;
+        }
+        return Math.max(1f, dpToPx(context, baseDp * scale));
+    }
+
+    public static android.graphics.drawable.Drawable createInteractiveCardForeground(Context context, float cornerRadiusDp) {
+        float radiusPx = dpToPx(context, cornerRadiusDp);
+        int restStroke = Math.round(getCardOutlineWidthPx(context, 1f));
+        int activeStroke = Math.max(restStroke, Math.round(dpToPx(context, 1.5f)));
+
+        android.graphics.drawable.StateListDrawable sld = new android.graphics.drawable.StateListDrawable();
+
+        GradientDrawable pressed = new GradientDrawable();
+        pressed.setShape(GradientDrawable.RECTANGLE);
+        pressed.setCornerRadius(radiusPx);
+        pressed.setColor(0x2A29354C);
+        pressed.setStroke(activeStroke, 0x88FFFFFF);
+        sld.addState(new int[]{android.R.attr.state_pressed}, pressed);
+
+        GradientDrawable focused = new GradientDrawable();
+        focused.setShape(GradientDrawable.RECTANGLE);
+        focused.setCornerRadius(radiusPx);
+        focused.setColor(0x22263248);
+        focused.setStroke(activeStroke, 0xAAFFFFFF);
+        sld.addState(new int[]{android.R.attr.state_focused}, focused);
+
+        GradientDrawable selected = new GradientDrawable();
+        selected.setShape(GradientDrawable.RECTANGLE);
+        selected.setCornerRadius(radiusPx);
+        selected.setColor(0x1E232F44);
+        selected.setStroke(activeStroke, 0x80FFFFFF);
+        sld.addState(new int[]{android.R.attr.state_selected}, selected);
+
+        GradientDrawable hovered = new GradientDrawable();
+        hovered.setShape(GradientDrawable.RECTANGLE);
+        hovered.setCornerRadius(radiusPx);
+        hovered.setColor(0x16202B3F);
+        if (restStroke > 0) {
+            hovered.setStroke(restStroke, 0x5EFFFFFF);
+        }
+        sld.addState(new int[]{android.R.attr.state_hovered}, hovered);
+
+        GradientDrawable idle = new GradientDrawable();
+        idle.setShape(GradientDrawable.RECTANGLE);
+        idle.setCornerRadius(radiusPx);
+        idle.setColor(android.graphics.Color.TRANSPARENT);
+        if (restStroke > 0) {
+            idle.setStroke(restStroke, 0x36FFFFFF);
+        }
+        sld.addState(new int[]{}, idle);
+
+        return sld;
+    }
+
     public static boolean applyFrostedCardBackground(
             View view,
             com.limelight.ui.FlowingAuroraView.CornerMode cornerMode,
@@ -108,9 +176,15 @@ public class UiHelper {
                 ? (com.limelight.ui.PortalShaderView) portalCandidate
                 : null;
         float radiusPx = dpToPx(view.getContext(), cornerRadiusDp);
+        boolean isSettingsMenuCard = (activity instanceof com.limelight.preferences.StreamSettings);
+        float strokeWidthPx = isSettingsMenuCard
+                ? Math.max(1f, dpToPx(view.getContext(), 1f))
+                : getCardOutlineWidthPx(view.getContext(), 1f);
         if (view.getBackground() instanceof com.limelight.ui.FlowingAuroraView.FrostedCardDrawable) {
-            ((com.limelight.ui.FlowingAuroraView.FrostedCardDrawable) view.getBackground())
-                    .updateStyle(cornerMode, radiusPx, frostTintColor, aurora, portal);
+            com.limelight.ui.FlowingAuroraView.FrostedCardDrawable existing =
+                    (com.limelight.ui.FlowingAuroraView.FrostedCardDrawable) view.getBackground();
+            existing.updateStyle(cornerMode, radiusPx, frostTintColor, aurora, portal);
+            existing.setStrokeWidthPx(strokeWidthPx);
             return true;
         }
         view.setBackground(new com.limelight.ui.FlowingAuroraView.FrostedCardDrawable(
@@ -120,7 +194,7 @@ public class UiHelper {
                 cornerMode,
                 radiusPx,
                 frostTintColor,
-                Math.max(1f, dpToPx(view.getContext(), 1f))));
+                strokeWidthPx));
         return true;
     }
 
@@ -770,12 +844,17 @@ public class UiHelper {
             }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                GradientDrawable border = new GradientDrawable();
-                border.setShape(GradientDrawable.RECTANGLE);
-                border.setColor(android.graphics.Color.TRANSPARENT);
-                border.setCornerRadius(dpToPx(ctx, ONEUI_DIALOG_SQUIRCLE_RADIUS_DP));
-                border.setStroke((int) Math.max(1f, dpToPx(ctx, 1f)), 0x33FFFFFF);
-                decorView.setForeground(border);
+                int dialogStroke = Math.round(getCardOutlineWidthPx(ctx, 1f));
+                if (dialogStroke > 0) {
+                    GradientDrawable border = new GradientDrawable();
+                    border.setShape(GradientDrawable.RECTANGLE);
+                    border.setColor(android.graphics.Color.TRANSPARENT);
+                    border.setCornerRadius(dpToPx(ctx, ONEUI_DIALOG_SQUIRCLE_RADIUS_DP));
+                    border.setStroke(dialogStroke, 0x33FFFFFF);
+                    decorView.setForeground(border);
+                } else {
+                    decorView.setForeground(null);
+                }
             }
             decorView.setClipToOutline(true);
         }

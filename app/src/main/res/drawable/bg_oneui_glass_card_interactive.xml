@@ -1,120 +1,40 @@
 <?xml version="1.0" encoding="utf-8"?>
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:state_pressed="true">
-        <layer-list>
-            <item>
-                <shape android:shape="rectangle">
-                    <gradient
-                        android:angle="315"
-                        android:startColor="#99FFFFFF"
-                        android:centerColor="#55FFFFFF"
-                        android:endColor="#33FFFFFF"
-                        android:type="linear" />
-                    <corners android:radius="@dimen/oneui_squircle_radius_large" />
-                </shape>
-            </item>
-            <item
-                android:top="1.5dp"
-                android:left="1.5dp"
-                android:right="1dp"
-                android:bottom="1dp">
-                <shape android:shape="rectangle">
-                    <gradient
-                        android:angle="315"
-                        android:startColor="#4A344360"
-                        android:endColor="#341E2738"
-                        android:type="linear" />
-                    <corners android:radius="@dimen/oneui_squircle_radius_large" />
-                </shape>
-            </item>
-        </layer-list>
+        <shape android:shape="rectangle">
+            <solid android:color="#4029354C" />
+            <stroke
+                android:width="1.5dp"
+                android:color="#7AFFFFFF" />
+            <corners android:radius="@dimen/oneui_squircle_radius_large" />
+        </shape>
     </item>
     <item android:state_focused="true">
-        <layer-list>
-            <item>
-                <shape android:shape="rectangle">
-                    <gradient
-                        android:angle="315"
-                        android:startColor="#B3FFFFFF"
-                        android:centerColor="#66FFFFFF"
-                        android:endColor="#40FFFFFF"
-                        android:type="linear" />
-                    <corners android:radius="@dimen/oneui_squircle_radius_large" />
-                </shape>
-            </item>
-            <item
-                android:top="1.5dp"
-                android:left="1.5dp"
-                android:right="1.5dp"
-                android:bottom="1.5dp">
-                <shape android:shape="rectangle">
-                    <gradient
-                        android:angle="315"
-                        android:startColor="#44303E58"
-                        android:endColor="#2E1B2332"
-                        android:type="linear" />
-                    <corners android:radius="@dimen/oneui_squircle_radius_large" />
-                </shape>
-            </item>
-        </layer-list>
+        <shape android:shape="rectangle">
+            <solid android:color="#3A263248" />
+            <stroke
+                android:width="1.5dp"
+                android:color="#99FFFFFF" />
+            <corners android:radius="@dimen/oneui_squircle_radius_large" />
+        </shape>
     </item>
     <item android:state_selected="true">
-        <layer-list>
-            <item>
-                <shape android:shape="rectangle">
-                    <gradient
-                        android:angle="315"
-                        android:startColor="#99FFFFFF"
-                        android:centerColor="#55FFFFFF"
-                        android:endColor="#33FFFFFF"
-                        android:type="linear" />
-                    <corners android:radius="@dimen/oneui_squircle_radius_large" />
-                </shape>
-            </item>
-            <item
-                android:top="1.5dp"
-                android:left="1.5dp"
-                android:right="1.5dp"
-                android:bottom="1.5dp">
-                <shape android:shape="rectangle">
-                    <gradient
-                        android:angle="315"
-                        android:startColor="#402C3950"
-                        android:endColor="#2A18202E"
-                        android:type="linear" />
-                    <corners android:radius="@dimen/oneui_squircle_radius_large" />
-                </shape>
-            </item>
-        </layer-list>
+        <shape android:shape="rectangle">
+            <solid android:color="#36232F44" />
+            <stroke
+                android:width="1.5dp"
+                android:color="#7AFFFFFF" />
+            <corners android:radius="@dimen/oneui_squircle_radius_large" />
+        </shape>
     </item>
     <item android:state_hovered="true">
-        <layer-list>
-            <item>
-                <shape android:shape="rectangle">
-                    <gradient
-                        android:angle="315"
-                        android:startColor="#80FFFFFF"
-                        android:centerColor="#40FFFFFF"
-                        android:endColor="#22FFFFFF"
-                        android:type="linear" />
-                    <corners android:radius="@dimen/oneui_squircle_radius_large" />
-                </shape>
-            </item>
-            <item
-                android:top="1.5dp"
-                android:left="1.5dp"
-                android:right="1dp"
-                android:bottom="1dp">
-                <shape android:shape="rectangle">
-                    <gradient
-                        android:angle="315"
-                        android:startColor="#3C29354B"
-                        android:endColor="#26171E2C"
-                        android:type="linear" />
-                    <corners android:radius="@dimen/oneui_squircle_radius_large" />
-                </shape>
-            </item>
-        </layer-list>
+        <shape android:shape="rectangle">
+            <solid android:color="#32202B3F" />
+            <stroke
+                android:width="1.2dp"
+                android:color="#5EFFFFFF" />
+            <corners android:radius="@dimen/oneui_squircle_radius_large" />
+        </shape>
     </item>
     <item android:drawable="@drawable/bg_oneui_squircle_card" />
 </selector>

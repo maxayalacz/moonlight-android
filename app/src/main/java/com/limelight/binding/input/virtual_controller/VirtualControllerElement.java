@@ -81,11 +81,38 @@ public abstract class VirtualControllerElement extends View {
         this.elementId = elementId;
     }
 
+    public int getElementId() {
+        return elementId;
+    }
+
+    public String getDisplayLabel() {
+        switch (elementId) {
+            case EID_DPAD: return "D-Pad";
+            case EID_LT: return "LT";
+            case EID_RT: return "RT";
+            case EID_LB: return "LB";
+            case EID_RB: return "RB";
+            case EID_A: return "A";
+            case EID_B: return "B";
+            case EID_X: return "X";
+            case EID_Y: return "Y";
+            case EID_BACK: return "Back";
+            case EID_START: return "Start";
+            case EID_LS: return "LS";
+            case EID_RS: return "RS";
+            case EID_LSB: return "L3";
+            case EID_RSB: return "R3";
+            case EID_GDB: return "Guide";
+            case EID_TOUCHPAD: return "Pad";
+            default: return "Btn";
+        }
+    }
+
     /**
      * Returns the locked width/height aspect ratio for controls that should only scale uniformly
      * (never stretch), or 0f for controls that may be resized freely.
      */
-    protected float getLockedAspectRatio() {
+    public float getLockedAspectRatio() {
         switch (elementId) {
             case EID_LS:
             case EID_RS:
@@ -102,6 +129,22 @@ public abstract class VirtualControllerElement extends View {
             default:
                 return 0f;
         }
+    }
+
+    public void applyBoundsFromEditor(int left, int top, int width, int height) {
+        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) getLayoutParams();
+        if (lp == null) {
+            return;
+        }
+        lp.leftMargin = Math.max(0, left);
+        lp.topMargin = Math.max(0, top);
+        lp.rightMargin = 0;
+        lp.bottomMargin = 0;
+        lp.width = Math.max(1, width);
+        lp.height = Math.max(1, height);
+        setLayoutParams(lp);
+        virtualController.notifyLayoutEdited();
+        invalidate();
     }
 
     protected void moveElement(int pressed_x, int pressed_y, int x, int y) {

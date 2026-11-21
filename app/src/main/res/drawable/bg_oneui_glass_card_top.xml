@@ -2,12 +2,7 @@
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item>
         <shape android:shape="rectangle">
-            <gradient
-                android:angle="315"
-                android:startColor="#48FFFFFF"
-                android:centerColor="#1CFFFFFF"
-                android:endColor="#10FFFFFF"
-                android:type="linear" />
+            <solid android:color="#36FFFFFF" />
             <corners
                 android:topLeftRadius="@dimen/oneui_squircle_radius"
                 android:topRightRadius="@dimen/oneui_squircle_radius"

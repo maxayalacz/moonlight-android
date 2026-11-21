@@ -533,7 +533,7 @@
     <PreferenceCategory
         android:key="category_ui_settings"
         android:title="@string/category_ui_settings"
-        app:initialExpandedChildrenCount="7"
+        app:initialExpandedChildrenCount="8"
         app:iconSpaceReserved="false">
         <SwitchPreferenceCompat
             android:defaultValue="true"
@@ -552,6 +552,17 @@
             app:iconSpaceReserved="false"
             seekbar:min="0"
             seekbar:step="10" />
+        <com.limelight.preferences.SeekBarPreference
+            android:defaultValue="100"
+            android:dialogMessage="@string/summary_card_outline_thickness"
+            android:key="seekbar_card_outline_thickness"
+            android:max="250"
+            android:summary="@string/summary_card_outline_thickness"
+            android:text="%"
+            android:title="@string/title_card_outline_thickness"
+            app:iconSpaceReserved="false"
+            seekbar:min="0"
+            seekbar:step="5" />
         <ListPreference
             android:defaultValue="720"
             android:entries="@array/bg_quality_names"

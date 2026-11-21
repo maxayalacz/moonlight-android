@@ -72,8 +72,9 @@ public class GameMenu implements Game.GameMenuCallbacks {
     public static final long KEY_UP_DELAY = 25;
     private static final long TEST_GAME_FOCUS_DELAY = 10;
 
-    private static final int NEON_YELLOW = 0xFFFFE600;
+    private static final int NEON_ORANGE = 0xFFFF7A00;
     private static final int NEON_RED = 0xFFFF3B5C;
+    private static final String PREF_DRAWER_ON_RIGHT = "quick_menu_drawer_on_right";
     private static final PathInterpolator SPRING_EASE = new PathInterpolator(0.22f, 1f, 0.36f, 1f);
 
     public static final String PREF_NAME = "specialPrefs"; // SharedPreferences的名称
@@ -348,8 +349,8 @@ public class GameMenu implements Game.GameMenuCallbacks {
 
     /**
      * Rounded One UI frosted glass card that clips a live screen-aligned blurred stream crop
-     * strictly inside its squircle outline, layered with a translucent dark-glass tint, subtle
-     * top specular sheen, and crisp glass rim stroke.
+     * strictly inside its squircle outline, layered with a clean uniform translucent dark-glass
+     * tint and optional global outline rim stroke.
      */
     private static final class FrostedStreamCardLayout extends FrameLayout {
         private final StreamBlurController blurController;
@@ -366,7 +367,6 @@ public class GameMenu implements Game.GameMenuCallbacks {
 
         private final Paint bitmapPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
         private final Paint fillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        private final Paint sheenPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint rimPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
         FrostedStreamCardLayout(Context context, StreamBlurController blurController,
@@ -382,8 +382,8 @@ public class GameMenu implements Game.GameMenuCallbacks {
             setClickable(true);
 
             rimPaint.setStyle(Paint.Style.STROKE);
-            rimPaint.setStrokeWidth(Math.max(1f, UiHelper.dpToPx(context, 1.15f)));
             rimPaint.setColor(0x3DFFFFFF);
+            refreshRimOutline();
 
             setOutlineProvider(new ViewOutlineProvider() {
                 @Override
@@ -395,17 +395,17 @@ public class GameMenu implements Game.GameMenuCallbacks {
             blurController.registerCard(this);
         }
 
+        void refreshRimOutline() {
+            rimPaint.setStrokeWidth(UiHelper.getCardOutlineWidthPx(getContext(), 1.15f));
+            invalidate();
+        }
+
         @Override
         protected void onSizeChanged(int w, int h, int oldw, int oldh) {
             super.onSizeChanged(w, h, oldw, oldh);
             cardBounds.set(0f, 0f, w, h);
             clipPath.reset();
             clipPath.addRoundRect(cardBounds, cornerRadiusPx, cornerRadiusPx, Path.Direction.CW);
-            if (h > 0) {
-                sheenPaint.setShader(new LinearGradient(
-                        0f, 0f, 0f, Math.min(h, cornerRadiusPx * 3.4f),
-                        0x1CFFFFFF, 0x00FFFFFF, Shader.TileMode.CLAMP));
-            }
         }
 
         @Override
@@ -449,16 +449,15 @@ public class GameMenu implements Game.GameMenuCallbacks {
 
             fillPaint.setColor(accentDeepTint);
             canvas.drawRect(cardBounds, fillPaint);
-
-            if (sheenPaint.getShader() != null) {
-                canvas.drawRect(cardBounds, sheenPaint);
-            }
             canvas.restore();
 
-            float inset = rimPaint.getStrokeWidth() * 0.5f;
-            dstRect.set(inset, inset, w - inset, h - inset);
-            canvas.drawRoundRect(dstRect, Math.max(0f, cornerRadiusPx - inset),
-                    Math.max(0f, cornerRadiusPx - inset), rimPaint);
+            float strokeW = rimPaint.getStrokeWidth();
+            if (strokeW > 0.1f) {
+                float inset = strokeW * 0.5f;
+                dstRect.set(inset, inset, w - inset, h - inset);
+                canvas.drawRoundRect(dstRect, Math.max(0f, cornerRadiusPx - inset),
+                        Math.max(0f, cornerRadiusPx - inset), rimPaint);
+            }
         }
     }
 
@@ -540,11 +539,11 @@ public class GameMenu implements Game.GameMenuCallbacks {
         row2.setClipChildren(false);
         row2.setClipToPadding(false);
 
-        // 1. Disconnect (Neon Yellow icon & outline)
+        // 1. Disconnect (Neon Orange icon & outline)
         ImageButton btnDisconnect = createSquircleIconButton(
                 themedContext, R.drawable.ic_qm_disconnect, getString(R.string.game_menu_disconnect), tileSize);
-        applyNeonTileStyle(btnDisconnect, NEON_YELLOW, false);
-        attachFocusRing(btnDisconnect, () -> applyNeonTileStyle(btnDisconnect, NEON_YELLOW, btnDisconnect.isFocused()));
+        applyNeonTileStyle(btnDisconnect, NEON_ORANGE, false);
+        attachFocusRing(btnDisconnect, () -> applyNeonTileStyle(btnDisconnect, NEON_ORANGE, btnDisconnect.isFocused()));
         btnDisconnect.setOnClickListener(v -> {
             animateTileTap(v);
             hideMenu();
@@ -709,21 +708,53 @@ public class GameMenu implements Game.GameMenuCallbacks {
         quickCardLp.gravity = Gravity.CENTER;
         overlayRoot.addView(quickMenuCard, quickCardLp);
 
-        // --- Left-Edge Scrollable Live-Blur Side Settings Drawer ---
+        // --- Switchable Left/Right Scrollable Live-Blur Side Settings Drawer ---
         DisplayMetrics dm = dialogScreenContext.getResources().getDisplayMetrics();
         final int drawerMargin = dp(12f);
         final int drawerWidth = Math.max(dp(256f), Math.min(dp(304f), Math.round(dm.widthPixels * 0.42f)));
+
+        final SharedPreferences overlayPrefs = ProfilesManager.getInstance()
+                .getOverlayingSharedPreferences(game);
+        final boolean[] drawerOnRight = { overlayPrefs.getBoolean(PREF_DRAWER_ON_RIGHT, false) };
 
         final FrostedStreamCardLayout sideDrawerCard = new FrostedStreamCardLayout(
                 themedContext, blurController, cardRadius, palette);
         sideDrawerCard.setVisibility(View.GONE);
         sideDrawerCard.setAlpha(0f);
-        sideDrawerCard.setTranslationX(-(drawerWidth + dp(24f)));
+        sideDrawerCard.setTranslationX((drawerOnRight[0] ? 1f : -1f) * (drawerWidth + dp(24f)));
+
+        final FrameLayout.LayoutParams drawerLp = new FrameLayout.LayoutParams(
+                drawerWidth, ViewGroup.LayoutParams.MATCH_PARENT);
+        drawerLp.gravity = (drawerOnRight[0] ? Gravity.END : Gravity.START) | Gravity.CENTER_VERTICAL;
+        drawerLp.setMargins(drawerMargin, drawerMargin, drawerMargin, drawerMargin);
+
+        final Runnable updateQuickMenuShift = () -> {
+            float targetShiftX = 0f;
+            if (drawerOpen[0]) {
+                int screenW = overlayRoot.getWidth() > 0 ? overlayRoot.getWidth() : dm.widthPixels;
+                int quickW = quickMenuCard.getWidth() > 0 ? quickMenuCard.getWidth() : dp(304f);
+                float defaultLeft = (screenW - quickW) * 0.5f;
+                float minClearLeft = drawerMargin + drawerWidth + dp(12f);
+                if (defaultLeft < minClearLeft) {
+                    float maxShift = Math.max(0f, screenW - dp(10f) - (defaultLeft + quickW));
+                    float shiftMag = Math.min(minClearLeft - defaultLeft, maxShift);
+                    targetShiftX = drawerOnRight[0] ? -shiftMag : shiftMag;
+                }
+            }
+            quickMenuCard.animate().cancel();
+            quickMenuCard.animate()
+                    .translationX(targetShiftX)
+                    .setDuration(240L)
+                    .setInterpolator(SPRING_EASE)
+                    .setUpdateListener(a -> quickMenuCard.invalidate())
+                    .start();
+        };
 
         Runnable setDrawerVisibility = new Runnable() {
             @Override
             public void run() {
                 boolean open = drawerOpen[0];
+                float hiddenOffset = (drawerOnRight[0] ? 1f : -1f) * (drawerWidth + dp(24f));
                 refreshSettingsPill.run();
                 settingsIconView.animate().cancel();
                 settingsIconView.animate()
@@ -745,7 +776,7 @@ public class GameMenu implements Game.GameMenuCallbacks {
                 } else {
                     sideDrawerCard.animate().cancel();
                     sideDrawerCard.animate()
-                            .translationX(-(drawerWidth + dp(24f)))
+                            .translationX(hiddenOffset)
                             .alpha(0f)
                             .setDuration(190L)
                             .setInterpolator(SPRING_EASE)
@@ -758,26 +789,35 @@ public class GameMenu implements Game.GameMenuCallbacks {
                             .start();
                 }
 
-                // Gently shift centered Quick Menu right only if screen width would overlap drawer
-                float targetShiftX = 0f;
-                if (open) {
-                    int screenW = overlayRoot.getWidth() > 0 ? overlayRoot.getWidth() : dm.widthPixels;
-                    int quickW = quickMenuCard.getWidth() > 0 ? quickMenuCard.getWidth() : dp(304f);
-                    float defaultLeft = (screenW - quickW) * 0.5f;
-                    float minClearLeft = drawerMargin + drawerWidth + dp(12f);
-                    if (defaultLeft < minClearLeft) {
-                        float maxShift = Math.max(0f, screenW - dp(10f) - (defaultLeft + quickW));
-                        targetShiftX = Math.min(minClearLeft - defaultLeft, maxShift);
-                    }
-                }
-                quickMenuCard.animate().cancel();
-                quickMenuCard.animate()
-                        .translationX(targetShiftX)
-                        .setDuration(240L)
-                        .setInterpolator(SPRING_EASE)
-                        .setUpdateListener(a -> quickMenuCard.invalidate())
-                        .start();
+                updateQuickMenuShift.run();
             }
+        };
+
+        Runnable swapDrawerSide = () -> {
+            drawerOnRight[0] = !drawerOnRight[0];
+            overlayPrefs.edit().putBoolean(PREF_DRAWER_ON_RIGHT, drawerOnRight[0]).apply();
+
+            sideDrawerCard.animate().cancel();
+            drawerLp.gravity = (drawerOnRight[0] ? Gravity.END : Gravity.START) | Gravity.CENTER_VERTICAL;
+            sideDrawerCard.setLayoutParams(drawerLp);
+
+            float enterOffset = (drawerOnRight[0] ? 1f : -1f) * dp(44f);
+            sideDrawerCard.setTranslationX(enterOffset);
+            sideDrawerCard.setAlpha(0.35f);
+            sideDrawerCard.animate()
+                    .translationX(0f)
+                    .alpha(1f)
+                    .setDuration(240L)
+                    .setInterpolator(SPRING_EASE)
+                    .setUpdateListener(a -> sideDrawerCard.invalidate())
+                    .start();
+
+            updateQuickMenuShift.run();
+        };
+
+        Runnable refreshCardOutlines = () -> {
+            quickMenuCard.refreshRimOutline();
+            sideDrawerCard.refreshRimOutline();
         };
 
         closeDrawerRef[0] = () -> {
@@ -788,26 +828,27 @@ public class GameMenu implements Game.GameMenuCallbacks {
         };
 
         View drawerContent = buildSideSettingsDrawerContent(
-                themedContext, palette, closeDrawerRef[0], refreshMouseTile);
+                themedContext, palette, closeDrawerRef[0], swapDrawerSide,
+                refreshMouseTile, refreshCardOutlines);
         sideDrawerCard.addView(drawerContent, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        FrameLayout.LayoutParams drawerLp = new FrameLayout.LayoutParams(
-                drawerWidth, ViewGroup.LayoutParams.MATCH_PARENT);
-        drawerLp.gravity = Gravity.START | Gravity.CENTER_VERTICAL;
-        drawerLp.setMargins(drawerMargin, drawerMargin, drawerMargin, drawerMargin);
         overlayRoot.addView(sideDrawerCard, drawerLp);
 
         btnSettingsPill.setOnClickListener(v -> {
             animateTileTap(v);
             drawerOpen[0] = !drawerOpen[0];
+            if (drawerOpen[0]) {
+                // Ensure starting offscreen translation matches the current side
+                sideDrawerCard.setTranslationX((drawerOnRight[0] ? 1f : -1f) * (drawerWidth + dp(24f)));
+            }
             setDrawerVisibility.run();
         });
 
         // Re-evaluate non-overlapping shift if device rotates while drawer is open
         overlayRoot.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
             if ((r - l) != (or - ol) && drawerOpen[0]) {
-                overlayRoot.post(setDrawerVisibility);
+                overlayRoot.post(updateQuickMenuShift);
             }
         });
 
@@ -861,12 +902,25 @@ public class GameMenu implements Game.GameMenuCallbacks {
                 .start();
     }
 
+    private static final class AccordionSection {
+        final LinearLayout content;
+        final TextView chevron;
+        boolean expanded = false;
+
+        AccordionSection(LinearLayout content, TextView chevron) {
+            this.content = content;
+            this.chevron = chevron;
+        }
+    }
+
     private View buildSideSettingsDrawerContent(Context ctx, AppThemePalette palette,
-                                                Runnable onCloseDrawer, Runnable onMouseModeMayChange) {
+                                                Runnable onCloseDrawer, Runnable onSwapSide,
+                                                Runnable onMouseModeMayChange,
+                                                Runnable onCardOutlineChanged) {
         LinearLayout container = new LinearLayout(ctx);
         container.setOrientation(LinearLayout.VERTICAL);
 
-        // Fixed Header Bar
+        // Fixed Header Bar with Swap-Side (⇄) and Close (✕) buttons
         LinearLayout header = new LinearLayout(ctx);
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
@@ -881,23 +935,22 @@ public class GameMenu implements Game.GameMenuCallbacks {
                 0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         header.addView(titleView, titleLp);
 
-        TextView closeBtn = new TextView(ctx);
-        closeBtn.setText("\u2715");
-        closeBtn.setTextColor(0xD8FFFFFF);
-        closeBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f);
-        closeBtn.setGravity(Gravity.CENTER);
-        closeBtn.setFocusable(true);
-        closeBtn.setClickable(true);
-        GradientDrawable closeBg = new GradientDrawable();
-        closeBg.setShape(GradientDrawable.OVAL);
-        closeBg.setColor(0x20FFFFFF);
-        closeBg.setStroke(Math.max(1, dp(1f)), 0x3DFFFFFF);
-        closeBtn.setBackground(closeBg);
+        TextView swapBtn = createDrawerHeaderIconButton(ctx, "\u21C4", getString(R.string.quick_settings_swap_side));
+        swapBtn.setOnClickListener(v -> {
+            animateTileTap(v);
+            onSwapSide.run();
+        });
+        LinearLayout.LayoutParams swapLp = new LinearLayout.LayoutParams(dp(28f), dp(28f));
+        swapLp.setMarginEnd(dp(6f));
+        header.addView(swapBtn, swapLp);
+
+        TextView closeBtn = createDrawerHeaderIconButton(ctx, "\u2715", getString(R.string.cancel));
         closeBtn.setOnClickListener(v -> {
             animateTileTap(v);
             onCloseDrawer.run();
         });
         header.addView(closeBtn, new LinearLayout.LayoutParams(dp(28f), dp(28f)));
+
         container.addView(header, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
@@ -906,37 +959,40 @@ public class GameMenu implements Game.GameMenuCallbacks {
         container.addView(divider, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(1f))));
 
-        // Scrollable Settings Body
+        // Scrollable Accordion Settings Body (all categories start collapsed)
         ScrollView scrollView = new ScrollView(ctx);
         scrollView.setVerticalScrollBarEnabled(false);
         scrollView.setOverScrollMode(View.OVER_SCROLL_ALWAYS);
 
         LinearLayout body = new LinearLayout(ctx);
         body.setOrientation(LinearLayout.VERTICAL);
-        body.setPadding(dp(14f), dp(10f), dp(14f), dp(18f));
+        body.setPadding(dp(12f), dp(10f), dp(12f), dp(18f));
 
-        // 1. On-Screen Controller Section (hidden on external display)
+        final List<AccordionSection> sections = new ArrayList<>();
+
+        // 1. On-Screen Controller Category (hidden on external display)
         if (!game.isOnExternalDisplay()) {
-            addDrawerSectionHeader(body, ctx, getString(R.string.quick_settings_section_osc), palette, false);
+            LinearLayout oscContent = addAccordionCategory(
+                    body, ctx, getString(R.string.quick_settings_section_osc), palette, sections);
 
-            addDrawerSliderRow(body, ctx, getString(R.string.dialog_title_osc_opacity),
+            addDrawerSliderRow(oscContent, ctx, getString(R.string.dialog_title_osc_opacity),
                     0, 100, 1, game.getOscOpacity(), "%", palette,
                     game::setOscOpacityLive);
 
-            addDrawerSliderRow(body, ctx, getString(R.string.title_osc_blur_amount),
+            addDrawerSliderRow(oscContent, ctx, getString(R.string.title_osc_blur_amount),
                     0, 200, 5, game.getOscBlurAmount(), "%", palette,
                     game::setOscBlurAmountLive);
 
-            addDrawerSliderRow(body, ctx, getString(R.string.title_osc_outline_thickness),
+            addDrawerSliderRow(oscContent, ctx, getString(R.string.title_osc_outline_thickness),
                     0, 250, 5, game.getOscOutlineThickness(), "%", palette,
                     game::setOscOutlineThicknessLive);
 
-            addDrawerToggleRow(body, ctx, getString(R.string.title_checkbox_vibrate_osc),
+            addDrawerToggleRow(oscContent, ctx, getString(R.string.title_checkbox_vibrate_osc),
                     game.isOscVibrateEnabled(), palette,
                     game::setOscVibrateLive);
 
             final View[] freeStickOpacityRowRef = new View[1];
-            addDrawerToggleRow(body, ctx, getString(R.string.title_free_analog_stick),
+            addDrawerToggleRow(oscContent, ctx, getString(R.string.title_free_analog_stick),
                     game.isFreeAnalogStickEnabled(), palette, enabled -> {
                         game.setFreeAnalogStickLive(enabled);
                         if (freeStickOpacityRowRef[0] != null) {
@@ -944,41 +1000,77 @@ public class GameMenu implements Game.GameMenuCallbacks {
                         }
                     });
 
-            freeStickOpacityRowRef[0] = addDrawerSliderRow(body, ctx,
+            freeStickOpacityRowRef[0] = addDrawerSliderRow(oscContent, ctx,
                     getString(R.string.title_free_analog_stick_opacity),
                     0, 100, 5, game.getFreeAnalogStickOpacity(), "%", palette,
                     game::setFreeAnalogStickOpacityLive);
             setRowEnabledState(freeStickOpacityRowRef[0], game.isFreeAnalogStickEnabled());
 
-            addDrawerActionButton(body, ctx, getString(R.string.quick_settings_edit_osc_inline), palette, () -> {
+            addDrawerActionButton(oscContent, ctx, getString(R.string.quick_settings_edit_osc_inline), palette, () -> {
                 hideMenu();
                 game.startInlineOscLayoutEdit();
             });
         }
 
-        // 2. Touch & Trackpad Section
-        addDrawerSectionHeader(body, ctx, getString(R.string.quick_settings_section_touch),
-                palette, !game.isOnExternalDisplay());
+        // 2. On-Screen Full Keyboard Category
+        LinearLayout kbdContent = addAccordionCategory(
+                body, ctx, getString(R.string.category_onscreen_keyboard), palette, sections);
 
-        addDrawerSliderRow(body, ctx, getString(R.string.title_touchpad_sensitivity_x),
+        addDrawerSliderRow(kbdContent, ctx, getString(R.string.title_keyboard_opacity),
+                0, 100, 1, game.getFullKeyboardOpacity(), "%", palette,
+                game::setFullKeyboardOpacityLive);
+
+        addDrawerToggleRow(kbdContent, ctx, getString(R.string.title_checkbox_enable_sticky_modifier_key_virtual_keyboard),
+                game.isFullKeyboardStickyModifierEnabled(), palette,
+                game::setFullKeyboardStickyModifierLive);
+
+        final View[] kbdHeightRowRef = new View[1];
+        final View[] kbdWidthRowRef = new View[1];
+        addDrawerToggleRow(kbdContent, ctx, getString(R.string.title_onscreen_keyboard_autofit),
+                game.isFullKeyboardCustomSizeEnabled(), palette, enabled -> {
+                    game.setFullKeyboardCustomSizeLive(enabled);
+                    if (kbdHeightRowRef[0] != null) {
+                        setRowEnabledState(kbdHeightRowRef[0], enabled);
+                    }
+                    if (kbdWidthRowRef[0] != null) {
+                        setRowEnabledState(kbdWidthRowRef[0], enabled);
+                    }
+                });
+
+        kbdHeightRowRef[0] = addDrawerSliderRow(kbdContent, ctx, getString(R.string.title_onscreen_keyboard_height),
+                150, 400, 10, game.getFullKeyboardHeightDp(), "dp", palette,
+                game::setFullKeyboardHeightDpLive);
+        kbdWidthRowRef[0] = addDrawerSliderRow(kbdContent, ctx, getString(R.string.title_onscreen_keyboard_width),
+                150, 1000, 10, game.getFullKeyboardWidthDp(), "dp", palette,
+                game::setFullKeyboardWidthDpLive);
+        setRowEnabledState(kbdHeightRowRef[0], game.isFullKeyboardCustomSizeEnabled());
+        setRowEnabledState(kbdWidthRowRef[0], game.isFullKeyboardCustomSizeEnabled());
+
+        addDrawerKeyboardAlignRow(kbdContent, ctx, palette);
+
+        // 3. Touch & Trackpad Category
+        LinearLayout touchContent = addAccordionCategory(
+                body, ctx, getString(R.string.quick_settings_section_touch), palette, sections);
+
+        addDrawerSliderRow(touchContent, ctx, getString(R.string.title_touchpad_sensitivity_x),
                 10, 300, 10, game.getTrackpadSensitivityX(), "%", palette,
                 game::setTrackpadSensitivityXLive);
 
-        addDrawerSliderRow(body, ctx, getString(R.string.title_touchpad_sensitivity_y),
+        addDrawerSliderRow(touchContent, ctx, getString(R.string.title_touchpad_sensitivity_y),
                 10, 300, 10, game.getTrackpadSensitivityY(), "%", palette,
                 game::setTrackpadSensitivityYLive);
 
-        addDrawerToggleRow(body, ctx, getString(R.string.title_trackpad_swap_axis),
+        addDrawerToggleRow(touchContent, ctx, getString(R.string.title_trackpad_swap_axis),
                 game.isTrackpadSwapAxisEnabled(), palette,
                 game::setTrackpadSwapAxisLive);
 
-        addDrawerToggleRow(body, ctx, getString(R.string.title_trackpad_drag_drop_vibration),
+        addDrawerToggleRow(touchContent, ctx, getString(R.string.title_trackpad_drag_drop_vibration),
                 game.isTrackpadDragDropVibrationEnabled(), palette,
                 game::setTrackpadDragDropVibrationLive);
 
         final View[] touchSensXRowRef = new View[1];
         final View[] touchSensYRowRef = new View[1];
-        addDrawerToggleRow(body, ctx, getString(R.string.title_touch_sensitivity),
+        addDrawerToggleRow(touchContent, ctx, getString(R.string.title_touch_sensitivity),
                 game.isTouchSensitivityEnabled(), palette, enabled -> {
                     game.setTouchSensitivityEnabledLive(enabled);
                     if (touchSensXRowRef[0] != null) {
@@ -989,35 +1081,36 @@ public class GameMenu implements Game.GameMenuCallbacks {
                     }
                 });
 
-        touchSensXRowRef[0] = addDrawerSliderRow(body, ctx, getString(R.string.title_touch_sensitivity_x),
+        touchSensXRowRef[0] = addDrawerSliderRow(touchContent, ctx, getString(R.string.title_touch_sensitivity_x),
                 10, 300, 10, game.getTouchSensitivityX(), "%", palette,
                 game::setTouchSensitivityXLive);
-        touchSensYRowRef[0] = addDrawerSliderRow(body, ctx, getString(R.string.title_touch_sensitivity_y),
+        touchSensYRowRef[0] = addDrawerSliderRow(touchContent, ctx, getString(R.string.title_touch_sensitivity_y),
                 10, 300, 10, game.getTouchSensitivityY(), "%", palette,
                 game::setTouchSensitivityYLive);
         setRowEnabledState(touchSensXRowRef[0], game.isTouchSensitivityEnabled());
         setRowEnabledState(touchSensYRowRef[0], game.isTouchSensitivityEnabled());
 
-        addDrawerToggleRow(body, ctx, getString(R.string.quick_settings_local_cursor),
+        addDrawerToggleRow(touchContent, ctx, getString(R.string.quick_settings_local_cursor),
                 game.isLocalMouseCursorVisible(), palette, enabled -> {
                     if (game.isLocalMouseCursorVisible() != enabled) {
                         game.toggleLocalMouseCursor();
                     }
                 });
 
-        addDrawerToggleRow(body, ctx, getString(R.string.quick_settings_special_keys),
+        addDrawerToggleRow(touchContent, ctx, getString(R.string.quick_settings_special_keys),
                 game.isSpecialKeysVisible(), palette, enabled -> {
                     if (game.isSpecialKeysVisible() != enabled) {
                         game.toggleKeyboardController();
                     }
                 });
 
-        // 3. Display & View Section
-        addDrawerSectionHeader(body, ctx, getString(R.string.quick_settings_section_display), palette, true);
+        // 4. Display & View Category
+        LinearLayout displayContent = addAccordionCategory(
+                body, ctx, getString(R.string.quick_settings_section_display), palette, sections);
 
-        addDrawerScaleModeRow(body, ctx, palette);
+        addDrawerScaleModeRow(displayContent, ctx, palette);
 
-        addDrawerToggleRow(body, ctx, getString(R.string.quick_settings_pan_zoom),
+        addDrawerToggleRow(displayContent, ctx, getString(R.string.quick_settings_pan_zoom),
                 game.isZoomModeEnabled(), palette, enabled -> {
                     if (game.isZoomModeEnabled() != enabled) {
                         game.toggleZoomMode();
@@ -1027,35 +1120,44 @@ public class GameMenu implements Game.GameMenuCallbacks {
                     }
                 });
 
-        addDrawerToggleRow(body, ctx, getString(R.string.title_top_center_display),
+        addDrawerToggleRow(displayContent, ctx, getString(R.string.title_top_center_display),
                 game.isAlignDisplayTopCenter(), palette,
                 game::setAlignDisplayTopCenterLive);
 
         if (dialogScreenContext == game) {
-            addDrawerActionButton(body, ctx, getString(R.string.quick_settings_rotate_screen),
+            addDrawerActionButton(displayContent, ctx, getString(R.string.quick_settings_rotate_screen),
                     palette, game::rotateScreen);
         }
 
-        // 4. Overlay & UI Section
-        addDrawerSectionHeader(body, ctx, getString(R.string.quick_settings_section_overlay), palette, true);
+        // 5. Overlay & UI Category
+        LinearLayout overlayContent = addAccordionCategory(
+                body, ctx, getString(R.string.quick_settings_section_overlay), palette, sections);
 
-        addDrawerToggleRow(body, ctx, getString(R.string.quick_settings_perf_lite),
+        addDrawerSliderRow(overlayContent, ctx, getString(R.string.title_card_outline_thickness),
+                0, 250, 5, game.getCardOutlineThickness(), "%", palette, val -> {
+                    game.setCardOutlineThicknessLive(val);
+                    if (onCardOutlineChanged != null) {
+                        onCardOutlineChanged.run();
+                    }
+                });
+
+        addDrawerToggleRow(overlayContent, ctx, getString(R.string.quick_settings_perf_lite),
                 game.isPerfOverlayLite(), palette,
                 game::setPerfOverlayLiteLive);
 
-        addDrawerToggleRow(body, ctx, getString(R.string.quick_settings_perf_bottom),
+        addDrawerToggleRow(overlayContent, ctx, getString(R.string.quick_settings_perf_bottom),
                 game.isPerfOverlayBottom(), palette,
                 game::setPerfOverlayBottomLive);
 
-        addDrawerToggleRow(body, ctx, getString(R.string.title_floating_button),
+        addDrawerToggleRow(overlayContent, ctx, getString(R.string.title_floating_button),
                 game.isFloatingMenuButtonVisible(), palette,
                 game::setFloatingMenuButtonLive);
 
-        addDrawerToggleRow(body, ctx, getString(R.string.title_post_session_metrics),
+        addDrawerToggleRow(overlayContent, ctx, getString(R.string.title_post_session_metrics),
                 game.isPostSessionMetricsEnabled(), palette,
                 game::setPostSessionMetricsLive);
 
-        addDrawerToggleRow(body, ctx, getString(R.string.title_checkbox_disable_warnings),
+        addDrawerToggleRow(overlayContent, ctx, getString(R.string.title_checkbox_disable_warnings),
                 game.isDisableWarningsEnabled(), palette,
                 game::setDisableWarningsLive);
 
@@ -1067,29 +1169,193 @@ public class GameMenu implements Game.GameMenuCallbacks {
         return container;
     }
 
-    private void addDrawerSectionHeader(LinearLayout parent, Context ctx, String title,
-                                        AppThemePalette palette, boolean withTopDivider) {
-        if (withTopDivider) {
-            View sep = new View(ctx);
-            sep.setBackgroundColor(0x1CFFFFFF);
-            LinearLayout.LayoutParams sepLp = new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(1f)));
-            sepLp.topMargin = dp(12f);
-            sepLp.bottomMargin = dp(8f);
-            parent.addView(sep, sepLp);
-        }
+    private TextView createDrawerHeaderIconButton(Context ctx, String symbol, String contentDesc) {
+        TextView btn = new TextView(ctx);
+        btn.setText(symbol);
+        btn.setTextColor(0xE0FFFFFF);
+        btn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.5f);
+        btn.setGravity(Gravity.CENTER);
+        btn.setFocusable(true);
+        btn.setClickable(true);
+        setTooltipAndDesc(btn, contentDesc);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setShape(GradientDrawable.OVAL);
+        bg.setColor(0x20FFFFFF);
+        bg.setStroke(Math.max(1, dp(1f)), 0x3DFFFFFF);
+        btn.setBackground(bg);
+        return btn;
+    }
 
-        TextView header = new TextView(ctx);
-        header.setText(title.toUpperCase());
-        header.setTextColor(palette.getNeonAccent());
-        header.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10.5f);
-        header.setTypeface(Typeface.DEFAULT_BOLD);
-        header.setLetterSpacing(0.08f);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+    private LinearLayout addAccordionCategory(LinearLayout parent, Context ctx, String title,
+                                              AppThemePalette palette,
+                                              List<AccordionSection> allSections) {
+        LinearLayout card = new LinearLayout(ctx);
+        card.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable cardBg = new GradientDrawable();
+        cardBg.setShape(GradientDrawable.RECTANGLE);
+        cardBg.setCornerRadius(dp(16f));
+        cardBg.setColor(0x14FFFFFF);
+        cardBg.setStroke(Math.max(1, dp(1f)), 0x24FFFFFF);
+        card.setBackground(cardBg);
+
+        LinearLayout headerRow = new LinearLayout(ctx);
+        headerRow.setOrientation(LinearLayout.HORIZONTAL);
+        headerRow.setGravity(Gravity.CENTER_VERTICAL);
+        headerRow.setPadding(dp(12f), dp(11f), dp(12f), dp(11f));
+        headerRow.setFocusable(true);
+        headerRow.setClickable(true);
+
+        TextView titleView = new TextView(ctx);
+        titleView.setText(title);
+        titleView.setTextColor(Color.WHITE);
+        titleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f);
+        titleView.setTypeface(Typeface.DEFAULT_BOLD);
+        headerRow.addView(titleView, new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        TextView chevron = new TextView(ctx);
+        chevron.setText("\u25BE");
+        chevron.setTextColor(palette.getNeonAccent());
+        chevron.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f);
+        chevron.setGravity(Gravity.CENTER);
+        headerRow.addView(chevron, new LinearLayout.LayoutParams(dp(20f), dp(20f)));
+
+        LinearLayout content = new LinearLayout(ctx);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(10f), dp(2f), dp(10f), dp(10f));
+        content.setVisibility(View.GONE);
+
+        final AccordionSection section = new AccordionSection(content, chevron);
+        allSections.add(section);
+
+        headerRow.setOnClickListener(v -> {
+            boolean willExpand = !section.expanded;
+            // Accordion behavior: collapse any other open category first
+            for (int i = 0; i < allSections.size(); i++) {
+                AccordionSection other = allSections.get(i);
+                if (other != section && other.expanded) {
+                    other.expanded = false;
+                    other.content.setVisibility(View.GONE);
+                    other.chevron.animate().cancel();
+                    other.chevron.animate()
+                            .rotation(0f)
+                            .setDuration(180L)
+                            .setInterpolator(SPRING_EASE)
+                            .start();
+                }
+            }
+
+            section.expanded = willExpand;
+            chevron.animate().cancel();
+            chevron.animate()
+                    .rotation(willExpand ? 180f : 0f)
+                    .setDuration(200L)
+                    .setInterpolator(SPRING_EASE)
+                    .start();
+            if (willExpand) {
+                content.setVisibility(View.VISIBLE);
+                content.setAlpha(0f);
+                content.animate().cancel();
+                content.animate()
+                        .alpha(1f)
+                        .setDuration(170L)
+                        .setInterpolator(SPRING_EASE)
+                        .start();
+            } else {
+                content.animate().cancel();
+                content.setVisibility(View.GONE);
+            }
+        });
+
+        card.addView(headerRow, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        card.addView(content, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        lp.topMargin = withTopDivider ? dp(2f) : dp(4f);
-        lp.bottomMargin = dp(6f);
-        parent.addView(header, lp);
+        if (allSections.size() > 1) {
+            cardLp.topMargin = dp(8f);
+        }
+        parent.addView(card, cardLp);
+        return content;
+    }
+
+    private void addDrawerKeyboardAlignRow(LinearLayout parent, Context ctx, AppThemePalette palette) {
+        LinearLayout block = new LinearLayout(ctx);
+        block.setOrientation(LinearLayout.VERTICAL);
+        block.setPadding(dp(4f), dp(5f), dp(2f), dp(7f));
+
+        TextView label = new TextView(ctx);
+        label.setText(R.string.title_onscreen_keyboard_align_mode);
+        label.setTextColor(0xDEFFFFFF);
+        label.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f);
+        block.addView(label, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        LinearLayout capsule = new LinearLayout(ctx);
+        capsule.setOrientation(LinearLayout.HORIZONTAL);
+        capsule.setPadding(dp(3f), dp(3f), dp(3f), dp(3f));
+        GradientDrawable capsuleBg = new GradientDrawable();
+        capsuleBg.setShape(GradientDrawable.RECTANGLE);
+        capsuleBg.setCornerRadius(dp(13f));
+        capsuleBg.setColor(0x18FFFFFF);
+        capsuleBg.setStroke(Math.max(1, dp(1f)), 0x33FFFFFF);
+        capsule.setBackground(capsuleBg);
+
+        final String[] modes = { "left", "center", "right" };
+        final int[] labels = { R.string.align_left, R.string.align_center, R.string.align_right };
+        final TextView[] tabs = new TextView[modes.length];
+        final String[] selected = { game.getFullKeyboardAlignMode() };
+
+        Runnable refreshTabs = () -> {
+            for (int i = 0; i < modes.length; i++) {
+                boolean active = modes[i].equals(selected[0]);
+                TextView tab = tabs[i];
+                if (active) {
+                    GradientDrawable tabBg = new GradientDrawable();
+                    tabBg.setShape(GradientDrawable.RECTANGLE);
+                    tabBg.setCornerRadius(dp(10f));
+                    tabBg.setColor(AppThemePalette.withAlpha(palette.highlight, 0.34f));
+                    tabBg.setStroke(Math.max(1, dp(1.1f)), 0xC8FFFFFF);
+                    tab.setBackground(tabBg);
+                    tab.setTextColor(Color.WHITE);
+                    tab.setTypeface(Typeface.DEFAULT_BOLD);
+                } else {
+                    tab.setBackground(null);
+                    tab.setTextColor(0xA8FFFFFF);
+                    tab.setTypeface(Typeface.DEFAULT);
+                }
+            }
+        };
+
+        for (int i = 0; i < modes.length; i++) {
+            final String mode = modes[i];
+            TextView tab = new TextView(ctx);
+            tab.setText(labels[i]);
+            tab.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f);
+            tab.setGravity(Gravity.CENTER);
+            tab.setPadding(dp(4f), dp(6f), dp(4f), dp(6f));
+            tab.setFocusable(true);
+            tab.setClickable(true);
+            tab.setOnClickListener(v -> {
+                selected[0] = mode;
+                refreshTabs.run();
+                game.setFullKeyboardAlignModeLive(mode);
+            });
+            tabs[i] = tab;
+            capsule.addView(tab, new LinearLayout.LayoutParams(
+                    0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        }
+        refreshTabs.run();
+
+        LinearLayout.LayoutParams capLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        capLp.topMargin = dp(6f);
+        block.addView(capsule, capLp);
+
+        parent.addView(block, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
     }
 
     private View addDrawerToggleRow(LinearLayout parent, Context ctx, String label,

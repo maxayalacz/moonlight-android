@@ -180,7 +180,11 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "    vec3  bgColor    = mix(innerBg, outerBg, outsideMask);\n" +
             "\n" +
             "    // --- 2. Interior Starfield (Also serves as full-screen app background when expand == 1 & preview == 0) ---\n" +
-            "    float particleVis = insideMask * innerAlpha * smoothstep(radius, radius - 0.04, d);\n" +
+            "    // During stream fade-in, keep cosmic dustmotes floating additively over the live stream\n" +
+            "    // and dissolve them smoothly across the full iris expansion (0% -> 100%).\n" +
+            "    float streamParticleFade = 1.0 - smoothstep(0.0, 1.0, expandEase);\n" +
+            "    float particleOpacity = mix(1.0, streamParticleFade, clamp(u_previewMix, 0.0, 1.0));\n" +
+            "    float particleVis = insideMask * particleOpacity * smoothstep(radius, radius - 0.04, d);\n" +
             "    vec3 particles = vec3(0.0);\n" +
             "    if (particleVis > 0.001 && u_particleBrightness > 0.001) {\n" +
             "        particles = sampleParticles(uv, u_time) * particleVis * u_particleBrightness;\n" +

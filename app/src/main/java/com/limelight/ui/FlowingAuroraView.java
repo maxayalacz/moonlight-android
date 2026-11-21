@@ -561,6 +561,14 @@ public class FlowingAuroraView extends View {
             }
         }
 
+        public void setStrokeWidthPx(float strokeWidthPx) {
+            float clamped = Math.max(0f, strokeWidthPx);
+            if (Math.abs(this.strokePaint.getStrokeWidth() - clamped) > 0.05f) {
+                this.strokePaint.setStrokeWidth(clamped);
+                invalidateSelf();
+            }
+        }
+
         private void updateRadii() {
             float top = (cornerMode == CornerMode.ALL || cornerMode == CornerMode.TOP) ? cornerRadiusPx : 0f;
             float bot = (cornerMode == CornerMode.ALL || cornerMode == CornerMode.BOTTOM) ? cornerRadiusPx : 0f;
@@ -658,12 +666,15 @@ public class FlowingAuroraView extends View {
             canvas.drawRect(rectF, tintPaint);
             canvas.restoreToCount(saveCount);
 
-            // Crisp specular rim
-            float halfStroke = strokePaint.getStrokeWidth() * 0.5f;
-            rectF.inset(halfStroke, halfStroke);
-            clipPath.reset();
-            clipPath.addRoundRect(rectF, radii, Path.Direction.CW);
-            canvas.drawPath(clipPath, strokePaint);
+            // Clean uniform rim stroke (omitted when global card outline is 0%)
+            float strokeW = strokePaint.getStrokeWidth();
+            if (strokeW > 0.1f) {
+                float halfStroke = strokeW * 0.5f;
+                rectF.inset(halfStroke, halfStroke);
+                clipPath.reset();
+                clipPath.addRoundRect(rectF, radii, Path.Direction.CW);
+                canvas.drawPath(clipPath, strokePaint);
+            }
         }
 
         @Override

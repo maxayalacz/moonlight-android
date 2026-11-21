@@ -242,6 +242,10 @@ public class AppGridAdapter extends GenericGridAdapter<AppView.AppObject> {
                 obj.isRunning ? 0x5E1A2438 : 0x52121826)) {
             gridMask.setBackgroundResource(R.drawable.bg_oneui_liquid_glass_dark);
         }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && gridMask.getParent() instanceof View) {
+            View cardView = (View) gridMask.getParent();
+            cardView.setForeground(UiHelper.createInteractiveCardForeground(cardView.getContext(), 28f));
+        }
 
         if (obj.isHidden) {
             parentView.setAlpha(0.40f);

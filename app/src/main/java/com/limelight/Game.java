@@ -1171,6 +1171,7 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
 
     private void initVirtualController(){
         virtualController = new VirtualController(controllerHandler, (FrameLayout)rootView, this);
+        virtualController.setConfigureButtonVisible(false);
         virtualController.refreshLayout();
         virtualController.show();
     }
@@ -1776,6 +1777,11 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
     @Override
     protected void onDestroy() {
         super.onDestroy();
+
+        if (oscLayoutEditorOverlay != null) {
+            oscLayoutEditorOverlay.detach();
+            oscLayoutEditorOverlay = null;
+        }
 
         instance = null;
         timerHandler.removeCallbacksAndMessages(null);
@@ -4536,8 +4542,10 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
         invalidateVirtualControllerElements();
     }
 
+    private com.limelight.binding.input.virtual_controller.OscLayoutEditorOverlay oscLayoutEditorOverlay;
+
     public void startInlineOscLayoutEdit() {
-        if (isOnExternalDisplay()) {
+        if (isOnExternalDisplay() || !(rootView instanceof FrameLayout)) {
             return;
         }
         if (virtualController == null) {
@@ -4546,9 +4554,16 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
             virtualController.show();
         }
         if (virtualController != null) {
-            virtualController.setConfigureButtonVisible(true);
-            virtualController.setControllerMode(VirtualController.ControllerMode.MoveButtons);
-            Toast.makeText(this, R.string.configuration_mode_move_buttons, Toast.LENGTH_SHORT).show();
+            if (oscLayoutEditorOverlay != null && oscLayoutEditorOverlay.isAttached()) {
+                oscLayoutEditorOverlay.refreshAfterControllerRemount();
+                return;
+            }
+            oscLayoutEditorOverlay = new com.limelight.binding.input.virtual_controller.OscLayoutEditorOverlay(
+                    this,
+                    (FrameLayout) rootView,
+                    virtualController,
+                    () -> oscLayoutEditorOverlay = null);
+            oscLayoutEditorOverlay.attach();
         }
     }
 
@@ -4800,6 +4815,113 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
         getLiveOverlayPrefs().edit().putBoolean("checkbox_disable_warnings", disabled).apply();
     }
 
+    public int getCardOutlineThickness() {
+        return getLiveOverlayPrefs().getInt(
+                PreferenceConfiguration.CARD_OUTLINE_THICKNESS_PREF_STRING,
+                PreferenceConfiguration.DEFAULT_CARD_OUTLINE_THICKNESS);
+    }
+
+    public void setCardOutlineThicknessLive(int pct) {
+        int clamped = Math.max(0, Math.min(250, pct));
+        if (prefConfig != null) {
+            prefConfig.cardOutlineThicknessPercent = clamped;
+        }
+        getLiveOverlayPrefs().edit()
+                .putInt(PreferenceConfiguration.CARD_OUTLINE_THICKNESS_PREF_STRING, clamped)
+                .apply();
+    }
+
+    // 5. On-Screen Full Keyboard live settings
+
+    public int getFullKeyboardOpacity() {
+        return prefConfig != null ? prefConfig.oscKeyboardOpacity : 90;
+    }
+
+    public void setFullKeyboardOpacityLive(int opacity) {
+        int clamped = Math.max(0, Math.min(100, opacity));
+        if (prefConfig != null) {
+            prefConfig.oscKeyboardOpacity = clamped;
+        }
+        getLiveOverlayPrefs().edit().putInt("seekbar_keyboard_axi_opacity", clamped).apply();
+        if (keyBoardLayoutController != null) {
+            keyBoardLayoutController.applyOpacityLive();
+        }
+    }
+
+    public boolean isFullKeyboardStickyModifierEnabled() {
+        return prefConfig == null || prefConfig.stickyModifierKey;
+    }
+
+    public void setFullKeyboardStickyModifierLive(boolean enabled) {
+        if (prefConfig != null) {
+            prefConfig.stickyModifierKey = enabled;
+        }
+        getLiveOverlayPrefs().edit()
+                .putBoolean("checkbox_enable_sticky_modifier_key_virtual_keyboard", enabled)
+                .apply();
+    }
+
+    public boolean isFullKeyboardCustomSizeEnabled() {
+        return prefConfig != null && prefConfig.onscreenKeyboardAutoFitDisabled;
+    }
+
+    public void setFullKeyboardCustomSizeLive(boolean enabled) {
+        if (prefConfig != null) {
+            prefConfig.onscreenKeyboardAutoFitDisabled = enabled;
+        }
+        getLiveOverlayPrefs().edit().putBoolean("onscreen_keyboard_autofit", enabled).apply();
+        if (keyBoardLayoutController != null) {
+            keyBoardLayoutController.refreshLayout();
+        }
+    }
+
+    public int getFullKeyboardHeightDp() {
+        return prefConfig != null ? prefConfig.onscreenKeyboardHeight : 200;
+    }
+
+    public void setFullKeyboardHeightDpLive(int heightDp) {
+        int clamped = Math.max(150, Math.min(400, heightDp));
+        if (prefConfig != null) {
+            prefConfig.onscreenKeyboardHeight = clamped;
+        }
+        getLiveOverlayPrefs().edit().putInt("seekbar_onscreen_keyboard_height", clamped).apply();
+        if (keyBoardLayoutController != null) {
+            keyBoardLayoutController.refreshLayout();
+        }
+    }
+
+    public int getFullKeyboardWidthDp() {
+        return prefConfig != null ? prefConfig.onscreenKeyboardWidth : 1000;
+    }
+
+    public void setFullKeyboardWidthDpLive(int widthDp) {
+        int clamped = Math.max(150, Math.min(1000, widthDp));
+        if (prefConfig != null) {
+            prefConfig.onscreenKeyboardWidth = clamped;
+        }
+        getLiveOverlayPrefs().edit().putInt("seekbar_onscreen_keyboard_width", clamped).apply();
+        if (keyBoardLayoutController != null) {
+            keyBoardLayoutController.refreshLayout();
+        }
+    }
+
+    public String getFullKeyboardAlignMode() {
+        return (prefConfig != null && prefConfig.onscreenKeyboardAlignMode != null)
+                ? prefConfig.onscreenKeyboardAlignMode
+                : "center";
+    }
+
+    public void setFullKeyboardAlignModeLive(String alignMode) {
+        String safe = ("left".equals(alignMode) || "right".equals(alignMode)) ? alignMode : "center";
+        if (prefConfig != null) {
+            prefConfig.onscreenKeyboardAlignMode = safe;
+        }
+        getLiveOverlayPrefs().edit().putString("list_onscreen_keyboard_align_mode", safe).apply();
+        if (keyBoardLayoutController != null) {
+            keyBoardLayoutController.refreshLayout();
+        }
+    }
+
     private void maybeLaunchSessionMetrics() {
         if (launchedSessionMetrics || reportedCrash || isFinishing()) {
             return;
@@ -4875,6 +4997,10 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
 
     @Override
     public void showGameMenu(GameInputDevice device) {
+        if (oscLayoutEditorOverlay != null && oscLayoutEditorOverlay.isAttached()) {
+            oscLayoutEditorOverlay.requestClose();
+            return;
+        }
         if(isOnExternalDisplay()) {
             ExternalDisplayControlActivity.toggleGameMenu();
         } else {

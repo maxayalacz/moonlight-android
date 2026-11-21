@@ -272,34 +272,13 @@ public class FocusCirclePortalView extends View {
                 new float[]{0.0f, 0.52f, 1.0f},
                 Shader.TileMode.CLAMP));
 
-        sheenPaint.setShader(new LinearGradient(
-                cx - innerRadius, cy - innerRadius,
-                cx + innerRadius, cy + innerRadius,
-                new int[]{
-                        0x30FFFFFF,
-                        0x0AFFFFFF,
-                        0x00FFFFFF,
-                        0x18FFFFFF
-                },
-                new float[]{0.0f, 0.35f, 0.7f, 1.0f},
-                Shader.TileMode.CLAMP));
-
         vignettePaint.setShader(new RadialGradient(
                 cx, cy, innerRadius,
                 new int[]{0x00000000, 0x52000000},
                 new float[]{0.58f, 1.0f},
                 Shader.TileMode.CLAMP));
 
-        if (!isPressedOrFocused) {
-            specularPaint.setShader(new LinearGradient(
-                    cx - innerRadius, cy - innerRadius,
-                    cx + innerRadius, cy + innerRadius,
-                    new int[]{0x66FFFFFF, 0x00FFFFFF, 0x22FFFFFF},
-                    new float[]{0.0f, 0.5f, 1.0f},
-                    Shader.TileMode.CLAMP));
-        } else {
-            specularPaint.setShader(null);
-        }
+        specularPaint.setShader(null);
     }
 
     @Override
@@ -404,10 +383,9 @@ public class FocusCirclePortalView extends View {
             }
         }
 
-        // Dark frosted glass tint + ambient radial interior + sheen + vignette
+        // Dark frosted glass tint + ambient radial interior + vignette
         canvas.drawCircle(cx, cy, innerRadius, frostedTintPaint);
         canvas.drawCircle(cx, cy, innerRadius, interiorPaint);
-        canvas.drawCircle(cx, cy, innerRadius, sheenPaint);
         canvas.drawCircle(cx, cy, innerRadius, vignettePaint);
         canvas.restoreToCount(saveCount);
 
@@ -451,7 +429,7 @@ public class FocusCirclePortalView extends View {
             lockDrawable.draw(canvas);
         }
 
-        // 6. Crisp 3.5dp status ring & top-left glass specular highlight
+        // 6. Crisp 3.5dp status ring
         ringPaint.setColor(statusColor);
         ringPaint.setStrokeWidth(ringStroke);
         canvas.drawCircle(cx, cy, outerRadius, ringPaint);
@@ -460,9 +438,6 @@ public class FocusCirclePortalView extends View {
             specularPaint.setColor(0xD9FFFFFF);
             specularPaint.setStrokeWidth(dp(2f));
             canvas.drawCircle(cx, cy, outerRadius + ringStroke * 0.65f, specularPaint);
-        } else {
-            specularPaint.setStrokeWidth(dp(1.2f));
-            canvas.drawCircle(cx, cy, innerRadius - dp(0.6f), specularPaint);
         }
     }
 }

@@ -875,4 +875,14 @@
     <string name="quick_settings_rotate_screen">Rotate Screen</string>
     <string name="quick_settings_perf_lite">Compact Stats Overlay</string>
     <string name="quick_settings_perf_bottom">Overlay at Bottom</string>
+    <string name="quick_settings_swap_side">Switch Drawer Side</string>
+    <string name="title_card_outline_thickness">Frosted Card Outline Thickness</string>
+    <string name="summary_card_outline_thickness">Adjust the outline thickness of frosted cards across menus and streaming overlays (0% hides card outlines; Settings menu cards are unaffected)</string>
+    <string name="osc_editor_snap_guides">Snap: Guides</string>
+    <string name="osc_editor_snap_grid">Snap: Grid</string>
+    <string name="osc_editor_snap_off">Snap: Off</string>
+    <string name="osc_editor_show_hidden">Hidden</string>
+    <string name="osc_editor_select_hint">Tap a button to select, drag to move, drag handle to scale</string>
+    <string name="osc_editor_hide_btn">Hide</string>
+    <string name="osc_editor_show_btn">Show</string>
 </resources>

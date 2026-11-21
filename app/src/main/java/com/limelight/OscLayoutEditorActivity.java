@@ -1,49 +1,30 @@
 package com.limelight;
 
-import android.app.AlertDialog;
-import android.content.Context;
 import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
-import android.graphics.Color;
-import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
-import android.view.View;
 import android.widget.FrameLayout;
-import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.limelight.binding.input.virtual_controller.OscLayoutEditorOverlay;
 import com.limelight.binding.input.virtual_controller.VirtualController;
-import com.limelight.binding.input.virtual_controller.VirtualControllerConfigurationLoader;
 import com.limelight.preferences.PreferenceConfiguration;
-import com.limelight.ui.AppThemePalette;
 import com.limelight.utils.UiHelper;
 
 /**
  * Standalone fullscreen editor for customizing the on-screen controller layout
- * (move, resize, show/hide, reset, and save) directly from Settings without
- * starting an active stream.
+ * directly from Settings without starting an active stream.
+ * Uses the exact same {@link OscLayoutEditorOverlay} precision editor as live mid-stream editing.
  */
 public class OscLayoutEditorActivity extends AppCompatActivity {
 
-    private static final int MODE_MOVE_COLOR = 0xFFFF5252;
-    private static final int MODE_RESIZE_COLOR = 0xFFFF40FF;
-    private static final int MODE_TOGGLE_COLOR = 0xFF30D158;
-
     private FrameLayout editorCanvas;
     private VirtualController virtualController;
-    private VirtualController.ControllerMode activeMode = VirtualController.ControllerMode.MoveButtons;
-    private boolean hasUnsavedChanges = false;
+    private OscLayoutEditorOverlay editorOverlay;
     private int mountedCanvasW = -1;
     private int mountedCanvasH = -1;
-
-    private TextView btnMove;
-    private TextView btnResize;
-    private TextView btnToggle;
-    private TextView btnReset;
-    private TextView btnSave;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -61,30 +42,22 @@ public class OscLayoutEditorActivity extends AppCompatActivity {
         UiHelper.notifyNewRootView(this);
 
         editorCanvas = findViewById(R.id.oscEditorCanvas);
-        View toolbar = findViewById(R.id.oscEditorToolbar);
-        UiHelper.applyLiquidGlassEffect(toolbar);
-
-        btnMove = findViewById(R.id.oscBtnModeMove);
-        btnResize = findViewById(R.id.oscBtnModeResize);
-        btnToggle = findViewById(R.id.oscBtnModeToggle);
-        btnReset = findViewById(R.id.oscBtnReset);
-        btnSave = findViewById(R.id.oscBtnSave);
-
-        btnMove.setOnClickListener(v -> selectMode(VirtualController.ControllerMode.MoveButtons));
-        btnResize.setOnClickListener(v -> selectMode(VirtualController.ControllerMode.ResizeButtons));
-        btnToggle.setOnClickListener(v -> selectMode(VirtualController.ControllerMode.DisableEnableButtons));
-        btnReset.setOnClickListener(v -> confirmResetLayout());
-        btnSave.setOnClickListener(v -> saveAndExit());
 
         virtualController = new VirtualController(null, editorCanvas, this);
         virtualController.setConfigureButtonVisible(false);
-        virtualController.setOnLayoutEditedListener(() -> hasUnsavedChanges = true);
+
+        editorOverlay = new OscLayoutEditorOverlay(
+                this,
+                editorCanvas,
+                virtualController,
+                () -> UiHelper.finishMenuWithDepthTransition(this, this::finish));
 
         // Wait until editorCanvas has final immersive dimensions so default layout matches Game 1:1
         editorCanvas.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
             int w = r - l;
             int h = b - t;
-            if (w > 0 && h > 0 && !hasUnsavedChanges && (w != mountedCanvasW || h != mountedCanvasH)) {
+            boolean edited = editorOverlay != null && editorOverlay.hasUnsavedChanges();
+            if (w > 0 && h > 0 && !edited && (w != mountedCanvasW || h != mountedCanvasH)) {
                 editorCanvas.post(this::mountController);
             }
         });
@@ -103,105 +76,24 @@ public class OscLayoutEditorActivity extends AppCompatActivity {
         mountedCanvasW = w;
         mountedCanvasH = h;
         virtualController.refreshLayout();
-        virtualController.setControllerMode(activeMode);
+        virtualController.setConfigureButtonVisible(false);
         virtualController.show();
-        updateToolbarStyles();
-    }
-
-    private void selectMode(VirtualController.ControllerMode mode) {
-        activeMode = mode;
-        if (virtualController != null) {
-            virtualController.setControllerMode(mode);
+        if (editorOverlay != null) {
+            if (!editorOverlay.isAttached()) {
+                editorOverlay.attach();
+            } else {
+                editorOverlay.refreshAfterControllerRemount();
+            }
         }
-        updateToolbarStyles();
-    }
-
-    private void updateToolbarStyles() {
-        AppThemePalette palette = AppThemePalette.getCurrent(this);
-        styleModeChip(btnMove, activeMode == VirtualController.ControllerMode.MoveButtons, MODE_MOVE_COLOR);
-        styleModeChip(btnResize, activeMode == VirtualController.ControllerMode.ResizeButtons, MODE_RESIZE_COLOR);
-        styleModeChip(btnToggle, activeMode == VirtualController.ControllerMode.DisableEnableButtons, MODE_TOGGLE_COLOR);
-
-        GradientDrawable resetBg = new GradientDrawable();
-        resetBg.setShape(GradientDrawable.RECTANGLE);
-        resetBg.setCornerRadius(dp(999f));
-        resetBg.setColor(0x1CFF5252);
-        resetBg.setStroke(Math.max(1, dp(1f)), 0x55FF5252);
-        btnReset.setBackground(resetBg);
-
-        GradientDrawable saveBg = new GradientDrawable();
-        saveBg.setShape(GradientDrawable.RECTANGLE);
-        saveBg.setCornerRadius(dp(999f));
-        saveBg.setColor(AppThemePalette.withAlpha(palette.highlight, 0.32f));
-        saveBg.setStroke(Math.max(1, dp(1.2f)), AppThemePalette.withAlpha(palette.highlight, 0.90f));
-        btnSave.setBackground(saveBg);
-    }
-
-    private void styleModeChip(TextView chip, boolean selected, int accentColor) {
-        GradientDrawable bg = new GradientDrawable();
-        bg.setShape(GradientDrawable.RECTANGLE);
-        bg.setCornerRadius(dp(999f));
-        if (selected) {
-            bg.setColor(AppThemePalette.withAlpha(accentColor, 0.26f));
-            bg.setStroke(Math.max(1, dp(1.3f)), AppThemePalette.withAlpha(accentColor, 0.92f));
-            chip.setTextColor(Color.WHITE);
-        } else {
-            bg.setColor(Color.TRANSPARENT);
-            chip.setTextColor(0xA8FFFFFF);
-        }
-        chip.setBackground(bg);
-    }
-
-    private void confirmResetLayout() {
-        AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle(R.string.dialog_title_reset_osc)
-                .setMessage(R.string.dialog_text_reset_osc)
-                .setPositiveButton(R.string.yes, (d, which) -> {
-                    getSharedPreferences(VirtualControllerConfigurationLoader.OSC_PREFERENCE, Context.MODE_PRIVATE)
-                            .edit()
-                            .clear()
-                            .apply();
-                    hasUnsavedChanges = false;
-                    if (virtualController != null) {
-                        virtualController.refreshLayout();
-                        virtualController.setControllerMode(activeMode);
-                        virtualController.show();
-                    }
-                    Toast.makeText(this, R.string.toast_reset_osc_success, Toast.LENGTH_SHORT).show();
-                })
-                .setNegativeButton(R.string.no, null)
-                .create();
-        UiHelper.styleDialogSquircle(dialog);
-        dialog.show();
-        UiHelper.styleDialogSquircle(dialog);
-    }
-
-    private void saveAndExit() {
-        if (virtualController != null) {
-            VirtualControllerConfigurationLoader.saveProfile(virtualController, this);
-        }
-        hasUnsavedChanges = false;
-        Toast.makeText(this, R.string.osc_editor_saved, Toast.LENGTH_SHORT).show();
-        UiHelper.finishMenuWithDepthTransition(this, this::finish);
     }
 
     @Override
     public void onBackPressed() {
-        if (!hasUnsavedChanges) {
+        if (editorOverlay != null && editorOverlay.isAttached()) {
+            editorOverlay.requestClose();
+        } else {
             UiHelper.finishMenuWithDepthTransition(this, super::onBackPressed);
-            return;
         }
-        AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle(R.string.osc_editor_unsaved_title)
-                .setMessage(R.string.osc_editor_unsaved_msg)
-                .setPositiveButton(R.string.osc_editor_save, (d, which) -> saveAndExit())
-                .setNegativeButton(R.string.osc_editor_discard, (d, which) ->
-                        UiHelper.finishMenuWithDepthTransition(this, this::finish))
-                .setNeutralButton(R.string.cancel, null)
-                .create();
-        UiHelper.styleDialogSquircle(dialog);
-        dialog.show();
-        UiHelper.styleDialogSquircle(dialog);
     }
 
     @Override
@@ -211,6 +103,9 @@ public class OscLayoutEditorActivity extends AppCompatActivity {
         UiHelper.restoreMenuForegroundIfNeeded(this);
         if (virtualController != null && !virtualController.getElements().isEmpty()) {
             virtualController.show();
+            if (editorOverlay != null && editorOverlay.isAttached()) {
+                editorOverlay.refreshAfterControllerRemount();
+            }
         }
     }
 
@@ -224,6 +119,10 @@ public class OscLayoutEditorActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
+        if (editorOverlay != null) {
+            editorOverlay.detach();
+            editorOverlay = null;
+        }
         if (virtualController != null) {
             virtualController.removeElements();
             virtualController = null;
@@ -234,12 +133,8 @@ public class OscLayoutEditorActivity extends AppCompatActivity {
     @Override
     public void onConfigurationChanged(@NonNull Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
-        if (virtualController != null && !hasUnsavedChanges) {
+        if (virtualController != null && (editorOverlay == null || !editorOverlay.hasUnsavedChanges())) {
             editorCanvas.post(this::mountController);
         }
-    }
-
-    private int dp(float dpValue) {
-        return Math.max(1, Math.round(UiHelper.dpToPx(this, dpValue)));
     }
 }

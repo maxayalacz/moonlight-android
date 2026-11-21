@@ -321,7 +321,12 @@ public class KeyBoardLayoutController {
         }
     }
 
+    public void applyOpacityLive() {
+        keyboardView.setAlpha(prefConfig.oscKeyboardOpacity / 100f);
+    }
+
     public void refreshLayout() {
+        boolean wasVisible = shown && keyboardView.getVisibility() == View.VISIBLE;
         frame_layout.removeView(keyboardView);
 
         int height = 0;
@@ -357,6 +362,9 @@ public class KeyBoardLayoutController {
         // params.topMargin = 15;
         keyboardView.setAlpha(prefConfig.oscKeyboardOpacity / 100f);
         frame_layout.addView(keyboardView, params);
+        if (!wasVisible && !shown) {
+            keyboardView.setVisibility(View.GONE);
+        }
     }
 
     public int dip2px(Context context, float dpValue) {
