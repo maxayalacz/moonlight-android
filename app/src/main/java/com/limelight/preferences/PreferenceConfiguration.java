@@ -1156,7 +1156,8 @@ private static int getFramePacingValue(Context context) {
         if (context == null) {
             return false;
         }
-        String mode = PreferenceManager.getDefaultSharedPreferences(context)
+        String mode = ProfilesManager.getInstance()
+                .getOverlayingSharedPreferences(context)
                 .getString(UI_BATTERY_SAVER_PREF_STRING, DEFAULT_UI_BATTERY_SAVER);
         return isUiBatterySaverEffective(context, mode);
     }
