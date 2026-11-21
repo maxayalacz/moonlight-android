@@ -614,7 +614,10 @@ public class FlowingAuroraView extends View {
                         ? AppThemePalette.getCurrent(host.getContext())
                         : AppThemePalette.MIDNIGHT;
                 if (active) {
-                    tintPaint.setColor(AppThemePalette.withAlpha(p.accent, p.isLight ? 0.16f : 0.24f));
+                    int baseAlpha = (frostTintColor >>> 24) & 0xFF;
+                    int activeRgb = AppThemePalette.blendColors(frostTintColor, p.accent, p.isLight ? 0.18f : 0.24f);
+                    int activeAlpha = Math.min(255, Math.max(baseAlpha, p.isLight ? 0x22 : 0x2E));
+                    tintPaint.setColor(AppThemePalette.withAlphaInt(activeRgb, activeAlpha));
                     strokePaint.setColor(AppThemePalette.withAlpha(p.getNeonAccent(), 0.90f));
                 } else {
                     tintPaint.setColor(frostTintColor);

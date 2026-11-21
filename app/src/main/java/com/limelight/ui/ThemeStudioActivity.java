@@ -49,21 +49,25 @@ import java.util.UUID;
 
 /**
  * Full-screen split-stage Custom Theme Studio with:
- * - Live interactive PortalShaderView preview stage (background, live frosted cards, pop-up preview,
- *   and playable PS Portal Iris animation)
- * - 4-tab editor sheet: Colors (10 channels + Start from Preset + Dark/Light + Auto-Harmonize),
- *   Glass & Blur (Live Blur Amount, 0-100% Frosted Tint Amount, Card Outline Thickness, BG Quality),
- *   Portal FX (Particle Brightness 0-400%, Size 25-400%, Density 25-400%, Ring Glow, Scale, Sonar, Timings),
- *   My Themes (Save / Overwrite / Load / Delete + Clipboard JSON Import & Export).
+ * - Full-screen PortalShaderView backdrop (1:1 particle scale with the rest of the app)
+ * - Live frosted glass cards, pop-up preview, and frosted bottom editor sheet
+ * - 5-tab editor sheet:
+ *   1. Colors (10 channels + Start from Preset + Dark/Light + Auto-Harmonize)
+ *   2. Glass (Live Blur Amount, 0-100% Frosted Tint Amount, Card Outline Thickness, BG Quality)
+ *   3. Portal FX (Particle Brightness, Particle Size, Particle Amount, Ring Glow, Scale, Sonar Speed)
+ *   4. Animation (Play Launch & Play Disconnect + 9 exact per-phase transition speed sliders in ms)
+ *   5. Themes (Save / Update / Load / Delete + Clipboard JSON Import & Export)
+ * - Tappable slider value pills for entering custom numeric values beyond slider limits.
  */
 public class ThemeStudioActivity extends AppCompatActivity {
 
     private static final int TAB_COLORS = 0;
     private static final int TAB_GLASS = 1;
     private static final int TAB_PORTAL = 2;
-    private static final int TAB_SAVED = 3;
+    private static final int TAB_ANIMATION = 3;
+    private static final int TAB_SAVED = 4;
 
-    private static final String[] TAB_LABELS = { "Colors", "Glass & Blur", "Portal FX", "My Themes" };
+    private static final String[] TAB_LABELS = { "Colors", "Glass", "Portal FX", "Animation", "Themes" };
 
     private static final int CH_ACCENT = 0;
     private static final int CH_BG = 1;
@@ -97,13 +101,18 @@ public class ThemeStudioActivity extends AppCompatActivity {
     private int activeChannel = CH_ACCENT;
     private boolean updatingControls = false;
     private boolean playingIris = false;
+    private boolean playingDisconnectMode = false;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private ValueAnimator irisAnimator;
+    private final PathInterpolator cubicOutEase = new PathInterpolator(0.22f, 1f, 0.36f, 1f);
 
     // Preview stage views
+    private FrameLayout outerRoot;
+    private FrameLayout previewStage;
     private PortalShaderView previewPortal;
     private LinearLayout previewTopBar;
+    private FlowingAuroraView.FrostedCardDrawable previewTopBarDrawable;
     private ImageButton btnBack;
     private TextView studioTitle;
     private TextView btnPlayIris;
@@ -122,6 +131,7 @@ public class ThemeStudioActivity extends AppCompatActivity {
 
     // Editor sheet views
     private LinearLayout editorSheet;
+    private FlowingAuroraView.FrostedCardDrawable editorSheetDrawable;
     private TextView[] tabButtons;
     private View[] tabPages;
 
@@ -147,22 +157,32 @@ public class ThemeStudioActivity extends AppCompatActivity {
     private TextView bgQualityHeading;
     private TextView[] bgQualityPills;
 
-    // Tab 3: Portal FX
+    // Tab 3: Portal FX (Visual shader controls)
     private SliderRow rowParticleBright;
     private SliderRow rowParticleSize;
     private SliderRow rowParticleDensity;
     private SliderRow rowRingGlow;
     private SliderRow rowPortalScale;
     private SliderRow rowSonarSpeed;
+    private TextView btnResetPortal;
+
+    // Tab 4: Animation (Per-phase transition speeds & preview playback)
+    private TextView btnAnimPlayLaunch;
+    private TextView btnAnimPlayDisconnect;
+    private TextView animLaunchHeading;
+    private TextView animDisconnectHeading;
+    private SliderRow rowLaunchCloseMs;
+    private SliderRow rowSonarHoldMs;
     private SliderRow rowReadyMs;
     private SliderRow rowFadeMs;
     private SliderRow rowHoldMs;
     private SliderRow rowExpandMs;
-    private SliderRow rowDisconnectMs;
-    private SliderRow rowLaunchCloseMs;
-    private TextView btnResetPortal;
+    private SliderRow rowDisconnectCloseMs;
+    private SliderRow rowDisconnectFadeMs;
+    private SliderRow rowDisconnectOpenMs;
+    private TextView btnResetAnimation;
 
-    // Tab 4: My Themes
+    // Tab 5: My Themes
     private TextView btnSaveNew;
     private TextView btnExportClipboard;
     private TextView btnImportClipboard;
@@ -173,32 +193,51 @@ public class ThemeStudioActivity extends AppCompatActivity {
         final TextView valueTv;
         final SeekBar seekBar;
         final int min;
+        final int max;
         final int step;
+        final int customMin;
+        final int customMax;
         final String suffix;
+        int currentValue;
 
-        SliderRow(TextView titleTv, TextView valueTv, SeekBar seekBar, int min, int step, String suffix) {
+        SliderRow(TextView titleTv, TextView valueTv, SeekBar seekBar,
+                  int min, int max, int step, int customMin, int customMax, String suffix) {
             this.titleTv = titleTv;
             this.valueTv = valueTv;
             this.seekBar = seekBar;
             this.min = min;
+            this.max = max;
             this.step = step;
+            this.customMin = customMin;
+            this.customMax = customMax;
             this.suffix = suffix;
+            this.currentValue = min;
         }
 
         void setValue(int val) {
-            int p = Math.max(0, Math.min(seekBar.getMax(), (val - min) / step));
+            this.currentValue = val;
+            int clampedForBar = Math.max(min, Math.min(max, val));
+            int p = Math.max(0, Math.min(seekBar.getMax(), (clampedForBar - min) / step));
             if (seekBar.getProgress() != p) {
                 seekBar.setProgress(p);
             }
             valueTv.setText(val + suffix);
         }
 
-        void applyTheme(AppThemePalette p) {
+        void applyTheme(AppThemePalette p, int strokePx, int padH, int padV, int radiusPx) {
             titleTv.setTextColor(p.getPrimaryTextColor());
-            valueTv.setTextColor(p.getNeonAccent());
-            seekBar.setProgressTintList(ColorStateList.valueOf(p.getNeonAccent()));
+            int neon = p.getNeonAccent();
+            valueTv.setTextColor(neon);
+            valueTv.setPadding(padH, padV, padH, padV);
+            GradientDrawable pillBg = new GradientDrawable();
+            pillBg.setShape(GradientDrawable.RECTANGLE);
+            pillBg.setCornerRadius(radiusPx);
+            pillBg.setColor(AppThemePalette.withAlpha(p.accent, p.isLight ? 0.14f : 0.22f));
+            pillBg.setStroke(Math.max(1, strokePx), AppThemePalette.withAlpha(neon, 0.55f));
+            valueTv.setBackground(pillBg);
+            seekBar.setProgressTintList(ColorStateList.valueOf(neon));
             seekBar.setProgressBackgroundTintList(ColorStateList.valueOf(p.isLight ? 0x280F172A : 0x36FFFFFF));
-            seekBar.setThumbTintList(ColorStateList.valueOf(p.getNeonAccent()));
+            seekBar.setThumbTintList(ColorStateList.valueOf(neon));
         }
     }
 
@@ -266,29 +305,38 @@ public class ThemeStudioActivity extends AppCompatActivity {
     }
 
     private void buildUi() {
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setLayoutParams(new ViewGroup.LayoutParams(
+        outerRoot = new FrameLayout(this);
+        outerRoot.setLayoutParams(new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        // 1. TOP LIVE PREVIEW STAGE (~38% height)
-        FrameLayout previewStage = new FrameLayout(this);
+        // 0. FULL-SCREEN LIVE PORTAL SHADER BACKDROP (1:1 particle scale with outside Theme Studio!)
+        previewPortal = new PortalShaderView(this);
+        previewPortal.configureStarfieldBackgroundMode();
+        previewPortal.applyPreviewOverride(bundle);
+        outerRoot.addView(previewPortal, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        previewPortal.startRendering();
+
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        outerRoot.addView(root, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        // 1. TOP LIVE PREVIEW STAGE (~39% height)
+        previewStage = new FrameLayout(this);
         LinearLayout.LayoutParams stageLp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 0.39f);
         root.addView(previewStage, stageLp);
 
-        previewPortal = new PortalShaderView(this);
-        previewPortal.configureStarfieldBackgroundMode();
-        previewPortal.applyPreviewOverride(bundle);
-        previewStage.addView(previewPortal, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        previewPortal.startRendering();
-
-        // Top floating bar inside preview stage
+        // Top floating bar inside preview stage (real FrostedCardDrawable!)
         previewTopBar = new LinearLayout(this);
         previewTopBar.setOrientation(LinearLayout.HORIZONTAL);
         previewTopBar.setGravity(Gravity.CENTER_VERTICAL);
         previewTopBar.setPadding(dp(10f), dp(8f), dp(10f), dp(8f));
+        previewTopBarDrawable = new FlowingAuroraView.FrostedCardDrawable(
+                previewTopBar, null, previewPortal,
+                FlowingAuroraView.CornerMode.ALL, dp(20f), 0x52121826, dp(1f));
+        previewTopBar.setBackground(previewTopBarDrawable);
         FrameLayout.LayoutParams topBarLp = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         topBarLp.gravity = Gravity.TOP;
@@ -305,7 +353,7 @@ public class ThemeStudioActivity extends AppCompatActivity {
 
         studioTitle = new TextView(this);
         studioTitle.setText(R.string.title_theme_studio);
-        studioTitle.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16.5f);
+        studioTitle.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f);
         studioTitle.setTypeface(Typeface.DEFAULT_BOLD);
         studioTitle.setSingleLine(true);
         LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
@@ -313,7 +361,7 @@ public class ThemeStudioActivity extends AppCompatActivity {
         previewTopBar.addView(studioTitle, titleLp);
 
         btnPlayIris = createPillButton("Play Iris");
-        btnPlayIris.setOnClickListener(v -> toggleIrisDemo());
+        btnPlayIris.setOnClickListener(v -> toggleIrisDemo(false));
         LinearLayout.LayoutParams irisLp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         irisLp.setMarginEnd(dp(8f));
@@ -344,7 +392,7 @@ public class ThemeStudioActivity extends AppCompatActivity {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         cardsRowLp.gravity = Gravity.BOTTOM;
 
-        // Frosted surface card preview (real FrostedCardDrawable sampling live previewPortal!)
+        // Frosted surface card preview (real FrostedCardDrawable sampling live full-screen previewPortal!)
         previewGlassCard = new LinearLayout(this);
         previewGlassCard.setOrientation(LinearLayout.VERTICAL);
         previewGlassCard.setPadding(dp(14f), dp(11f), dp(14f), dp(11f));
@@ -422,22 +470,27 @@ public class ThemeStudioActivity extends AppCompatActivity {
         previewCardsRow.addView(previewPopupCard, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         previewStage.addView(previewCardsRow, cardsRowLp);
 
-        // 2. BOTTOM 4-TAB EDITOR SHEET (~61% height)
+        // 2. BOTTOM 5-TAB FROSTED EDITOR SHEET (~61% height, using Surface color + Frosted Card Tint)
         editorSheet = new LinearLayout(this);
         editorSheet.setOrientation(LinearLayout.VERTICAL);
         editorSheet.setPadding(dp(14f), dp(12f), dp(14f), dp(12f));
+        editorSheetDrawable = new FlowingAuroraView.FrostedCardDrawable(
+                editorSheet, null, previewPortal,
+                FlowingAuroraView.CornerMode.TOP, dp(24f), 0x52121826, dp(1f));
+        editorSheet.setBackground(editorSheetDrawable);
         root.addView(editorSheet, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 0.61f));
 
-        // Tab strip
+        // 5-Tab strip
         LinearLayout tabBar = new LinearLayout(this);
         tabBar.setOrientation(LinearLayout.HORIZONTAL);
         tabButtons = new TextView[TAB_LABELS.length];
         for (int i = 0; i < TAB_LABELS.length; i++) {
             final int idx = i;
             TextView tb = createPillButton(TAB_LABELS[i]);
-            tb.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f);
-            tb.setPadding(dp(8f), dp(8f), dp(8f), dp(8f));
+            tb.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f);
+            tb.setSingleLine(true);
+            tb.setPadding(dp(4f), dp(8f), dp(4f), dp(8f));
             tb.setOnClickListener(v -> {
                 activeTab = idx;
                 updateTabVisibility();
@@ -445,7 +498,7 @@ public class ThemeStudioActivity extends AppCompatActivity {
             });
             LinearLayout.LayoutParams tLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
             if (i > 0) {
-                tLp.setMarginStart(dp(6f));
+                tLp.setMarginStart(dp(5f));
             }
             tabBar.addView(tb, tLp);
             tabButtons[i] = tb;
@@ -460,10 +513,11 @@ public class ThemeStudioActivity extends AppCompatActivity {
         tcLp.topMargin = dp(10f);
         editorSheet.addView(tabContent, tcLp);
 
-        tabPages = new View[4];
+        tabPages = new View[TAB_LABELS.length];
         tabPages[TAB_COLORS] = buildColorsTab();
         tabPages[TAB_GLASS] = buildGlassTab();
         tabPages[TAB_PORTAL] = buildPortalTab();
+        tabPages[TAB_ANIMATION] = buildAnimationTab();
         tabPages[TAB_SAVED] = buildSavedThemesTab();
         for (View page : tabPages) {
             tabContent.addView(page, new FrameLayout.LayoutParams(
@@ -471,7 +525,7 @@ public class ThemeStudioActivity extends AppCompatActivity {
         }
         updateTabVisibility();
 
-        setContentView(root);
+        setContentView(outerRoot);
     }
 
     private View buildColorsTab() {
@@ -647,10 +701,10 @@ public class ThemeStudioActivity extends AppCompatActivity {
         swLp.topMargin = dp(10f);
         col.addView(swScroll, swLp);
 
-        // RGB sliders
+        // RGB sliders with tappable value pills
         rgbBars = new SeekBar[3];
         rgbVals = new TextView[3];
-        String[] names = { "R", "G", "B" };
+        final String[] names = { "R", "G", "B" };
         int[] tints = { 0xFFFF5252, 0xFF10B981, 0xFF3B82F6 };
         SeekBar.OnSeekBarChangeListener rgbListener = new SeekBar.OnSeekBarChangeListener() {
             @Override
@@ -664,6 +718,7 @@ public class ThemeStudioActivity extends AppCompatActivity {
             @Override public void onStopTrackingTouch(SeekBar seekBar) {}
         };
         for (int c = 0; c < 3; c++) {
+            final int chIdx = c;
             LinearLayout row = new LinearLayout(this);
             row.setOrientation(LinearLayout.HORIZONTAL);
             row.setGravity(Gravity.CENTER_VERTICAL);
@@ -685,10 +740,25 @@ public class ThemeStudioActivity extends AppCompatActivity {
             row.addView(sb, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
             TextView val = new TextView(this);
-            val.setTypeface(Typeface.MONOSPACE);
-            val.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f);
-            val.setGravity(Gravity.END);
-            row.addView(val, new LinearLayout.LayoutParams(dp(36f), ViewGroup.LayoutParams.WRAP_CONTENT));
+            val.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+            val.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f);
+            val.setGravity(Gravity.CENTER);
+            val.setClickable(true);
+            val.setFocusable(true);
+            val.setOnClickListener(v -> {
+                int current = rgbBars[chIdx].getProgress();
+                promptCustomSliderValue(CHANNEL_LABELS[activeChannel] + " — " + names[chIdx],
+                        current, 0, 255, "", newVal -> {
+                            rgbBars[chIdx].setProgress(newVal);
+                            int color = Color.rgb(rgbBars[0].getProgress(), rgbBars[1].getProgress(), rgbBars[2].getProgress());
+                            setChannelColor(bundle.colors, activeChannel, color);
+                            refreshAll();
+                        });
+            });
+            LinearLayout.LayoutParams valLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            valLp.setMarginStart(dp(6f));
+            row.addView(val, valLp);
 
             rgbBars[c] = sb;
             rgbVals[c] = val;
@@ -748,10 +818,10 @@ public class ThemeStudioActivity extends AppCompatActivity {
         col.setOrientation(LinearLayout.VERTICAL);
         col.setPadding(0, dp(4f), 0, dp(20f));
 
-        rowBlurAmount = addSliderRow(col, "Live Blur Amount", 0, 200, 5, "%",
+        rowBlurAmount = addSliderRow(col, "Live Blur Amount", 0, 200, 5, 0, 2000, "%",
                 v -> { bundle.blurAmountPercent = v; refreshAll(); });
 
-        rowTintAmount = addSliderRow(col, "Frosted Card Tint Amount", 0, 100, 1, "%",
+        rowTintAmount = addSliderRow(col, "Frosted Card Tint Amount", 0, 100, 1, 0, 100, "%",
                 v -> { bundle.frostedTintAmountPercent = v; refreshAll(); });
 
         tintPerfHint = new TextView(this);
@@ -763,7 +833,7 @@ public class ThemeStudioActivity extends AppCompatActivity {
         hintLp.bottomMargin = dp(8f);
         col.addView(tintPerfHint, hintLp);
 
-        rowCardOutline = addSliderRow(col, "Card Outline Thickness", 0, 250, 5, "%",
+        rowCardOutline = addSliderRow(col, "Card Outline Thickness", 0, 250, 5, 0, 2000, "%",
                 v -> { bundle.cardOutlineThicknessPercent = v; refreshAll(); });
 
         bgQualityHeading = new TextView(this);
@@ -806,31 +876,18 @@ public class ThemeStudioActivity extends AppCompatActivity {
         col.setOrientation(LinearLayout.VERTICAL);
         col.setPadding(0, dp(4f), 0, dp(20f));
 
-        rowParticleBright = addSliderRow(col, "Particle Brightness", 0, 400, 5, "%",
+        rowParticleBright = addSliderRow(col, "Particle Brightness", 0, 400, 5, 0, 2000, "%",
                 v -> { bundle.portalParticleBrightnessPercent = v; refreshAll(); });
-        rowParticleSize = addSliderRow(col, "Particle Size", 25, 400, 5, "%",
+        rowParticleSize = addSliderRow(col, "Particle Size", 25, 400, 5, 1, 2000, "%",
                 v -> { bundle.portalParticleSizePercent = v; refreshAll(); });
-        rowParticleDensity = addSliderRow(col, "Particle Density", 25, 400, 5, "%",
+        rowParticleDensity = addSliderRow(col, "Particle Amount", 25, 400, 5, 0, 2000, "%",
                 v -> { bundle.portalParticleDensityPercent = v; refreshAll(); });
-        rowRingGlow = addSliderRow(col, "Portal Ring Glow", 20, 250, 5, "%",
+        rowRingGlow = addSliderRow(col, "Portal Ring Glow", 20, 250, 5, 0, 2000, "%",
                 v -> { bundle.portalGlowIntensityPercent = v; refreshAll(); });
-        rowPortalScale = addSliderRow(col, "Portal Window Scale", 60, 150, 5, "%",
+        rowPortalScale = addSliderRow(col, "Portal Window Scale", 60, 150, 5, 10, 2000, "%",
                 v -> { bundle.portalWindowScalePercent = v; refreshAll(); });
-        rowSonarSpeed = addSliderRow(col, "Sonar Pulse Speed", 20, 250, 5, "%",
+        rowSonarSpeed = addSliderRow(col, "Sonar Pulse Speed", 20, 250, 5, 0, 2000, "%",
                 v -> { bundle.portalSonarSpeedPercent = v; refreshAll(); });
-
-        rowReadyMs = addSliderRow(col, "Ready Glow Duration", 100, 1000, 25, " ms",
-                v -> { bundle.portalReadyMs = v; refreshAll(); });
-        rowFadeMs = addSliderRow(col, "Stream Fade-In", 100, 1200, 25, " ms",
-                v -> { bundle.portalPreviewFadeMs = v; refreshAll(); });
-        rowHoldMs = addSliderRow(col, "Preview Hold", 0, 2000, 50, " ms",
-                v -> { bundle.portalPreviewHoldMs = v; refreshAll(); });
-        rowExpandMs = addSliderRow(col, "Iris Expand Duration", 150, 1500, 25, " ms",
-                v -> { bundle.portalExpandMs = v; refreshAll(); });
-        rowDisconnectMs = addSliderRow(col, "Disconnect Iris Close", 300, 2500, 50, " ms",
-                v -> { bundle.portalDisconnectMs = v; refreshAll(); });
-        rowLaunchCloseMs = addSliderRow(col, "Launch Transition", 150, 1200, 25, " ms",
-                v -> { bundle.portalLaunchCloseMs = v; refreshAll(); });
 
         btnResetPortal = createPillButton("Reset Portal FX Defaults");
         btnResetPortal.setOnClickListener(v -> {
@@ -840,12 +897,6 @@ public class ThemeStudioActivity extends AppCompatActivity {
             bundle.portalGlowIntensityPercent = PreferenceConfiguration.DEFAULT_PORTAL_GLOW_INTENSITY;
             bundle.portalWindowScalePercent = PreferenceConfiguration.DEFAULT_PORTAL_WINDOW_SCALE;
             bundle.portalSonarSpeedPercent = PreferenceConfiguration.DEFAULT_PORTAL_SONAR_SPEED;
-            bundle.portalReadyMs = PreferenceConfiguration.DEFAULT_PORTAL_READY_MS;
-            bundle.portalPreviewFadeMs = PreferenceConfiguration.DEFAULT_PORTAL_PREVIEW_FADE_MS;
-            bundle.portalPreviewHoldMs = PreferenceConfiguration.DEFAULT_PORTAL_PREVIEW_HOLD_MS;
-            bundle.portalExpandMs = PreferenceConfiguration.DEFAULT_PORTAL_EXPAND_MS;
-            bundle.portalDisconnectMs = PreferenceConfiguration.DEFAULT_PORTAL_DISCONNECT_MS;
-            bundle.portalLaunchCloseMs = PreferenceConfiguration.DEFAULT_PORTAL_LAUNCH_CLOSE_MS;
             refreshAll();
         });
         LinearLayout.LayoutParams rstLp = new LinearLayout.LayoutParams(
@@ -853,6 +904,105 @@ public class ThemeStudioActivity extends AppCompatActivity {
         rstLp.topMargin = dp(12f);
         rstLp.gravity = Gravity.END;
         col.addView(btnResetPortal, rstLp);
+
+        sv.addView(col);
+        return sv;
+    }
+
+    private View buildAnimationTab() {
+        ScrollView sv = new ScrollView(this);
+        sv.setVerticalScrollBarEnabled(false);
+        LinearLayout col = new LinearLayout(this);
+        col.setOrientation(LinearLayout.VERTICAL);
+        col.setPadding(0, dp(4f), 0, dp(20f));
+
+        // Top preview buttons: Play Launch | Play Disconnect
+        LinearLayout playRow = new LinearLayout(this);
+        playRow.setOrientation(LinearLayout.HORIZONTAL);
+        btnAnimPlayLaunch = createPillButton("Play Launch");
+        btnAnimPlayDisconnect = createPillButton("Play Disconnect");
+        btnAnimPlayLaunch.setOnClickListener(v -> toggleIrisDemo(false));
+        btnAnimPlayDisconnect.setOnClickListener(v -> toggleIrisDemo(true));
+        LinearLayout.LayoutParams p1Lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        p1Lp.setMarginEnd(dp(6f));
+        playRow.addView(btnAnimPlayLaunch, p1Lp);
+        playRow.addView(btnAnimPlayDisconnect, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        col.addView(playRow);
+
+        // Section 1: Launch Sequence Timings (6 phases)
+        animLaunchHeading = new TextView(this);
+        animLaunchHeading.setText("LAUNCH SEQUENCE TIMINGS");
+        animLaunchHeading.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f);
+        animLaunchHeading.setTypeface(Typeface.DEFAULT_BOLD);
+        LinearLayout.LayoutParams lhLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lhLp.topMargin = dp(12f);
+        col.addView(animLaunchHeading, lhLp);
+
+        rowLaunchCloseMs = addSliderRow(col, "1. Launch Iris Close-In", 150, 1500, 25, 0, 30000, " ms",
+                v -> { bundle.portalLaunchCloseMs = v; refreshAll(); });
+        rowSonarHoldMs = addSliderRow(col, "2. Sonar Pulse Hold", 0, 2000, 50, 0, 30000, " ms",
+                v -> { bundle.portalSonarHoldMs = v; refreshAll(); });
+        rowReadyMs = addSliderRow(col, "3. Sonar \u2192 Ready Glow", 50, 1500, 25, 0, 30000, " ms",
+                v -> { bundle.portalReadyMs = v; refreshAll(); });
+        rowFadeMs = addSliderRow(col, "4. Ready \u2192 Charge / Stream Fade", 50, 1500, 25, 0, 30000, " ms",
+                v -> { bundle.portalPreviewFadeMs = v; refreshAll(); });
+        rowHoldMs = addSliderRow(col, "5. Peephole Preview Hold", 0, 2000, 50, 0, 30000, " ms",
+                v -> { bundle.portalPreviewHoldMs = v; refreshAll(); });
+        rowExpandMs = addSliderRow(col, "6. Iris Wipe Expand Open", 150, 1800, 25, 0, 30000, " ms",
+                v -> { bundle.portalExpandMs = v; refreshAll(); });
+
+        // Section 2: Disconnect Sequence Timings (3 steps)
+        animDisconnectHeading = new TextView(this);
+        animDisconnectHeading.setText("DISCONNECT SEQUENCE TIMINGS");
+        animDisconnectHeading.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f);
+        animDisconnectHeading.setTypeface(Typeface.DEFAULT_BOLD);
+        LinearLayout.LayoutParams dhLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        dhLp.topMargin = dp(14f);
+        col.addView(animDisconnectHeading, dhLp);
+
+        rowDisconnectCloseMs = addSliderRow(col, "1. Disconnect Iris Close", 100, 1500, 25, 0, 30000, " ms",
+                v -> {
+                    bundle.portalDisconnectCloseMs = v;
+                    bundle.portalDisconnectMs = bundle.portalDisconnectCloseMs
+                            + bundle.portalDisconnectFadeMs + bundle.portalDisconnectOpenMs;
+                    refreshAll();
+                });
+        rowDisconnectFadeMs = addSliderRow(col, "2. Stream \u2192 Starfield Fade", 100, 1500, 25, 0, 30000, " ms",
+                v -> {
+                    bundle.portalDisconnectFadeMs = v;
+                    bundle.portalDisconnectMs = bundle.portalDisconnectCloseMs
+                            + bundle.portalDisconnectFadeMs + bundle.portalDisconnectOpenMs;
+                    refreshAll();
+                });
+        rowDisconnectOpenMs = addSliderRow(col, "3. Iris Reopen to Menu", 100, 1500, 25, 0, 30000, " ms",
+                v -> {
+                    bundle.portalDisconnectOpenMs = v;
+                    bundle.portalDisconnectMs = bundle.portalDisconnectCloseMs
+                            + bundle.portalDisconnectFadeMs + bundle.portalDisconnectOpenMs;
+                    refreshAll();
+                });
+
+        btnResetAnimation = createPillButton("Reset Animation Timings");
+        btnResetAnimation.setOnClickListener(v -> {
+            bundle.portalLaunchCloseMs = PreferenceConfiguration.DEFAULT_PORTAL_LAUNCH_CLOSE_MS;
+            bundle.portalSonarHoldMs = PreferenceConfiguration.DEFAULT_PORTAL_SONAR_HOLD_MS;
+            bundle.portalReadyMs = PreferenceConfiguration.DEFAULT_PORTAL_READY_MS;
+            bundle.portalPreviewFadeMs = PreferenceConfiguration.DEFAULT_PORTAL_PREVIEW_FADE_MS;
+            bundle.portalPreviewHoldMs = PreferenceConfiguration.DEFAULT_PORTAL_PREVIEW_HOLD_MS;
+            bundle.portalExpandMs = PreferenceConfiguration.DEFAULT_PORTAL_EXPAND_MS;
+            bundle.portalDisconnectCloseMs = PreferenceConfiguration.DEFAULT_PORTAL_DISCONNECT_CLOSE_MS;
+            bundle.portalDisconnectFadeMs = PreferenceConfiguration.DEFAULT_PORTAL_DISCONNECT_FADE_MS;
+            bundle.portalDisconnectOpenMs = PreferenceConfiguration.DEFAULT_PORTAL_DISCONNECT_OPEN_MS;
+            bundle.portalDisconnectMs = PreferenceConfiguration.DEFAULT_PORTAL_DISCONNECT_MS;
+            refreshAll();
+        });
+        LinearLayout.LayoutParams rstLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        rstLp.topMargin = dp(12f);
+        rstLp.gravity = Gravity.END;
+        col.addView(btnResetAnimation, rstLp);
 
         sv.addView(col);
         return sv;
@@ -1074,40 +1224,127 @@ public class ThemeStudioActivity extends AppCompatActivity {
         Toast.makeText(this, getString(R.string.theme_studio_imported_fmt, imported.name), Toast.LENGTH_SHORT).show();
     }
 
-    private void toggleIrisDemo() {
-        if (playingIris) {
-            stopIrisDemo();
+    /**
+     * Centers the portal iris & sonar ripples inside the top preview stage while keeping
+     * u_resolution and minDim locked to the full-screen PortalShaderView (1:1 particle scale).
+     */
+    private void updatePortalStageCenterOffset() {
+        if (previewPortal == null || outerRoot == null) {
             return;
         }
-        playingIris = true;
-        btnPlayIris.setText("Stop Iris");
-        previewCardsRow.animate().alpha(0f).setDuration(180L).start();
+        int fullW = outerRoot.getWidth();
+        int fullH = outerRoot.getHeight();
+        int stageH = previewStage != null ? previewStage.getHeight() : Math.round(fullH * 0.39f);
+        if (fullW <= 0 || fullH <= 0 || stageH <= 0) {
+            previewPortal.setPortalCenterOffset(0f, 0.24f);
+            return;
+        }
+        float minDim = Math.max(1f, Math.min(fullW, fullH));
+        int topBarBottom = (previewTopBar != null && previewTopBar.getBottom() > 0)
+                ? previewTopBar.getBottom()
+                : dp(64f);
+        float stageCenterFromTop = (topBarBottom + stageH) * 0.5f;
+        float offsetY = (0.5f * fullH - stageCenterFromTop) / minDim;
+        previewPortal.setPortalCenterOffset(0f, offsetY);
+    }
 
-        // Play full Connecting -> Ready -> Charge -> Expand sequence inside the live preview stage
-        previewPortal.setUniforms(0f, 0f, 0f);
-        long totalMs = Math.max(1800L, bundle.portalReadyMs + bundle.portalPreviewFadeMs + bundle.portalExpandMs + 900L);
-        irisAnimator = ValueAnimator.ofFloat(0f, 1f);
-        irisAnimator.setDuration(totalMs);
-        irisAnimator.setInterpolator(new PathInterpolator(0.25f, 0.1f, 0.25f, 1f));
-        irisAnimator.addUpdateListener(anim -> {
-            float t = (float) anim.getAnimatedValue();
-            if (t < 0.30f) {
-                // Connecting sonar pulses
-                previewPortal.setUniforms(0f, 0f, 0f);
-            } else if (t < 0.50f) {
-                // Ready glow ramp
-                float r = (t - 0.30f) / 0.20f;
-                previewPortal.setUniforms(r, 0f, 0f);
-            } else if (t < 0.72f) {
-                // Charge arcs ramp
-                float p = (t - 0.50f) / 0.22f;
-                previewPortal.setUniforms(1f, p, 0f);
-            } else {
-                // Full iris expand
-                float e = (t - 0.72f) / 0.28f;
-                previewPortal.setUniforms(1f, 1f, e);
+    /**
+     * Plays the exact sequential millisecond Launch or Disconnect state machine inside the
+     * top preview stage using the real configured phase durations.
+     */
+    private void toggleIrisDemo(boolean disconnectMode) {
+        if (playingIris) {
+            boolean sameMode = (playingDisconnectMode == disconnectMode);
+            stopIrisDemo();
+            if (sameMode) {
+                return;
             }
-        });
+        }
+        playingIris = true;
+        playingDisconnectMode = disconnectMode;
+        btnPlayIris.setText("Stop Iris");
+        if (btnAnimPlayLaunch != null) {
+            btnAnimPlayLaunch.setText(!disconnectMode ? "Stop Launch" : "Play Launch");
+        }
+        if (btnAnimPlayDisconnect != null) {
+            btnAnimPlayDisconnect.setText(disconnectMode ? "Stop Disconnect" : "Play Disconnect");
+        }
+        refreshAll();
+        previewCardsRow.animate().alpha(0f).setDuration(180L).start();
+        updatePortalStageCenterOffset();
+
+        if (!disconnectMode) {
+            // Exact 6-phase Launch state machine in milliseconds:
+            // 1. Launch Iris Close-In (1.0 -> 0.0 expand)
+            // 2. Sonar Pulse Hold (0.0 expand, 0.0 ready, 0.0 preview)
+            // 3. Sonar -> Ready Glow (0.0 -> 1.0 ready)
+            // 4. Ready -> Charge / Stream Fade (0.0 -> 1.0 preview)
+            // 5. Peephole Preview Hold (1.0 ready, 1.0 preview, 0.0 expand)
+            // 6. Iris Wipe Expand Open (0.0 -> 1.0 expand)
+            final long t0 = Math.max(0L, bundle.portalLaunchCloseMs);
+            final long t1 = t0 + Math.max(0L, bundle.portalSonarHoldMs);
+            final long t2 = t1 + Math.max(0L, bundle.portalReadyMs);
+            final long t3 = t2 + Math.max(0L, bundle.portalPreviewFadeMs);
+            final long t4 = t3 + Math.max(0L, bundle.portalPreviewHoldMs);
+            final long t5 = t4 + Math.max(0L, bundle.portalExpandMs);
+            final long totalMs = Math.max(100L, t5);
+
+            previewPortal.setUniforms(0f, 0f, 1f);
+            irisAnimator = ValueAnimator.ofFloat(0f, (float) totalMs);
+            irisAnimator.setDuration(totalMs);
+            irisAnimator.setInterpolator(new android.view.animation.LinearInterpolator());
+            irisAnimator.addUpdateListener(anim -> {
+                float elapsed = (float) anim.getAnimatedValue();
+                if (elapsed < t0) {
+                    float prog = t0 > 0 ? (elapsed / (float) t0) : 1f;
+                    previewPortal.setUniforms(0f, 0f, 1f - Math.max(0f, Math.min(1f, prog)));
+                } else if (elapsed < t1) {
+                    previewPortal.setUniforms(0f, 0f, 0f);
+                } else if (elapsed < t2) {
+                    float raw = (t2 > t1) ? ((elapsed - t1) / (float) (t2 - t1)) : 1f;
+                    float r = cubicOutEase.getInterpolation(Math.max(0f, Math.min(1f, raw)));
+                    previewPortal.setUniforms(r, 0f, 0f);
+                } else if (elapsed < t3) {
+                    float raw = (t3 > t2) ? ((elapsed - t2) / (float) (t3 - t2)) : 1f;
+                    float p = cubicOutEase.getInterpolation(Math.max(0f, Math.min(1f, raw)));
+                    previewPortal.setUniforms(1f, p, 0f);
+                } else if (elapsed < t4) {
+                    previewPortal.setUniforms(1f, 1f, 0f);
+                } else {
+                    float e = (t5 > t4) ? ((elapsed - t4) / (float) (t5 - t4)) : 1f;
+                    previewPortal.setUniforms(1f, 1f, Math.max(0f, Math.min(1f, e)));
+                }
+            });
+        } else {
+            // Exact 3-step Disconnect state machine in milliseconds:
+            // 1. Disconnect Iris Close Over Stream (1.0 -> 0.0 expand, ready=1, preview=1)
+            // 2. Stream -> Starfield Fade (1.0 -> 0.0 ready & preview)
+            // 3. Iris Reopen to Menu (0.0 -> 1.0 expand)
+            final long d1 = Math.max(0L, bundle.portalDisconnectCloseMs);
+            final long d2 = d1 + Math.max(0L, bundle.portalDisconnectFadeMs);
+            final long d3 = d2 + Math.max(0L, bundle.portalDisconnectOpenMs);
+            final long totalMs = Math.max(100L, d3);
+
+            previewPortal.setUniforms(1f, 1f, 1f);
+            irisAnimator = ValueAnimator.ofFloat(0f, (float) totalMs);
+            irisAnimator.setDuration(totalMs);
+            irisAnimator.setInterpolator(new android.view.animation.LinearInterpolator());
+            irisAnimator.addUpdateListener(anim -> {
+                float elapsed = (float) anim.getAnimatedValue();
+                if (elapsed < d1) {
+                    float prog = d1 > 0 ? (elapsed / (float) d1) : 1f;
+                    previewPortal.setUniforms(1f, 1f, 1f - Math.max(0f, Math.min(1f, prog)));
+                } else if (elapsed < d2) {
+                    float raw = (d2 > d1) ? ((elapsed - d1) / (float) (d2 - d1)) : 1f;
+                    float v = 1f - cubicOutEase.getInterpolation(Math.max(0f, Math.min(1f, raw)));
+                    previewPortal.setUniforms(v, v, 0f);
+                } else {
+                    float e = (d3 > d2) ? ((elapsed - d2) / (float) (d3 - d2)) : 1f;
+                    previewPortal.setUniforms(0f, 0f, Math.max(0f, Math.min(1f, e)));
+                }
+            });
+        }
+
         irisAnimator.addListener(new AnimatorListenerAdapter() {
             @Override
             public void onAnimationEnd(Animator animation) {
@@ -1123,14 +1360,25 @@ public class ThemeStudioActivity extends AppCompatActivity {
             irisAnimator = null;
         }
         playingIris = false;
+        playingDisconnectMode = false;
         if (btnPlayIris != null) {
             btnPlayIris.setText("Play Iris");
         }
+        if (btnAnimPlayLaunch != null) {
+            btnAnimPlayLaunch.setText("Play Launch");
+        }
+        if (btnAnimPlayDisconnect != null) {
+            btnAnimPlayDisconnect.setText("Play Disconnect");
+        }
         if (previewPortal != null) {
+            previewPortal.setPortalCenterOffset(0f, 0f);
             previewPortal.setUniforms(0f, 0f, 1f);
         }
         if (previewCardsRow != null) {
             previewCardsRow.animate().alpha(1f).setDuration(200L).start();
+        }
+        if (!updatingControls && bundle != null) {
+            refreshAll();
         }
     }
 
@@ -1158,16 +1406,15 @@ public class ThemeStudioActivity extends AppCompatActivity {
             }
         }
 
-        // Preview top bar
-        GradientDrawable topBarBg = new GradientDrawable();
-        topBarBg.setShape(GradientDrawable.RECTANGLE);
-        topBarBg.setCornerRadius(dp(20f));
-        topBarBg.setColor(p.getFrostedCardTint(0x64000000));
         int strokePx = Math.round(dp(1f) * (bundle.cardOutlineThicknessPercent / 100f));
-        if (strokePx > 0) {
-            topBarBg.setStroke(strokePx, p.getCardRimColor());
-        }
-        previewTopBar.setBackground(topBarBg);
+        int frostedTint = p.getFrostedCardTint(0x56000000);
+
+        // Preview top bar (FrostedCardDrawable sampling full-screen previewPortal)
+        previewTopBarDrawable.updateStyle(
+                FlowingAuroraView.CornerMode.ALL, dp(20f),
+                frostedTint, null, previewPortal);
+        previewTopBarDrawable.setStrokeWidthPx(strokePx);
+        previewTopBarDrawable.setRimColor(p.getCardRimColor());
         btnBack.setColorFilter(p.getPrimaryTextColor(), PorterDuff.Mode.SRC_IN);
         studioTitle.setTextColor(p.getPrimaryTextColor());
         stylePillButton(btnPlayIris, playingIris, p.highlight, p.isLight);
@@ -1176,7 +1423,7 @@ public class ThemeStudioActivity extends AppCompatActivity {
         // Live preview Frosted Card
         previewCardDrawable.updateStyle(
                 FlowingAuroraView.CornerMode.ALL, dp(20f),
-                p.getFrostedCardTint(0x56000000), null, previewPortal);
+                frostedTint, null, previewPortal);
         previewCardDrawable.setStrokeWidthPx(strokePx);
         previewCardDrawable.setRimColor(p.getCardRimColor());
 
@@ -1211,8 +1458,16 @@ public class ThemeStudioActivity extends AppCompatActivity {
         previewPopupTitle.setTextColor(p.getPrimaryTextColor());
         previewPopupSub.setTextColor(p.getSecondaryTextColor());
 
-        // Editor sheet surface
-        editorSheet.setBackgroundColor(AppThemePalette.blendColors(p.background, p.surface, 0.55f));
+        // Frosted Editor Sheet surface (uses Surface color + Frosted Card Tint + live blur!)
+        int sheetTint = AppThemePalette.withAlphaInt(
+                p.surface,
+                Math.max(p.isLight ? 0xCC : 0xB0, Math.round((bundle.frostedTintAmountPercent / 100f) * 255f)));
+        editorSheetDrawable.updateStyle(
+                FlowingAuroraView.CornerMode.TOP, dp(24f),
+                sheetTint, null, previewPortal);
+        editorSheetDrawable.setStrokeWidthPx(Math.max(1, strokePx));
+        editorSheetDrawable.setRimColor(p.getCardRimColor());
+
         for (int i = 0; i < tabButtons.length; i++) {
             stylePillButton(tabButtons[i], i == activeTab, p.accent, p.isLight);
         }
@@ -1248,8 +1503,19 @@ public class ThemeStudioActivity extends AppCompatActivity {
         rgbVals[0].setText(String.valueOf(r));
         rgbVals[1].setText(String.valueOf(g));
         rgbVals[2].setText(String.valueOf(b));
+        int pillStroke = Math.max(1, dp(1f));
+        int pillPadH = dp(9f);
+        int pillPadV = dp(3f);
+        int pillRad = dp(999f);
         for (int i = 0; i < 3; i++) {
-            rgbVals[i].setTextColor(p.getPrimaryTextColor());
+            rgbVals[i].setTextColor(p.getNeonAccent());
+            rgbVals[i].setPadding(pillPadH, pillPadV, pillPadH, pillPadV);
+            GradientDrawable rgbPill = new GradientDrawable();
+            rgbPill.setShape(GradientDrawable.RECTANGLE);
+            rgbPill.setCornerRadius(pillRad);
+            rgbPill.setColor(AppThemePalette.withAlpha(p.accent, p.isLight ? 0.14f : 0.22f));
+            rgbPill.setStroke(pillStroke, AppThemePalette.withAlpha(p.getNeonAccent(), 0.55f));
+            rgbVals[i].setBackground(rgbPill);
             rgbBars[i].setProgressBackgroundTintList(ColorStateList.valueOf(p.isLight ? 0x280F172A : 0x36FFFFFF));
             rgbBars[i].setThumbTintList(ColorStateList.valueOf(p.isLight ? 0xFF0F172A : Color.WHITE));
         }
@@ -1271,12 +1537,12 @@ public class ThemeStudioActivity extends AppCompatActivity {
 
         // Tab 2: Glass & Blur
         rowBlurAmount.setValue(bundle.blurAmountPercent);
-        rowBlurAmount.applyTheme(p);
+        rowBlurAmount.applyTheme(p, pillStroke, pillPadH, pillPadV, pillRad);
         rowTintAmount.setValue(bundle.frostedTintAmountPercent);
-        rowTintAmount.applyTheme(p);
+        rowTintAmount.applyTheme(p, pillStroke, pillPadH, pillPadV, pillRad);
         tintPerfHint.setTextColor(bundle.frostedTintAmountPercent >= 100 ? p.getNeonAccent() : p.getSecondaryTextColor());
         rowCardOutline.setValue(bundle.cardOutlineThicknessPercent);
-        rowCardOutline.applyTheme(p);
+        rowCardOutline.applyTheme(p, pillStroke, pillPadH, pillPadV, pillRad);
         bgQualityHeading.setTextColor(p.getPrimaryTextColor());
         for (int i = 0; i < bgQualityPills.length; i++) {
             boolean active = BG_QUALITY_VALUES[i].equals(bundle.bgQuality);
@@ -1285,24 +1551,42 @@ public class ThemeStudioActivity extends AppCompatActivity {
 
         // Tab 3: Portal FX
         SliderRow[] portalRows = {
-                rowParticleBright, rowParticleSize, rowParticleDensity, rowRingGlow,
-                rowPortalScale, rowSonarSpeed, rowReadyMs, rowFadeMs, rowHoldMs,
-                rowExpandMs, rowDisconnectMs, rowLaunchCloseMs
+                rowParticleBright, rowParticleSize, rowParticleDensity,
+                rowRingGlow, rowPortalScale, rowSonarSpeed
         };
         int[] portalVals = {
                 bundle.portalParticleBrightnessPercent, bundle.portalParticleSizePercent,
                 bundle.portalParticleDensityPercent, bundle.portalGlowIntensityPercent,
-                bundle.portalWindowScalePercent, bundle.portalSonarSpeedPercent,
-                bundle.portalReadyMs, bundle.portalPreviewFadeMs, bundle.portalPreviewHoldMs,
-                bundle.portalExpandMs, bundle.portalDisconnectMs, bundle.portalLaunchCloseMs
+                bundle.portalWindowScalePercent, bundle.portalSonarSpeedPercent
         };
         for (int i = 0; i < portalRows.length; i++) {
             portalRows[i].setValue(portalVals[i]);
-            portalRows[i].applyTheme(p);
+            portalRows[i].applyTheme(p, pillStroke, pillPadH, pillPadV, pillRad);
         }
         stylePillButton(btnResetPortal, false, 0xFFFF5252, p.isLight);
 
-        // Tab 4: My Themes
+        // Tab 4: Animation
+        stylePillButton(btnAnimPlayLaunch, playingIris && !playingDisconnectMode, p.highlight, p.isLight);
+        stylePillButton(btnAnimPlayDisconnect, playingIris && playingDisconnectMode, p.highlight, p.isLight);
+        animLaunchHeading.setTextColor(p.getSecondaryTextColor());
+        animDisconnectHeading.setTextColor(p.getSecondaryTextColor());
+        SliderRow[] animRows = {
+                rowLaunchCloseMs, rowSonarHoldMs, rowReadyMs,
+                rowFadeMs, rowHoldMs, rowExpandMs,
+                rowDisconnectCloseMs, rowDisconnectFadeMs, rowDisconnectOpenMs
+        };
+        int[] animVals = {
+                bundle.portalLaunchCloseMs, bundle.portalSonarHoldMs, bundle.portalReadyMs,
+                bundle.portalPreviewFadeMs, bundle.portalPreviewHoldMs, bundle.portalExpandMs,
+                bundle.portalDisconnectCloseMs, bundle.portalDisconnectFadeMs, bundle.portalDisconnectOpenMs
+        };
+        for (int i = 0; i < animRows.length; i++) {
+            animRows[i].setValue(animVals[i]);
+            animRows[i].applyTheme(p, pillStroke, pillPadH, pillPadV, pillRad);
+        }
+        stylePillButton(btnResetAnimation, false, 0xFFFF5252, p.isLight);
+
+        // Tab 5: My Themes
         stylePillButton(btnSaveNew, true, p.accent, p.isLight);
         stylePillButton(btnExportClipboard, false, p.highlight, p.isLight);
         stylePillButton(btnImportClipboard, false, p.highlight, p.isLight);
@@ -1317,8 +1601,10 @@ public class ThemeStudioActivity extends AppCompatActivity {
         void onValue(int value);
     }
 
-    private SliderRow addSliderRow(LinearLayout parent, String label, int min, int max, int step,
-                                   String suffix, IntCallback onChanged) {
+    private SliderRow addSliderRow(LinearLayout parent, final String label,
+                                   final int min, final int max, final int step,
+                                   final int customMin, final int customMax,
+                                   final String suffix, final IntCallback onChanged) {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
         LinearLayout.LayoutParams bLp = new LinearLayout.LayoutParams(
@@ -1334,31 +1620,89 @@ public class ThemeStudioActivity extends AppCompatActivity {
         titleTv.setTypeface(Typeface.DEFAULT_BOLD);
         header.addView(titleTv, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
-        TextView valueTv = new TextView(this);
-        valueTv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f);
+        final TextView valueTv = new TextView(this);
+        valueTv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f);
         valueTv.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+        valueTv.setClickable(true);
+        valueTv.setFocusable(true);
         header.addView(valueTv);
         box.addView(header);
 
         SeekBar sb = new SeekBar(this);
         sb.setMax((max - min) / step);
+
+        final SliderRow row = new SliderRow(titleTv, valueTv, sb, min, max, step, customMin, customMax, suffix);
+
         sb.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 if (updatingControls || !fromUser) return;
                 int val = min + progress * step;
+                row.currentValue = val;
                 valueTv.setText(val + suffix);
                 onChanged.onValue(val);
             }
             @Override public void onStartTrackingTouch(SeekBar seekBar) {}
             @Override public void onStopTrackingTouch(SeekBar seekBar) {}
         });
+
+        valueTv.setOnClickListener(v -> promptCustomSliderValue(
+                label, row.currentValue, customMin, customMax, suffix,
+                customVal -> {
+                    row.setValue(customVal);
+                    onChanged.onValue(customVal);
+                }));
+
         LinearLayout.LayoutParams sbLp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         sbLp.topMargin = dp(2f);
         box.addView(sb, sbLp);
         parent.addView(box, bLp);
-        return new SliderRow(titleTv, valueTv, sb, min, step, suffix);
+        return row;
+    }
+
+    /**
+     * Opens a themed squircle dialog allowing the user to type a custom numeric value
+     * that can exceed the normal SeekBar limit (up to customMax).
+     */
+    private void promptCustomSliderValue(String label, int currentVal, int customMin, int customMax,
+                                         String suffix, IntCallback onAccepted) {
+        final EditText input = new EditText(this);
+        input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        input.setSingleLine(true);
+        String curStr = String.valueOf(currentVal);
+        input.setText(curStr);
+        input.setSelection(curStr.length());
+        String unit = (suffix != null && !suffix.trim().isEmpty()) ? suffix.trim() : "";
+        input.setHint(customMin + " – " + customMax + (unit.isEmpty() ? "" : (" " + unit)));
+
+        int pad = dp(18f);
+        FrameLayout container = new FrameLayout(this);
+        container.setPadding(pad, dp(10f), pad, 0);
+        container.addView(input);
+
+        String title = label + (unit.isEmpty() ? "" : (" (" + unit + ")"));
+        AlertDialog dlg = new AlertDialog.Builder(this)
+                .setTitle(title)
+                .setMessage("Enter custom value (" + customMin + " – " + customMax + (unit.isEmpty() ? "" : (" " + unit)) + "):")
+                .setView(container)
+                .setPositiveButton(android.R.string.ok, (d, w) -> {
+                    String raw = input.getText() != null ? input.getText().toString().trim() : "";
+                    if (raw.isEmpty()) {
+                        return;
+                    }
+                    try {
+                        int parsed = Integer.parseInt(raw);
+                        int clamped = Math.max(customMin, Math.min(customMax, parsed));
+                        onAccepted.onValue(clamped);
+                    } catch (NumberFormatException ignored) {
+                    }
+                })
+                .setNegativeButton(R.string.cancel, null)
+                .create();
+        UiHelper.styleDialogSquircle(dlg);
+        dlg.show();
+        UiHelper.styleDialogSquircle(dlg);
     }
 
     private TextView createPillButton(String text) {

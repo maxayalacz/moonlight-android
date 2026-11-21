@@ -91,7 +91,7 @@ public class UiHelper {
                 .getOverlayingSharedPreferences(context)
                 .getInt(PreferenceConfiguration.CARD_OUTLINE_THICKNESS_PREF_STRING,
                         PreferenceConfiguration.DEFAULT_CARD_OUTLINE_THICKNESS);
-        return Math.max(0f, Math.min(2.5f, pct / 100f));
+        return Math.max(0f, Math.min(20.0f, pct / 100f));
     }
 
     public static float getCardOutlineWidthPx(Context context, float baseDp) {
@@ -693,8 +693,12 @@ public class UiHelper {
         final long[] lastCaptureMs = { 0L };
         final android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
 
-        final int blurPct = Math.max(0, Math.min(200,
+        final int rawBlurPct = Math.max(0, Math.min(2000,
                 PreferenceConfiguration.readPreferences(activity).blurAmountPercent));
+        final int blurPct = com.limelight.ui.AppThemePalette.isLiveBlurEffective(activity) ? rawBlurPct : 0;
+        if (!com.limelight.ui.AppThemePalette.isLiveBlurEffective(activity)) {
+            return;
+        }
 
         // Adaptive capture scale: higher res when blur is low/off, lower res when blur is heavy
         final float captureScale = blurPct == 0 ? 0.50f
@@ -724,13 +728,13 @@ public class UiHelper {
                 }
                 if (inFlight[0] || surfaceView.getWidth() <= 0 || surfaceView.getHeight() <= 0
                         || !surfaceView.getHolder().getSurface().isValid()) {
-                    mainHandler.postDelayed(tickHolder[0], 33L);
+                    mainHandler.postDelayed(tickHolder[0], 16L);
                     return;
                 }
                 int dialogW = decorView.getWidth();
                 int dialogH = decorView.getHeight();
                 if (dialogW <= 0 || dialogH <= 0) {
-                    mainHandler.postDelayed(tickHolder[0], 33L);
+                    mainHandler.postDelayed(tickHolder[0], 16L);
                     return;
                 }
                 ensureBuffers.run();
@@ -748,7 +752,7 @@ public class UiHelper {
                 int interRight = Math.min(svLoc[0] + svW, dialogLoc[0] + dialogW);
                 int interBottom = Math.min(svLoc[1] + svH, dialogLoc[1] + dialogH);
                 if (interRight <= interLeft || interBottom <= interTop) {
-                    mainHandler.postDelayed(tickHolder[0], 33L);
+                    mainHandler.postDelayed(tickHolder[0], 16L);
                     return;
                 }
 
@@ -764,7 +768,7 @@ public class UiHelper {
                         Math.min(bufW, Math.round((interRight - svLoc[0]) * scaleX)),
                         Math.min(bufH, Math.round((interBottom - svLoc[1]) * scaleY)));
                 if (srcRect.isEmpty()) {
-                    mainHandler.postDelayed(tickHolder[0], 33L);
+                    mainHandler.postDelayed(tickHolder[0], 16L);
                     return;
                 }
 
@@ -800,7 +804,7 @@ public class UiHelper {
                                     copyDest.recycle();
                                 }
                                 if (!stopped[0] && decorView.isAttachedToWindow()) {
-                                    mainHandler.postDelayed(tickHolder[0], 33L);
+                                    mainHandler.postDelayed(tickHolder[0], 16L);
                                 }
                             },
                             mainHandler);
@@ -904,7 +908,7 @@ public class UiHelper {
         final android.view.ViewTreeObserver.OnPreDrawListener preDrawListener = () -> {
             if (!stopped[0] && decorView.isAttachedToWindow() && !inFlight[0]) {
                 long now = android.os.SystemClock.uptimeMillis();
-                if (now - lastCaptureMs[0] >= 33L) {
+                if (now - lastCaptureMs[0] >= 16L) {
                     inFlight[0] = true;
                     decorView.post(() -> {
                         try {
@@ -979,7 +983,7 @@ public class UiHelper {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 float radiusDp = 22f * (blurPct / 100f);
                 if (radiusDp > 0.5f) {
-                    float radiusPx = dpToPx(ctx, Math.min(38f, radiusDp));
+                    float radiusPx = dpToPx(ctx, Math.min(64f, radiusDp));
                     RenderEffect blur = RenderEffect.createBlurEffect(radiusPx, radiusPx, Shader.TileMode.CLAMP);
                     RenderEffect tinted = RenderEffect.createColorFilterEffect(
                             new PorterDuffColorFilter(overlayTint, PorterDuff.Mode.SRC_OVER), blur);
@@ -1009,7 +1013,7 @@ public class UiHelper {
         }
 
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S && blurPct > 0) {
-            int boxRadius = Math.max(1, Math.min(10, Math.round(6f * (blurPct / 100f))));
+            int boxRadius = Math.max(1, Math.min(18, Math.round(6f * (blurPct / 100f))));
             fastBoxBlur(bitmap, boxRadius);
         }
         backdrop.setImageBitmap(bitmap);
@@ -1068,10 +1072,12 @@ public class UiHelper {
     @androidx.annotation.RequiresApi(api = Build.VERSION_CODES.S)
     private static void applyBoundedWindowBlur(final Window window, Context context) {
         final WindowManager wm = context.getSystemService(WindowManager.class);
-        int blurPct = Math.max(0, Math.min(200,
-                PreferenceConfiguration.readPreferences(context).blurAmountPercent));
+        boolean blurEffective = com.limelight.ui.AppThemePalette.isLiveBlurEffective(context);
+        int blurPct = blurEffective
+                ? Math.max(0, Math.min(2000, PreferenceConfiguration.readPreferences(context).blurAmountPercent))
+                : 0;
         final int blurRadiusPx = blurPct <= 0 ? 0
-                : Math.max(1, Math.round(dpToPx(context, Math.min(48f, ONEUI_BLUR_RADIUS_DP * (blurPct / 100f)))));
+                : Math.max(1, Math.round(dpToPx(context, Math.min(64f, ONEUI_BLUR_RADIUS_DP * (blurPct / 100f)))));
         final java.util.function.Consumer<Boolean> updateBlur = enabled -> {
             boolean useBlurredStyle = enabled || blurRadiusPx == 0;
             window.setBackgroundDrawable(createDialogSquircleDrawable(context, useBlurredStyle));

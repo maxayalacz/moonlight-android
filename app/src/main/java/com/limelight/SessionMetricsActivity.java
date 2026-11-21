@@ -103,14 +103,8 @@ public class SessionMetricsActivity extends AppCompatActivity {
             return;
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            WindowManager wm = getSystemService(WindowManager.class);
-            if (wm != null && wm.isCrossWindowBlurEnabled() && getWindow() != null) {
-                getWindow().setBackgroundBlurRadius(Math.round(dp(24f)));
-            }
-        }
-
         setContentView(R.layout.activity_session_metrics);
+        UiHelper.notifyNewRootView(this);
         UiHelper.applyMenuImmersiveMode(this);
         if (getWindow() != null) {
             final View decorView = getWindow().getDecorView();
@@ -134,17 +128,23 @@ public class SessionMetricsActivity extends AppCompatActivity {
         cardLp.width = maxCardWidth;
         cardContainer.setLayoutParams(cardLp);
 
-        // Rich frosted glass surface letting live GPU starfield & API 31+ window blur breathe through
-        rootBackdrop.setBackgroundColor(palette.isLight ? 0x550F172A : 0x88060A14);
-        GradientDrawable cardBg = new GradientDrawable();
-        cardBg.setShape(GradientDrawable.RECTANGLE);
-        cardBg.setCornerRadius(dp(24f));
-        cardBg.setColor(palette.getDialogSurfaceColor(true));
-        int outlinePx = Math.round(UiHelper.getCardOutlineWidthPx(this, 1f));
-        if (outlinePx > 0) {
-            cardBg.setStroke(outlinePx, palette.getCardRimColor());
+        // Unified frosted glass card sampling the live GPU starfield with configured Blur Amount & Frosted Card Tint
+        rootBackdrop.setBackgroundColor(palette.isLight ? 0x1E0F172A : 0x33060A14);
+        if (!UiHelper.applyFrostedCardBackground(
+                cardContainer,
+                com.limelight.ui.FlowingAuroraView.CornerMode.ALL,
+                24f,
+                0x5C121826)) {
+            GradientDrawable cardBg = new GradientDrawable();
+            cardBg.setShape(GradientDrawable.RECTANGLE);
+            cardBg.setCornerRadius(dp(24f));
+            cardBg.setColor(palette.getFrostedCardTint(0x5C121826));
+            int outlinePx = Math.round(UiHelper.getCardOutlineWidthPx(this, 1f));
+            if (outlinePx > 0) {
+                cardBg.setStroke(outlinePx, palette.getCardRimColor());
+            }
+            cardContainer.setBackground(cardBg);
         }
-        cardContainer.setBackground(cardBg);
 
         rootBackdrop.setOnClickListener(v -> dismissSmoothly());
         cardContainer.setOnClickListener(v -> resetCountdown());
@@ -422,10 +422,12 @@ public class SessionMetricsActivity extends AppCompatActivity {
         card.setMinimumWidth(Math.round(dp(68f)));
         card.setPadding(Math.round(dp(10f)), Math.round(dp(8f)), Math.round(dp(10f)), Math.round(dp(8f)));
 
+        float tintRatio = palette.getEffectiveTintAmount() / 100f;
+        int innerBase = AppThemePalette.blendColors(palette.surface, palette.accent, palette.isLight ? 0.06f : 0.10f);
         GradientDrawable bg = new GradientDrawable();
         bg.setShape(GradientDrawable.RECTANGLE);
         bg.setCornerRadius(dp(12f));
-        bg.setColor(AppThemePalette.withAlpha(palette.background, palette.isLight ? 0.55f : 0.52f));
+        bg.setColor(AppThemePalette.withAlpha(innerBase, tintRatio * 0.72f));
         bg.setStroke(Math.max(1, Math.round(dp(0.8f))), palette.getCardRimColor());
         card.setBackground(bg);
 
@@ -459,10 +461,12 @@ public class SessionMetricsActivity extends AppCompatActivity {
     }
 
     private void stylePanel(View panel, AppThemePalette palette) {
+        float tintRatio = palette.getEffectiveTintAmount() / 100f;
+        int innerBase = AppThemePalette.blendColors(palette.surface, palette.accent, palette.isLight ? 0.05f : 0.08f);
         GradientDrawable bg = new GradientDrawable();
         bg.setShape(GradientDrawable.RECTANGLE);
         bg.setCornerRadius(dp(14f));
-        bg.setColor(AppThemePalette.withAlpha(palette.background, palette.isLight ? 0.48f : 0.44f));
+        bg.setColor(AppThemePalette.withAlpha(innerBase, tintRatio * 0.65f));
         bg.setStroke(Math.max(1, Math.round(dp(0.8f))), palette.getCardRimColor());
         panel.setBackground(bg);
     }

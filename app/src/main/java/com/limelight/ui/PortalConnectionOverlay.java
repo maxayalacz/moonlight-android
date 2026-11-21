@@ -47,28 +47,32 @@ public class PortalConnectionOverlay extends FrameLayout {
     private static final long GL_FIRST_FRAME_TIMEOUT_MS = 160L;
     private static final long CANCEL_REOPEN_MS = 380L;
 
-    // Configurable durations loaded from UI Settings -> Portal Animation
+    // Configurable durations loaded from Theme Studio -> Animation tab
     private long phase0IrisCloseMs = com.limelight.preferences.PreferenceConfiguration.DEFAULT_PORTAL_LAUNCH_CLOSE_MS;
+    private long phase1SonarHoldMs = com.limelight.preferences.PreferenceConfiguration.DEFAULT_PORTAL_SONAR_HOLD_MS;
     private long phase2ReadyMs = com.limelight.preferences.PreferenceConfiguration.DEFAULT_PORTAL_READY_MS;
     private long phase3PreviewFadeMs = com.limelight.preferences.PreferenceConfiguration.DEFAULT_PORTAL_PREVIEW_FADE_MS;
     private long phase3HoldMs = com.limelight.preferences.PreferenceConfiguration.DEFAULT_PORTAL_PREVIEW_HOLD_MS;
     private long phase4ExpandMs = com.limelight.preferences.PreferenceConfiguration.DEFAULT_PORTAL_EXPAND_MS;
-    private long disconnectStep1IrisCloseMs = 450L;
-    private long disconnectStep2FadeStarfieldMs = 350L;
-    private long disconnectStep3IrisOpenMs = 500L;
+    private long disconnectStep1IrisCloseMs = com.limelight.preferences.PreferenceConfiguration.DEFAULT_PORTAL_DISCONNECT_CLOSE_MS;
+    private long disconnectStep2FadeStarfieldMs = com.limelight.preferences.PreferenceConfiguration.DEFAULT_PORTAL_DISCONNECT_FADE_MS;
+    private long disconnectStep3IrisOpenMs = com.limelight.preferences.PreferenceConfiguration.DEFAULT_PORTAL_DISCONNECT_OPEN_MS;
 
     private void loadPreferences() {
         com.limelight.preferences.PreferenceConfiguration cfg =
                 com.limelight.preferences.PreferenceConfiguration.readPreferences(getContext());
-        phase0IrisCloseMs = Math.max(150L, cfg.portalLaunchCloseMs);
-        phase2ReadyMs = Math.max(100L, cfg.portalReadyMs);
-        phase3PreviewFadeMs = Math.max(100L, cfg.portalPreviewFadeMs);
+        phase0IrisCloseMs = Math.max(0L, cfg.portalLaunchCloseMs);
+        phase1SonarHoldMs = Math.max(0L, cfg.portalSonarHoldMs);
+        phase2ReadyMs = Math.max(0L, cfg.portalReadyMs);
+        phase3PreviewFadeMs = Math.max(0L, cfg.portalPreviewFadeMs);
         phase3HoldMs = Math.max(0L, cfg.portalPreviewHoldMs);
-        phase4ExpandMs = Math.max(200L, cfg.portalExpandMs);
-        long totalDisconnect = Math.max(300L, cfg.portalDisconnectMs);
-        disconnectStep1IrisCloseMs = Math.max(100L, Math.round(totalDisconnect * 0.35f));
-        disconnectStep2FadeStarfieldMs = Math.max(100L, Math.round(totalDisconnect * 0.27f));
-        disconnectStep3IrisOpenMs = Math.max(100L, totalDisconnect - disconnectStep1IrisCloseMs - disconnectStep2FadeStarfieldMs);
+        phase4ExpandMs = Math.max(0L, cfg.portalExpandMs);
+        disconnectStep1IrisCloseMs = Math.max(0L, cfg.portalDisconnectCloseMs);
+        disconnectStep2FadeStarfieldMs = Math.max(0L, cfg.portalDisconnectFadeMs);
+        disconnectStep3IrisOpenMs = Math.max(0L, cfg.portalDisconnectOpenMs);
+        if (handoffBackdropView != null) {
+            handoffBackdropView.setBackgroundColor(AppThemePalette.getCurrent(getContext()).background);
+        }
         if (shaderView != null) {
             shaderView.refreshFromPrefs();
         }
@@ -87,6 +91,7 @@ public class PortalConnectionOverlay extends FrameLayout {
     private boolean canceling = false;
     private boolean phase0AnimatorStarted = false;
     private boolean phase0Completed = false;
+    private boolean sonarHoldCompleted = false;
     private boolean connectionStartedPending = false;
     private boolean phase2Started = false;
     private boolean phase2Completed = false;
@@ -98,6 +103,15 @@ public class PortalConnectionOverlay extends FrameLayout {
     private Runnable onCancelAction;
     private Runnable onRevealCompleteAction;
     private Runnable pendingFirstFrameFallback;
+
+    private final Runnable sonarHoldRunnable = () -> {
+        if (active && !disconnecting && !canceling) {
+            sonarHoldCompleted = true;
+            if (connectionStartedPending && !phase2Started) {
+                startPhase2();
+            }
+        }
+    };
 
     private final Runnable firstFrameFallbackRunnable = () -> {
         if (active && !disconnecting && !canceling && phase2Completed && !phase3Started) {
@@ -249,6 +263,7 @@ public class PortalConnectionOverlay extends FrameLayout {
         this.canceling = false;
         this.phase0AnimatorStarted = false;
         this.phase0Completed = false;
+        this.sonarHoldCompleted = false;
         this.connectionStartedPending = false;
         this.phase2Started = false;
         this.phase2Completed = false;
@@ -311,13 +326,13 @@ public class PortalConnectionOverlay extends FrameLayout {
         topHudContainer.animate()
                 .alpha(1f)
                 .translationY(0f)
-                .setDuration(Math.min(360L, phase0IrisCloseMs))
+                .setDuration(Math.min(360L, Math.max(80L, phase0IrisCloseMs)))
                 .setInterpolator(hudEase)
                 .start();
         cancelButton.animate()
                 .alpha(1f)
                 .translationY(0f)
-                .setDuration(Math.min(360L, phase0IrisCloseMs))
+                .setDuration(Math.min(360L, Math.max(80L, phase0IrisCloseMs)))
                 .setInterpolator(hudEase)
                 .start();
 
@@ -340,8 +355,13 @@ public class PortalConnectionOverlay extends FrameLayout {
                 }
                 shaderView.setExpandProgress(0f);
                 phase0Completed = true;
-                if (connectionStartedPending && !phase2Started) {
-                    startPhase2();
+                if (phase1SonarHoldMs <= 0L) {
+                    sonarHoldCompleted = true;
+                    if (connectionStartedPending && !phase2Started) {
+                        startPhase2();
+                    }
+                } else {
+                    mainHandler.postDelayed(sonarHoldRunnable, phase1SonarHoldMs);
                 }
             }
         });
@@ -370,8 +390,8 @@ public class PortalConnectionOverlay extends FrameLayout {
             if (!active || disconnecting || canceling || phase2Started) {
                 return;
             }
-            if (!phase0Completed) {
-                connectionStartedPending = true;
+            connectionStartedPending = true;
+            if (!phase0Completed || !sonarHoldCompleted) {
                 return;
             }
             startPhase2();
@@ -775,6 +795,7 @@ public class PortalConnectionOverlay extends FrameLayout {
         canceling = false;
         phase0AnimatorStarted = false;
         phase0Completed = false;
+        sonarHoldCompleted = false;
         connectionStartedPending = false;
         phase2Started = false;
         phase2Completed = false;
@@ -808,6 +829,7 @@ public class PortalConnectionOverlay extends FrameLayout {
         if (shaderView != null) {
             shaderView.setFirstFrameListener(null);
         }
+        mainHandler.removeCallbacks(sonarHoldRunnable);
         mainHandler.removeCallbacks(firstFrameFallbackRunnable);
         mainHandler.removeCallbacks(phase3HoldRunnable);
         cancelActiveAnimator();

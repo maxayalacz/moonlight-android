@@ -124,11 +124,15 @@ public final class AppThemePalette {
         public int portalGlowIntensityPercent;
         public int portalWindowScalePercent;
         public int portalSonarSpeedPercent;
+        public int portalSonarHoldMs;
         public int portalReadyMs;
         public int portalPreviewFadeMs;
         public int portalPreviewHoldMs;
         public int portalExpandMs;
         public int portalDisconnectMs;
+        public int portalDisconnectCloseMs;
+        public int portalDisconnectFadeMs;
+        public int portalDisconnectOpenMs;
         public int portalLaunchCloseMs;
 
         public ThemeBundle(@NonNull String id, @NonNull String name, @NonNull CustomPaletteSpec colors) {
@@ -145,18 +149,22 @@ public final class AppThemePalette {
             this.portalGlowIntensityPercent = PreferenceConfiguration.DEFAULT_PORTAL_GLOW_INTENSITY;
             this.portalWindowScalePercent = PreferenceConfiguration.DEFAULT_PORTAL_WINDOW_SCALE;
             this.portalSonarSpeedPercent = PreferenceConfiguration.DEFAULT_PORTAL_SONAR_SPEED;
+            this.portalSonarHoldMs = PreferenceConfiguration.DEFAULT_PORTAL_SONAR_HOLD_MS;
             this.portalReadyMs = PreferenceConfiguration.DEFAULT_PORTAL_READY_MS;
             this.portalPreviewFadeMs = PreferenceConfiguration.DEFAULT_PORTAL_PREVIEW_FADE_MS;
             this.portalPreviewHoldMs = PreferenceConfiguration.DEFAULT_PORTAL_PREVIEW_HOLD_MS;
             this.portalExpandMs = PreferenceConfiguration.DEFAULT_PORTAL_EXPAND_MS;
             this.portalDisconnectMs = PreferenceConfiguration.DEFAULT_PORTAL_DISCONNECT_MS;
+            this.portalDisconnectCloseMs = PreferenceConfiguration.DEFAULT_PORTAL_DISCONNECT_CLOSE_MS;
+            this.portalDisconnectFadeMs = PreferenceConfiguration.DEFAULT_PORTAL_DISCONNECT_FADE_MS;
+            this.portalDisconnectOpenMs = PreferenceConfiguration.DEFAULT_PORTAL_DISCONNECT_OPEN_MS;
             this.portalLaunchCloseMs = PreferenceConfiguration.DEFAULT_PORTAL_LAUNCH_CLOSE_MS;
         }
 
         @NonNull
         public JSONObject toJsonObject() throws JSONException {
             JSONObject obj = new JSONObject();
-            obj.put("v", 1);
+            obj.put("v", 2);
             obj.put("id", id != null ? id : UUID.randomUUID().toString());
             obj.put("name", name != null ? name : "Custom Theme");
             obj.put("isLight", colors.isLight);
@@ -180,11 +188,18 @@ public final class AppThemePalette {
             obj.put("glow", portalGlowIntensityPercent);
             obj.put("scale", portalWindowScalePercent);
             obj.put("sonar", portalSonarSpeedPercent);
+            obj.put("sonarHoldMs", portalSonarHoldMs);
             obj.put("readyMs", portalReadyMs);
             obj.put("fadeMs", portalPreviewFadeMs);
             obj.put("holdMs", portalPreviewHoldMs);
             obj.put("expandMs", portalExpandMs);
-            obj.put("discMs", portalDisconnectMs);
+            int totalDisc = Math.max(0, portalDisconnectCloseMs)
+                    + Math.max(0, portalDisconnectFadeMs)
+                    + Math.max(0, portalDisconnectOpenMs);
+            obj.put("discMs", totalDisc > 0 ? totalDisc : portalDisconnectMs);
+            obj.put("discCloseMs", portalDisconnectCloseMs);
+            obj.put("discFadeMs", portalDisconnectFadeMs);
+            obj.put("discOpenMs", portalDisconnectOpenMs);
             obj.put("launchMs", portalLaunchCloseMs);
             return obj;
         }
@@ -229,22 +244,33 @@ public final class AppThemePalette {
                     name = "Imported Theme";
                 }
                 ThemeBundle b = new ThemeBundle(id, name, spec);
-                b.blurAmountPercent = clamp(obj.optInt("blur", PreferenceConfiguration.DEFAULT_BLUR_AMOUNT), 0, 200);
+                b.blurAmountPercent = clamp(obj.optInt("blur", PreferenceConfiguration.DEFAULT_BLUR_AMOUNT), 0, 2000);
                 b.frostedTintAmountPercent = clamp(obj.optInt("tint", isLight ? 76 : PreferenceConfiguration.DEFAULT_FROSTED_TINT_AMOUNT), 0, 100);
-                b.cardOutlineThicknessPercent = clamp(obj.optInt("cardOutlinePx", PreferenceConfiguration.DEFAULT_CARD_OUTLINE_THICKNESS), 0, 250);
+                b.cardOutlineThicknessPercent = clamp(obj.optInt("cardOutlinePx", PreferenceConfiguration.DEFAULT_CARD_OUTLINE_THICKNESS), 0, 2000);
                 b.bgQuality = obj.optString("bgQuality", PreferenceConfiguration.DEFAULT_BG_QUALITY);
-                b.portalParticleBrightnessPercent = clamp(obj.optInt("pBright", PreferenceConfiguration.DEFAULT_PORTAL_PARTICLE_BRIGHTNESS), 0, 400);
-                b.portalParticleSizePercent = clamp(obj.optInt("pSize", PreferenceConfiguration.DEFAULT_PORTAL_PARTICLE_SIZE), 25, 400);
-                b.portalParticleDensityPercent = clamp(obj.optInt("pDensity", PreferenceConfiguration.DEFAULT_PORTAL_PARTICLE_DENSITY), 25, 400);
-                b.portalGlowIntensityPercent = clamp(obj.optInt("glow", PreferenceConfiguration.DEFAULT_PORTAL_GLOW_INTENSITY), 20, 250);
-                b.portalWindowScalePercent = clamp(obj.optInt("scale", PreferenceConfiguration.DEFAULT_PORTAL_WINDOW_SCALE), 60, 150);
-                b.portalSonarSpeedPercent = clamp(obj.optInt("sonar", PreferenceConfiguration.DEFAULT_PORTAL_SONAR_SPEED), 20, 250);
-                b.portalReadyMs = clamp(obj.optInt("readyMs", PreferenceConfiguration.DEFAULT_PORTAL_READY_MS), 100, 1000);
-                b.portalPreviewFadeMs = clamp(obj.optInt("fadeMs", PreferenceConfiguration.DEFAULT_PORTAL_PREVIEW_FADE_MS), 100, 1200);
-                b.portalPreviewHoldMs = clamp(obj.optInt("holdMs", PreferenceConfiguration.DEFAULT_PORTAL_PREVIEW_HOLD_MS), 0, 2000);
-                b.portalExpandMs = clamp(obj.optInt("expandMs", PreferenceConfiguration.DEFAULT_PORTAL_EXPAND_MS), 150, 1500);
-                b.portalDisconnectMs = clamp(obj.optInt("discMs", PreferenceConfiguration.DEFAULT_PORTAL_DISCONNECT_MS), 300, 2500);
-                b.portalLaunchCloseMs = clamp(obj.optInt("launchMs", PreferenceConfiguration.DEFAULT_PORTAL_LAUNCH_CLOSE_MS), 150, 1200);
+                b.portalParticleBrightnessPercent = clamp(obj.optInt("pBright", PreferenceConfiguration.DEFAULT_PORTAL_PARTICLE_BRIGHTNESS), 0, 2000);
+                b.portalParticleSizePercent = clamp(obj.optInt("pSize", PreferenceConfiguration.DEFAULT_PORTAL_PARTICLE_SIZE), 1, 2000);
+                b.portalParticleDensityPercent = clamp(obj.optInt("pDensity", PreferenceConfiguration.DEFAULT_PORTAL_PARTICLE_DENSITY), 0, 2000);
+                b.portalGlowIntensityPercent = clamp(obj.optInt("glow", PreferenceConfiguration.DEFAULT_PORTAL_GLOW_INTENSITY), 0, 2000);
+                b.portalWindowScalePercent = clamp(obj.optInt("scale", PreferenceConfiguration.DEFAULT_PORTAL_WINDOW_SCALE), 10, 2000);
+                b.portalSonarSpeedPercent = clamp(obj.optInt("sonar", PreferenceConfiguration.DEFAULT_PORTAL_SONAR_SPEED), 0, 2000);
+                b.portalSonarHoldMs = clamp(obj.optInt("sonarHoldMs", PreferenceConfiguration.DEFAULT_PORTAL_SONAR_HOLD_MS), 0, 30000);
+                b.portalReadyMs = clamp(obj.optInt("readyMs", PreferenceConfiguration.DEFAULT_PORTAL_READY_MS), 0, 30000);
+                b.portalPreviewFadeMs = clamp(obj.optInt("fadeMs", PreferenceConfiguration.DEFAULT_PORTAL_PREVIEW_FADE_MS), 0, 30000);
+                b.portalPreviewHoldMs = clamp(obj.optInt("holdMs", PreferenceConfiguration.DEFAULT_PORTAL_PREVIEW_HOLD_MS), 0, 30000);
+                b.portalExpandMs = clamp(obj.optInt("expandMs", PreferenceConfiguration.DEFAULT_PORTAL_EXPAND_MS), 0, 30000);
+                int legacyDisc = clamp(obj.optInt("discMs", PreferenceConfiguration.DEFAULT_PORTAL_DISCONNECT_MS), 0, 90000);
+                b.portalDisconnectCloseMs = clamp(
+                        obj.has("discCloseMs") ? obj.optInt("discCloseMs") : Math.round(legacyDisc * 0.346f),
+                        0, 30000);
+                b.portalDisconnectFadeMs = clamp(
+                        obj.has("discFadeMs") ? obj.optInt("discFadeMs") : Math.round(legacyDisc * 0.269f),
+                        0, 30000);
+                b.portalDisconnectOpenMs = clamp(
+                        obj.has("discOpenMs") ? obj.optInt("discOpenMs") : Math.max(0, legacyDisc - b.portalDisconnectCloseMs - b.portalDisconnectFadeMs),
+                        0, 30000);
+                b.portalDisconnectMs = b.portalDisconnectCloseMs + b.portalDisconnectFadeMs + b.portalDisconnectOpenMs;
+                b.portalLaunchCloseMs = clamp(obj.optInt("launchMs", PreferenceConfiguration.DEFAULT_PORTAL_LAUNCH_CLOSE_MS), 0, 30000);
                 return b;
             } catch (Exception e) {
                 return null;
@@ -581,22 +607,26 @@ public final class AppThemePalette {
                 ? loadCustomSpec(context)
                 : specFromPreset(current);
         ThemeBundle b = new ThemeBundle(UUID.randomUUID().toString(), current.label, spec);
-        b.blurAmountPercent = clamp(cfg.blurAmountPercent, 0, 200);
+        b.blurAmountPercent = clamp(cfg.blurAmountPercent, 0, 2000);
         b.frostedTintAmountPercent = current.getEffectiveTintAmount();
-        b.cardOutlineThicknessPercent = clamp(cfg.cardOutlineThicknessPercent, 0, 250);
+        b.cardOutlineThicknessPercent = clamp(cfg.cardOutlineThicknessPercent, 0, 2000);
         b.bgQuality = prefs.getString(PreferenceConfiguration.BG_QUALITY_PREF_STRING, PreferenceConfiguration.DEFAULT_BG_QUALITY);
-        b.portalParticleBrightnessPercent = clamp(cfg.portalParticleBrightnessPercent, 0, 400);
-        b.portalParticleSizePercent = clamp(cfg.portalParticleSizePercent, 25, 400);
-        b.portalParticleDensityPercent = clamp(cfg.portalParticleDensityPercent, 25, 400);
-        b.portalGlowIntensityPercent = clamp(cfg.portalGlowIntensityPercent, 20, 250);
-        b.portalWindowScalePercent = clamp(cfg.portalWindowScalePercent, 60, 150);
-        b.portalSonarSpeedPercent = clamp(cfg.portalSonarSpeedPercent, 20, 250);
-        b.portalReadyMs = clamp(cfg.portalReadyMs, 100, 1000);
-        b.portalPreviewFadeMs = clamp(cfg.portalPreviewFadeMs, 100, 1200);
-        b.portalPreviewHoldMs = clamp(cfg.portalPreviewHoldMs, 0, 2000);
-        b.portalExpandMs = clamp(cfg.portalExpandMs, 150, 1500);
-        b.portalDisconnectMs = clamp(cfg.portalDisconnectMs, 300, 2500);
-        b.portalLaunchCloseMs = clamp(cfg.portalLaunchCloseMs, 150, 1200);
+        b.portalParticleBrightnessPercent = clamp(cfg.portalParticleBrightnessPercent, 0, 2000);
+        b.portalParticleSizePercent = clamp(cfg.portalParticleSizePercent, 1, 2000);
+        b.portalParticleDensityPercent = clamp(cfg.portalParticleDensityPercent, 0, 2000);
+        b.portalGlowIntensityPercent = clamp(cfg.portalGlowIntensityPercent, 0, 2000);
+        b.portalWindowScalePercent = clamp(cfg.portalWindowScalePercent, 10, 2000);
+        b.portalSonarSpeedPercent = clamp(cfg.portalSonarSpeedPercent, 0, 2000);
+        b.portalSonarHoldMs = clamp(cfg.portalSonarHoldMs, 0, 30000);
+        b.portalReadyMs = clamp(cfg.portalReadyMs, 0, 30000);
+        b.portalPreviewFadeMs = clamp(cfg.portalPreviewFadeMs, 0, 30000);
+        b.portalPreviewHoldMs = clamp(cfg.portalPreviewHoldMs, 0, 30000);
+        b.portalExpandMs = clamp(cfg.portalExpandMs, 0, 30000);
+        b.portalDisconnectCloseMs = clamp(cfg.portalDisconnectCloseMs, 0, 30000);
+        b.portalDisconnectFadeMs = clamp(cfg.portalDisconnectFadeMs, 0, 30000);
+        b.portalDisconnectOpenMs = clamp(cfg.portalDisconnectOpenMs, 0, 30000);
+        b.portalDisconnectMs = b.portalDisconnectCloseMs + b.portalDisconnectFadeMs + b.portalDisconnectOpenMs;
+        b.portalLaunchCloseMs = clamp(cfg.portalLaunchCloseMs, 0, 30000);
         return b;
     }
 
@@ -618,24 +648,31 @@ public final class AppThemePalette {
         ed.putInt(PREF_CUSTOM_PARTICLE, bundle.colors.particleColor | 0xFF000000);
         ed.putInt(PREF_CUSTOM_RING, bundle.colors.ringColor | 0xFF000000);
 
-        ed.putInt(PreferenceConfiguration.BLUR_AMOUNT_PREF_STRING, clamp(bundle.blurAmountPercent, 0, 200));
+        ed.putInt(PreferenceConfiguration.BLUR_AMOUNT_PREF_STRING, clamp(bundle.blurAmountPercent, 0, 2000));
         ed.putInt(PreferenceConfiguration.FROSTED_TINT_AMOUNT_PREF_STRING, clamp(bundle.frostedTintAmountPercent, 0, 100));
-        ed.putInt(PreferenceConfiguration.CARD_OUTLINE_THICKNESS_PREF_STRING, clamp(bundle.cardOutlineThicknessPercent, 0, 250));
+        ed.putInt(PreferenceConfiguration.CARD_OUTLINE_THICKNESS_PREF_STRING, clamp(bundle.cardOutlineThicknessPercent, 0, 2000));
         if (bundle.bgQuality != null) {
             ed.putString(PreferenceConfiguration.BG_QUALITY_PREF_STRING, bundle.bgQuality);
         }
-        ed.putInt(PreferenceConfiguration.PORTAL_PARTICLE_BRIGHTNESS_PREF_STRING, clamp(bundle.portalParticleBrightnessPercent, 0, 400));
-        ed.putInt(PreferenceConfiguration.PORTAL_PARTICLE_SIZE_PREF_STRING, clamp(bundle.portalParticleSizePercent, 25, 400));
-        ed.putInt(PreferenceConfiguration.PORTAL_PARTICLE_DENSITY_PREF_STRING, clamp(bundle.portalParticleDensityPercent, 25, 400));
-        ed.putInt(PreferenceConfiguration.PORTAL_GLOW_INTENSITY_PREF_STRING, clamp(bundle.portalGlowIntensityPercent, 20, 250));
-        ed.putInt(PreferenceConfiguration.PORTAL_WINDOW_SCALE_PREF_STRING, clamp(bundle.portalWindowScalePercent, 60, 150));
-        ed.putInt(PreferenceConfiguration.PORTAL_SONAR_SPEED_PREF_STRING, clamp(bundle.portalSonarSpeedPercent, 20, 250));
-        ed.putInt(PreferenceConfiguration.PORTAL_READY_MS_PREF_STRING, clamp(bundle.portalReadyMs, 100, 1000));
-        ed.putInt(PreferenceConfiguration.PORTAL_PREVIEW_FADE_MS_PREF_STRING, clamp(bundle.portalPreviewFadeMs, 100, 1200));
-        ed.putInt(PreferenceConfiguration.PORTAL_PREVIEW_HOLD_MS_PREF_STRING, clamp(bundle.portalPreviewHoldMs, 0, 2000));
-        ed.putInt(PreferenceConfiguration.PORTAL_EXPAND_MS_PREF_STRING, clamp(bundle.portalExpandMs, 150, 1500));
-        ed.putInt(PreferenceConfiguration.PORTAL_DISCONNECT_MS_PREF_STRING, clamp(bundle.portalDisconnectMs, 300, 2500));
-        ed.putInt(PreferenceConfiguration.PORTAL_LAUNCH_CLOSE_MS_PREF_STRING, clamp(bundle.portalLaunchCloseMs, 150, 1200));
+        ed.putInt(PreferenceConfiguration.PORTAL_PARTICLE_BRIGHTNESS_PREF_STRING, clamp(bundle.portalParticleBrightnessPercent, 0, 2000));
+        ed.putInt(PreferenceConfiguration.PORTAL_PARTICLE_SIZE_PREF_STRING, clamp(bundle.portalParticleSizePercent, 1, 2000));
+        ed.putInt(PreferenceConfiguration.PORTAL_PARTICLE_DENSITY_PREF_STRING, clamp(bundle.portalParticleDensityPercent, 0, 2000));
+        ed.putInt(PreferenceConfiguration.PORTAL_GLOW_INTENSITY_PREF_STRING, clamp(bundle.portalGlowIntensityPercent, 0, 2000));
+        ed.putInt(PreferenceConfiguration.PORTAL_WINDOW_SCALE_PREF_STRING, clamp(bundle.portalWindowScalePercent, 10, 2000));
+        ed.putInt(PreferenceConfiguration.PORTAL_SONAR_SPEED_PREF_STRING, clamp(bundle.portalSonarSpeedPercent, 0, 2000));
+        ed.putInt(PreferenceConfiguration.PORTAL_SONAR_HOLD_MS_PREF_STRING, clamp(bundle.portalSonarHoldMs, 0, 30000));
+        ed.putInt(PreferenceConfiguration.PORTAL_READY_MS_PREF_STRING, clamp(bundle.portalReadyMs, 0, 30000));
+        ed.putInt(PreferenceConfiguration.PORTAL_PREVIEW_FADE_MS_PREF_STRING, clamp(bundle.portalPreviewFadeMs, 0, 30000));
+        ed.putInt(PreferenceConfiguration.PORTAL_PREVIEW_HOLD_MS_PREF_STRING, clamp(bundle.portalPreviewHoldMs, 0, 30000));
+        ed.putInt(PreferenceConfiguration.PORTAL_EXPAND_MS_PREF_STRING, clamp(bundle.portalExpandMs, 0, 30000));
+        int closeMs = clamp(bundle.portalDisconnectCloseMs, 0, 30000);
+        int fadeMs = clamp(bundle.portalDisconnectFadeMs, 0, 30000);
+        int openMs = clamp(bundle.portalDisconnectOpenMs, 0, 30000);
+        ed.putInt(PreferenceConfiguration.PORTAL_DISCONNECT_CLOSE_MS_PREF_STRING, closeMs);
+        ed.putInt(PreferenceConfiguration.PORTAL_DISCONNECT_FADE_MS_PREF_STRING, fadeMs);
+        ed.putInt(PreferenceConfiguration.PORTAL_DISCONNECT_OPEN_MS_PREF_STRING, openMs);
+        ed.putInt(PreferenceConfiguration.PORTAL_DISCONNECT_MS_PREF_STRING, closeMs + fadeMs + openMs);
+        ed.putInt(PreferenceConfiguration.PORTAL_LAUNCH_CLOSE_MS_PREF_STRING, clamp(bundle.portalLaunchCloseMs, 0, 30000));
         ed.apply();
     }
 
@@ -866,43 +903,33 @@ public final class AppThemePalette {
      * 0% = completely clear glass (alpha 0), 100% = fully opaque solid card (alpha 255).
      */
     public int getFrostedCardTint(int defaultDarkTint) {
-        if (frostedTintAmount >= 0) {
-            int alpha = Math.round((clamp(frostedTintAmount, 0, 100) / 100f) * 255f);
-            return withAlphaInt(surface, alpha);
-        }
-        int alpha = (defaultDarkTint >>> 24) & 0xFF;
-        if (isLight) {
-            int lightAlpha = Math.max(0xB4, Math.min(0xE8, alpha + 0x68));
-            return withAlphaInt(surface, lightAlpha);
-        }
+        int tintPct = getEffectiveTintAmount();
+        int alpha = Math.round((tintPct / 100f) * 255f);
         return withAlphaInt(surface, alpha);
     }
 
     public int getDialogSurfaceColor(boolean blurred) {
-        if (frostedTintAmount >= 100) {
-            return withAlphaInt(popupTint, 0xFF);
+        int tintPct = getEffectiveTintAmount();
+        int alpha = Math.round((tintPct / 100f) * 255f);
+        if (!blurred && tintPct > 0 && tintPct < 100) {
+            alpha = Math.max(isLight ? 0xE6 : 0xD8, alpha);
         }
-        if (isLight) {
-            return withAlphaInt(popupTint, blurred ? 0xCC : 0xF0);
-        }
-        return withAlphaInt(popupTint, blurred ? 0x9E : 0xE6);
+        return withAlphaInt(popupTint, alpha);
     }
 
     public int getDialogOverlayTint() {
-        if (frostedTintAmount >= 100) {
-            return withAlphaInt(popupTint, 0xFF);
-        }
-        return withAlphaInt(popupTint, isLight ? 0xA8 : 0x78);
+        int tintPct = getEffectiveTintAmount();
+        int alpha = Math.round((tintPct / 100f) * 255f);
+        return withAlphaInt(popupTint, alpha);
     }
 
     public int getQuickMenuCardTint(boolean withBlur) {
-        if (frostedTintAmount >= 100) {
-            return withAlphaInt(popupTint, 0xFF);
+        int tintPct = getEffectiveTintAmount();
+        int alpha = Math.round((tintPct / 100f) * 255f);
+        if (!withBlur && tintPct > 0 && tintPct < 100) {
+            alpha = Math.max(isLight ? 0xE6 : 0xD8, alpha);
         }
-        if (isLight) {
-            return withAlphaInt(popupTint, withBlur ? 0xC4 : 0xEB);
-        }
-        return withAlphaInt(popupTint, withBlur ? 0xA4 : 0xDE);
+        return withAlphaInt(surface, alpha);
     }
 
     @NonNull

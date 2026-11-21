@@ -196,18 +196,20 @@ public class GameMenu implements Game.GameMenuCallbacks {
     }
 
     /**
-     * Single-pass 30 FPS PixelCopy live stream blur shared across both the centered Quick Menu
-     * card and the left-edge Side Settings Drawer so each card refracts the exact pixels beneath it.
+     * Single-pass ~60 FPS off-UI-thread PixelCopy live stream blur shared across both the centered
+     * Quick Menu card and the Side Settings Drawer so each card refracts the exact pixels beneath it
+     * with zero UI-thread stall. Automatically skipped when live blur is 0% or frosted tint is 100%.
      */
     private static final class StreamBlurController {
-        private static final int CAPTURE_LONG_EDGE = 220;
-        private static final long CAPTURE_INTERVAL_MS = 33L;
+        private static final long CAPTURE_INTERVAL_MS = 16L;
 
         private final Activity activity;
-        private final Handler handler = new Handler(Looper.getMainLooper());
+        private final Handler mainHandler = new Handler(Looper.getMainLooper());
+        private android.os.HandlerThread workerThread;
+        private Handler workerHandler;
         private final List<FrostedStreamCardLayout> cards = new ArrayList<>();
         private final int[] surfaceLoc = new int[2];
-        private final Bitmap[] buffers = new Bitmap[2];
+        private final Bitmap[] buffers = new Bitmap[3];
 
         private int writeIndex = 0;
         private volatile Bitmap readyBitmap = null;
@@ -216,9 +218,20 @@ public class GameMenu implements Game.GameMenuCallbacks {
         private volatile int surfaceWidth = 0;
         private volatile int surfaceHeight = 0;
 
-        private boolean running = false;
-        private boolean inFlight = false;
-        private int blurRadius = 5;
+        private volatile boolean running = false;
+        private volatile boolean inFlight = false;
+        private final int blurPct;
+        private final int blurRadius;
+        private final int captureLongEdge;
+
+        private final Runnable invalidateCardsRunnable = () -> {
+            for (int i = 0; i < cards.size(); i++) {
+                FrostedStreamCardLayout card = cards.get(i);
+                if (card.getVisibility() == View.VISIBLE) {
+                    card.invalidate();
+                }
+            }
+        };
 
         private final Runnable captureTick = new Runnable() {
             @Override
@@ -227,17 +240,33 @@ public class GameMenu implements Game.GameMenuCallbacks {
                     return;
                 }
                 requestFrameCapture();
-                handler.postDelayed(this, CAPTURE_INTERVAL_MS);
+                mainHandler.postDelayed(this, CAPTURE_INTERVAL_MS);
             }
         };
 
         StreamBlurController(Activity activity) {
             this.activity = activity;
-            int blurPct = ProfilesManager.getInstance()
+            AppThemePalette palette = AppThemePalette.getCurrent(activity);
+            int rawBlurPct = ProfilesManager.getInstance()
                     .getOverlayingSharedPreferences(activity)
                     .getInt(PreferenceConfiguration.BLUR_AMOUNT_PREF_STRING,
                             PreferenceConfiguration.DEFAULT_BLUR_AMOUNT);
-            this.blurRadius = Math.max(0, Math.min(12, Math.round(5f * (blurPct / 100f))));
+            if (rawBlurPct <= 0 || palette.getEffectiveTintAmount() >= 100) {
+                this.blurPct = 0;
+                this.blurRadius = 0;
+                this.captureLongEdge = 160;
+            } else {
+                this.blurPct = rawBlurPct;
+                this.blurRadius = Math.max(1, Math.min(18, Math.round(5f * (rawBlurPct / 100f))));
+                this.captureLongEdge = chooseCaptureLongEdge(rawBlurPct);
+            }
+        }
+
+        private static int chooseCaptureLongEdge(int blurPct) {
+            if (blurPct <= 35) return 280;
+            if (blurPct <= 85) return 220;
+            if (blurPct <= 140) return 160;
+            return 120;
         }
 
         void registerCard(FrostedStreamCardLayout card) {
@@ -251,14 +280,26 @@ public class GameMenu implements Game.GameMenuCallbacks {
                 return;
             }
             running = true;
-            handler.removeCallbacks(captureTick);
-            handler.post(captureTick);
+            workerThread = new android.os.HandlerThread("StreamBlurThread");
+            workerThread.start();
+            workerHandler = new Handler(workerThread.getLooper());
+            mainHandler.removeCallbacks(captureTick);
+            mainHandler.post(captureTick);
         }
 
         void stop() {
             running = false;
             inFlight = false;
-            handler.removeCallbacks(captureTick);
+            mainHandler.removeCallbacks(captureTick);
+            mainHandler.removeCallbacks(invalidateCardsRunnable);
+            if (workerHandler != null) {
+                workerHandler.removeCallbacksAndMessages(null);
+                workerHandler = null;
+            }
+            if (workerThread != null) {
+                workerThread.quitSafely();
+                workerThread = null;
+            }
             readyBitmap = null;
         }
 
@@ -287,6 +328,10 @@ public class GameMenu implements Game.GameMenuCallbacks {
                     || activity == null || activity.isFinishing()) {
                 return;
             }
+            Handler bg = workerHandler;
+            if (bg == null) {
+                return;
+            }
             SurfaceView surfaceView = UiHelper.findStreamSurfaceView(activity);
             if (surfaceView == null || surfaceView.getWidth() <= 0 || surfaceView.getHeight() <= 0
                     || !surfaceView.getHolder().getSurface().isValid()) {
@@ -302,16 +347,17 @@ public class GameMenu implements Game.GameMenuCallbacks {
             int bw;
             int bh;
             if (sw >= sh) {
-                bw = CAPTURE_LONG_EDGE;
-                bh = Math.max(16, Math.round(CAPTURE_LONG_EDGE * (sh / (float) sw)));
+                bw = captureLongEdge;
+                bh = Math.max(16, Math.round(captureLongEdge * (sh / (float) sw)));
             } else {
-                bh = CAPTURE_LONG_EDGE;
-                bw = Math.max(16, Math.round(CAPTURE_LONG_EDGE * (sw / (float) sh)));
+                bh = captureLongEdge;
+                bw = Math.max(16, Math.round(captureLongEdge * (sw / (float) sh)));
             }
 
             if (buffers[0] == null || buffers[0].getWidth() != bw || buffers[0].getHeight() != bh) {
-                buffers[0] = Bitmap.createBitmap(bw, bh, Bitmap.Config.ARGB_8888);
-                buffers[1] = Bitmap.createBitmap(bw, bh, Bitmap.Config.ARGB_8888);
+                for (int i = 0; i < buffers.length; i++) {
+                    buffers[i] = Bitmap.createBitmap(bw, bh, Bitmap.Config.ARGB_8888);
+                }
                 readyBitmap = null;
             }
 
@@ -320,8 +366,8 @@ public class GameMenu implements Game.GameMenuCallbacks {
             inFlight = true;
             try {
                 PixelCopy.request(surfaceView, target, copyResult -> {
-                    inFlight = false;
                     if (!running || copyResult != PixelCopy.SUCCESS) {
+                        inFlight = false;
                         return;
                     }
                     if (blurRadius > 0) {
@@ -332,15 +378,10 @@ public class GameMenu implements Game.GameMenuCallbacks {
                     surfaceWidth = sw;
                     surfaceHeight = sh;
                     readyBitmap = target;
-                    writeIndex = 1 - idx;
-
-                    for (int i = 0; i < cards.size(); i++) {
-                        FrostedStreamCardLayout card = cards.get(i);
-                        if (card.getVisibility() == View.VISIBLE) {
-                            card.invalidate();
-                        }
-                    }
-                }, handler);
+                    writeIndex = (idx + 1) % buffers.length;
+                    inFlight = false;
+                    mainHandler.post(invalidateCardsRunnable);
+                }, bg);
             } catch (IllegalArgumentException | IllegalStateException e) {
                 inFlight = false;
             }
@@ -349,15 +390,13 @@ public class GameMenu implements Game.GameMenuCallbacks {
 
     /**
      * Rounded One UI frosted glass card that clips a live screen-aligned blurred stream crop
-     * strictly inside its squircle outline, layered with a clean uniform translucent dark-glass
-     * tint and optional global outline rim stroke.
+     * strictly inside its squircle outline, layered with the unified theme Surface color +
+     * Frosted Card Tint Amount (0-100%) and global Card Outline rim stroke.
      */
     private static final class FrostedStreamCardLayout extends FrameLayout {
         private final StreamBlurController blurController;
         private final float cornerRadiusPx;
-        private final int tintColorWithBlur;
-        private final int tintColorFallback;
-        private final int accentDeepTint;
+        private final AppThemePalette palette;
 
         private final Path clipPath = new Path();
         private final RectF cardBounds = new RectF();
@@ -374,16 +413,13 @@ public class GameMenu implements Game.GameMenuCallbacks {
             super(context);
             this.blurController = blurController;
             this.cornerRadiusPx = cornerRadiusPx;
-            int darkBase = palette.isLight ? 0xFF141B29 : palette.background;
-            this.tintColorWithBlur = AppThemePalette.withAlphaInt(darkBase, 0xAA);
-            this.tintColorFallback = AppThemePalette.withAlphaInt(darkBase, 0xDE);
-            this.accentDeepTint = AppThemePalette.withAlpha(palette.isLight ? palette.accent : palette.surface, palette.isLight ? 0.14f : 0.24f);
+            this.palette = palette;
 
             setWillNotDraw(false);
             setClickable(true);
 
             rimPaint.setStyle(Paint.Style.STROKE);
-            rimPaint.setColor(0x3DFFFFFF);
+            rimPaint.setColor(palette.getCardRimColor());
             refreshRimOutline();
 
             setOutlineProvider(new ViewOutlineProvider() {
@@ -397,6 +433,7 @@ public class GameMenu implements Game.GameMenuCallbacks {
         }
 
         void refreshRimOutline() {
+            rimPaint.setColor(palette.getCardRimColor());
             rimPaint.setStrokeWidth(UiHelper.getCardOutlineWidthPx(getContext(), 1.15f));
             invalidate();
         }
@@ -445,11 +482,11 @@ public class GameMenu implements Game.GameMenuCallbacks {
                 drewBlur = true;
             }
 
-            fillPaint.setColor(drewBlur ? tintColorWithBlur : tintColorFallback);
-            canvas.drawRect(cardBounds, fillPaint);
-
-            fillPaint.setColor(accentDeepTint);
-            canvas.drawRect(cardBounds, fillPaint);
+            int tintColor = palette.getQuickMenuCardTint(drewBlur || blurController.blurPct <= 0);
+            if ((tintColor >>> 24) > 0) {
+                fillPaint.setColor(tintColor);
+                canvas.drawRect(cardBounds, fillPaint);
+            }
             canvas.restore();
 
             float strokeW = rimPaint.getStrokeWidth();
@@ -929,14 +966,14 @@ public class GameMenu implements Game.GameMenuCallbacks {
 
         TextView titleView = new TextView(ctx);
         titleView.setText(R.string.quick_settings_title);
-        titleView.setTextColor(Color.WHITE);
+        titleView.setTextColor(palette.getPrimaryTextColor());
         titleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f);
         titleView.setTypeface(Typeface.DEFAULT_BOLD);
         LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(
                 0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         header.addView(titleView, titleLp);
 
-        TextView swapBtn = createDrawerHeaderIconButton(ctx, "\u21C4", getString(R.string.quick_settings_swap_side));
+        TextView swapBtn = createDrawerHeaderIconButton(ctx, palette, "\u21C4", getString(R.string.quick_settings_swap_side));
         swapBtn.setOnClickListener(v -> {
             animateTileTap(v);
             onSwapSide.run();
@@ -945,7 +982,7 @@ public class GameMenu implements Game.GameMenuCallbacks {
         swapLp.setMarginEnd(dp(6f));
         header.addView(swapBtn, swapLp);
 
-        TextView closeBtn = createDrawerHeaderIconButton(ctx, "\u2715", getString(R.string.cancel));
+        TextView closeBtn = createDrawerHeaderIconButton(ctx, palette, "\u2715", getString(R.string.cancel));
         closeBtn.setOnClickListener(v -> {
             animateTileTap(v);
             onCloseDrawer.run();
@@ -956,7 +993,7 @@ public class GameMenu implements Game.GameMenuCallbacks {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         View divider = new View(ctx);
-        divider.setBackgroundColor(0x22FFFFFF);
+        divider.setBackgroundColor(palette.getDividerColor());
         container.addView(divider, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(1f))));
 
@@ -1170,10 +1207,10 @@ public class GameMenu implements Game.GameMenuCallbacks {
         return container;
     }
 
-    private TextView createDrawerHeaderIconButton(Context ctx, String symbol, String contentDesc) {
+    private TextView createDrawerHeaderIconButton(Context ctx, AppThemePalette palette, String symbol, String contentDesc) {
         TextView btn = new TextView(ctx);
         btn.setText(symbol);
-        btn.setTextColor(0xE0FFFFFF);
+        btn.setTextColor(palette.getPrimaryTextColor());
         btn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.5f);
         btn.setGravity(Gravity.CENTER);
         btn.setFocusable(true);
@@ -1181,8 +1218,8 @@ public class GameMenu implements Game.GameMenuCallbacks {
         setTooltipAndDesc(btn, contentDesc);
         GradientDrawable bg = new GradientDrawable();
         bg.setShape(GradientDrawable.OVAL);
-        bg.setColor(0x20FFFFFF);
-        bg.setStroke(Math.max(1, dp(1f)), 0x3DFFFFFF);
+        bg.setColor(AppThemePalette.withAlpha(palette.accent, palette.isLight ? 0.14f : 0.22f));
+        bg.setStroke(Math.max(1, dp(1f)), palette.getCardRimColor());
         btn.setBackground(bg);
         return btn;
     }
@@ -1195,8 +1232,8 @@ public class GameMenu implements Game.GameMenuCallbacks {
         GradientDrawable cardBg = new GradientDrawable();
         cardBg.setShape(GradientDrawable.RECTANGLE);
         cardBg.setCornerRadius(dp(16f));
-        cardBg.setColor(0x14FFFFFF);
-        cardBg.setStroke(Math.max(1, dp(1f)), 0x24FFFFFF);
+        cardBg.setColor(AppThemePalette.withAlpha(palette.accent, palette.isLight ? 0.08f : 0.12f));
+        cardBg.setStroke(Math.max(1, dp(1f)), palette.getDividerColor());
         card.setBackground(cardBg);
 
         LinearLayout headerRow = new LinearLayout(ctx);
@@ -1208,7 +1245,7 @@ public class GameMenu implements Game.GameMenuCallbacks {
 
         TextView titleView = new TextView(ctx);
         titleView.setText(title);
-        titleView.setTextColor(Color.WHITE);
+        titleView.setTextColor(palette.getPrimaryTextColor());
         titleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f);
         titleView.setTypeface(Typeface.DEFAULT_BOLD);
         headerRow.addView(titleView, new LinearLayout.LayoutParams(
@@ -1289,7 +1326,7 @@ public class GameMenu implements Game.GameMenuCallbacks {
 
         TextView label = new TextView(ctx);
         label.setText(R.string.title_onscreen_keyboard_align_mode);
-        label.setTextColor(0xDEFFFFFF);
+        label.setTextColor(palette.getSecondaryTextColor());
         label.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f);
         block.addView(label, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -1300,8 +1337,8 @@ public class GameMenu implements Game.GameMenuCallbacks {
         GradientDrawable capsuleBg = new GradientDrawable();
         capsuleBg.setShape(GradientDrawable.RECTANGLE);
         capsuleBg.setCornerRadius(dp(13f));
-        capsuleBg.setColor(0x18FFFFFF);
-        capsuleBg.setStroke(Math.max(1, dp(1f)), 0x33FFFFFF);
+        capsuleBg.setColor(AppThemePalette.withAlpha(palette.accent, palette.isLight ? 0.10f : 0.14f));
+        capsuleBg.setStroke(Math.max(1, dp(1f)), palette.getDividerColor());
         capsule.setBackground(capsuleBg);
 
         final String[] modes = { "left", "center", "right" };
@@ -1317,14 +1354,14 @@ public class GameMenu implements Game.GameMenuCallbacks {
                     GradientDrawable tabBg = new GradientDrawable();
                     tabBg.setShape(GradientDrawable.RECTANGLE);
                     tabBg.setCornerRadius(dp(10f));
-                    tabBg.setColor(AppThemePalette.withAlpha(palette.highlight, 0.34f));
-                    tabBg.setStroke(Math.max(1, dp(1.1f)), 0xC8FFFFFF);
+                    tabBg.setColor(AppThemePalette.withAlpha(palette.highlight, palette.isLight ? 0.24f : 0.34f));
+                    tabBg.setStroke(Math.max(1, dp(1.1f)), palette.getNeonAccent());
                     tab.setBackground(tabBg);
-                    tab.setTextColor(Color.WHITE);
+                    tab.setTextColor(palette.getPrimaryTextColor());
                     tab.setTypeface(Typeface.DEFAULT_BOLD);
                 } else {
                     tab.setBackground(null);
-                    tab.setTextColor(0xA8FFFFFF);
+                    tab.setTextColor(palette.getSecondaryTextColor());
                     tab.setTypeface(Typeface.DEFAULT);
                 }
             }
@@ -1373,7 +1410,7 @@ public class GameMenu implements Game.GameMenuCallbacks {
 
         TextView text = new TextView(ctx);
         text.setText(label);
-        text.setTextColor(0xEAFFFFFF);
+        text.setTextColor(palette.getPrimaryTextColor());
         text.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f);
         text.setMaxLines(2);
         text.setEllipsize(TextUtils.TruncateAt.END);
@@ -1406,13 +1443,13 @@ public class GameMenu implements Game.GameMenuCallbacks {
             trackBg.setCornerRadius(trackH * 0.5f);
             if (checked[0]) {
                 trackBg.setColor(AppThemePalette.withAlpha(palette.highlight, 0.85f));
-                trackBg.setStroke(Math.max(1, dp(1f)), 0x99FFFFFF);
+                trackBg.setStroke(Math.max(1, dp(1f)), palette.getCardRimColor());
             } else {
-                trackBg.setColor(0x28FFFFFF);
-                trackBg.setStroke(Math.max(1, dp(1f)), 0x44FFFFFF);
+                trackBg.setColor(AppThemePalette.withAlpha(palette.cardOutline, palette.isLight ? 0.25f : 0.20f));
+                trackBg.setStroke(Math.max(1, dp(1f)), palette.getDividerColor());
             }
             switchTrack.setBackground(trackBg);
-            thumb.setAlpha(checked[0] ? 1f : 0.78f);
+            thumb.setAlpha(checked[0] ? 1f : 0.85f);
         };
         applyVisual.run();
         thumb.setTranslationX(checked[0] ? travelPx : 0f);
@@ -1454,7 +1491,7 @@ public class GameMenu implements Game.GameMenuCallbacks {
 
         TextView labelView = new TextView(ctx);
         labelView.setText(label);
-        labelView.setTextColor(0xDEFFFFFF);
+        labelView.setTextColor(palette.getSecondaryTextColor());
         labelView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f);
         labelView.setMaxLines(1);
         labelView.setEllipsize(TextUtils.TruncateAt.END);
@@ -1478,8 +1515,8 @@ public class GameMenu implements Game.GameMenuCallbacks {
         seekBar.setMax(stepsCount);
         seekBar.setProgress(Math.max(0, Math.min(stepsCount, Math.round((clampedInit - minVal) / (float) safeStep))));
         seekBar.setProgressTintList(ColorStateList.valueOf(palette.highlight));
-        seekBar.setProgressBackgroundTintList(ColorStateList.valueOf(0x3DFFFFFF));
-        seekBar.setThumbTintList(ColorStateList.valueOf(Color.WHITE));
+        seekBar.setProgressBackgroundTintList(ColorStateList.valueOf(palette.getCardRimColor()));
+        seekBar.setThumbTintList(ColorStateList.valueOf(palette.getNeonAccent()));
         seekBar.setPadding(dp(8f), dp(4f), dp(8f), dp(2f));
         seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
@@ -1517,7 +1554,7 @@ public class GameMenu implements Game.GameMenuCallbacks {
 
         TextView label = new TextView(ctx);
         label.setText(R.string.title_video_scale_mode);
-        label.setTextColor(0xDEFFFFFF);
+        label.setTextColor(palette.getSecondaryTextColor());
         label.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f);
         block.addView(label, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -1528,8 +1565,8 @@ public class GameMenu implements Game.GameMenuCallbacks {
         GradientDrawable capsuleBg = new GradientDrawable();
         capsuleBg.setShape(GradientDrawable.RECTANGLE);
         capsuleBg.setCornerRadius(dp(13f));
-        capsuleBg.setColor(0x18FFFFFF);
-        capsuleBg.setStroke(Math.max(1, dp(1f)), 0x33FFFFFF);
+        capsuleBg.setColor(AppThemePalette.withAlpha(palette.accent, palette.isLight ? 0.10f : 0.14f));
+        capsuleBg.setStroke(Math.max(1, dp(1f)), palette.getDividerColor());
         capsule.setBackground(capsuleBg);
 
         final PreferenceConfiguration.ScaleMode[] modes = {
@@ -1553,14 +1590,14 @@ public class GameMenu implements Game.GameMenuCallbacks {
                     GradientDrawable tabBg = new GradientDrawable();
                     tabBg.setShape(GradientDrawable.RECTANGLE);
                     tabBg.setCornerRadius(dp(10f));
-                    tabBg.setColor(AppThemePalette.withAlpha(palette.highlight, 0.34f));
-                    tabBg.setStroke(Math.max(1, dp(1.1f)), 0xC8FFFFFF);
+                    tabBg.setColor(AppThemePalette.withAlpha(palette.highlight, palette.isLight ? 0.24f : 0.34f));
+                    tabBg.setStroke(Math.max(1, dp(1.1f)), palette.getNeonAccent());
                     tab.setBackground(tabBg);
-                    tab.setTextColor(Color.WHITE);
+                    tab.setTextColor(palette.getPrimaryTextColor());
                     tab.setTypeface(Typeface.DEFAULT_BOLD);
                 } else {
                     tab.setBackground(null);
-                    tab.setTextColor(0xA8FFFFFF);
+                    tab.setTextColor(palette.getSecondaryTextColor());
                     tab.setTypeface(Typeface.DEFAULT);
                 }
             }
@@ -1599,7 +1636,7 @@ public class GameMenu implements Game.GameMenuCallbacks {
                                        AppThemePalette palette, Runnable onClick) {
         TextView btn = new TextView(ctx);
         btn.setText(label);
-        btn.setTextColor(Color.WHITE);
+        btn.setTextColor(palette.getPrimaryTextColor());
         btn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f);
         btn.setTypeface(Typeface.DEFAULT_BOLD);
         btn.setGravity(Gravity.CENTER);
@@ -1614,7 +1651,7 @@ public class GameMenu implements Game.GameMenuCallbacks {
             boolean focused = btn.isFocused();
             bg.setColor(AppThemePalette.withAlpha(palette.highlight, focused ? 0.32f : 0.18f));
             bg.setStroke(Math.max(1, dp(focused ? 1.6f : 1.1f)),
-                    focused ? Color.WHITE : 0x66FFFFFF);
+                    focused ? palette.getPrimaryTextColor() : palette.getCardRimColor());
             btn.setBackground(bg);
         };
         applyStyle.run();
@@ -1647,21 +1684,24 @@ public class GameMenu implements Game.GameMenuCallbacks {
     }
 
     private void applySettingsPillStyle(View pill, ImageView icon, boolean isOpen, int accentRgb, boolean focused) {
+        AppThemePalette p = AppThemePalette.getCurrent(game);
+        int fg = p.getPrimaryTextColor();
+        int fgMuted = p.getSecondaryTextColor();
         GradientDrawable bg = new GradientDrawable();
         bg.setShape(GradientDrawable.RECTANGLE);
         bg.setCornerRadius(dp(999f));
         if (isOpen) {
             bg.setColor(AppThemePalette.withAlpha(accentRgb, focused ? 0.34f : 0.24f));
             bg.setStroke(Math.max(1, dp(focused ? 2.0f : 1.5f)),
-                    focused ? Color.WHITE : AppThemePalette.withAlpha(Color.WHITE, 0.88f));
+                    focused ? fg : AppThemePalette.withAlpha(fg, 0.88f));
             pill.setBackground(bg);
-            icon.setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN);
+            icon.setColorFilter(fg, PorterDuff.Mode.SRC_IN);
         } else {
-            bg.setColor(focused ? 0x2EFFFFFF : 0x1AFFFFFF);
+            bg.setColor(AppThemePalette.withAlpha(p.accent, focused ? 0.22f : 0.12f));
             bg.setStroke(Math.max(1, dp(focused ? 1.8f : 1.15f)),
-                    focused ? 0xCCFFFFFF : 0x4AFFFFFF);
+                    focused ? fg : p.getCardRimColor());
             pill.setBackground(bg);
-            icon.setColorFilter(focused ? Color.WHITE : 0xC8FFFFFF, PorterDuff.Mode.SRC_IN);
+            icon.setColorFilter(focused ? fg : fgMuted, PorterDuff.Mode.SRC_IN);
         }
     }
 
@@ -1719,38 +1759,44 @@ public class GameMenu implements Game.GameMenuCallbacks {
     }
 
     private void applyToggleTileStyle(ImageButton btn, boolean isOn, int accentRgb, boolean focused) {
+        AppThemePalette p = AppThemePalette.getCurrent(game);
+        int fg = p.getPrimaryTextColor();
+        int fgMuted = p.getSecondaryTextColor();
         GradientDrawable bg = new GradientDrawable();
         bg.setShape(GradientDrawable.RECTANGLE);
         bg.setCornerRadius(dp(17f));
         if (isOn) {
             bg.setColor(AppThemePalette.withAlpha(accentRgb, focused ? 0.30f : 0.20f));
-            int strokeColor = focused ? Color.WHITE : AppThemePalette.withAlpha(Color.WHITE, 0.88f);
+            int strokeColor = focused ? fg : AppThemePalette.withAlpha(fg, 0.88f);
             bg.setStroke(Math.max(1, dp(focused ? 2.1f : 1.6f)), strokeColor);
             btn.setBackground(bg);
-            btn.setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN);
+            btn.setColorFilter(fg, PorterDuff.Mode.SRC_IN);
         } else {
-            bg.setColor(focused ? 0x2AFFFFFF : 0x16FFFFFF);
-            int strokeColor = focused ? 0x99FFFFFF : 0x3AFFFFFF;
+            bg.setColor(AppThemePalette.withAlpha(p.accent, focused ? 0.20f : 0.10f));
+            int strokeColor = focused ? fg : p.getCardRimColor();
             bg.setStroke(Math.max(1, dp(focused ? 1.8f : 1.15f)), strokeColor);
             btn.setBackground(bg);
-            btn.setColorFilter(focused ? 0xB8FFFFFF : 0x6EFFFFFF, PorterDuff.Mode.SRC_IN);
+            btn.setColorFilter(focused ? fg : AppThemePalette.withAlpha(fgMuted, 0.72f), PorterDuff.Mode.SRC_IN);
         }
     }
 
     private void applyActionTileStyle(ImageButton btn, boolean lit, int accentRgb, boolean focused) {
+        AppThemePalette p = AppThemePalette.getCurrent(game);
+        int fg = p.getPrimaryTextColor();
+        int fgMuted = p.getSecondaryTextColor();
         GradientDrawable bg = new GradientDrawable();
         bg.setShape(GradientDrawable.RECTANGLE);
         bg.setCornerRadius(dp(17f));
         if (lit) {
             bg.setColor(AppThemePalette.withAlpha(accentRgb, 0.30f));
-            bg.setStroke(Math.max(1, dp(1.8f)), Color.WHITE);
+            bg.setStroke(Math.max(1, dp(1.8f)), fg);
             btn.setBackground(bg);
-            btn.setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN);
+            btn.setColorFilter(fg, PorterDuff.Mode.SRC_IN);
         } else {
-            bg.setColor(focused ? 0x2EFFFFFF : 0x1CFFFFFF);
-            bg.setStroke(Math.max(1, dp(focused ? 1.9f : 1.25f)), focused ? 0xCCFFFFFF : 0x56FFFFFF);
+            bg.setColor(AppThemePalette.withAlpha(p.accent, focused ? 0.22f : 0.12f));
+            bg.setStroke(Math.max(1, dp(focused ? 1.9f : 1.25f)), focused ? fg : p.getCardRimColor());
             btn.setBackground(bg);
-            btn.setColorFilter(focused ? Color.WHITE : 0xC8FFFFFF, PorterDuff.Mode.SRC_IN);
+            btn.setColorFilter(focused ? fg : fgMuted, PorterDuff.Mode.SRC_IN);
         }
     }
 

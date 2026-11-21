@@ -42,7 +42,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 public class PortalShaderView extends TextureView implements TextureView.SurfaceTextureListener {
 
     private static final int OVERLAY_MAX_SHORT_EDGE = 1080;
-    private static final long BLUR_INTERVAL_MS = 66L; // ~15 FPS off-UI-thread refraction updates
+    private static final long BLUR_INTERVAL_MS = 16L; // ~60 FPS zero-loop GPU refraction updates
 
     private static final String VERTEX_SHADER_SRC =
             "#version 300 es\n" +
@@ -57,6 +57,20 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "out vec2 v_uv;\n" +
             "void main() {\n" +
             "    v_uv = a_pos * 0.5 + 0.5;\n" +
+            "    gl_Position = vec4(a_pos, 0.0, 1.0);\n" +
+            "}\n";
+
+    private static final String BLUR_VERTEX_SHADER_SRC =
+            "#version 300 es\n" +
+            "in vec2 a_pos;\n" +
+            "uniform float u_flipY;\n" +
+            "out vec2 v_uv;\n" +
+            "void main() {\n" +
+            "    vec2 uv = a_pos * 0.5 + 0.5;\n" +
+            "    if (u_flipY > 0.5) {\n" +
+            "        uv.y = 1.0 - uv.y;\n" +
+            "    }\n" +
+            "    v_uv = uv;\n" +
             "    gl_Position = vec4(a_pos, 0.0, 1.0);\n" +
             "}\n";
 
@@ -84,7 +98,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "    sum += texture(u_tex, clamp(v_uv - u_texelStep * 1.384615, vec2(0.0), vec2(1.0))) * 0.316216;\n" +
             "    sum += texture(u_tex, clamp(v_uv + u_texelStep * 3.230769, vec2(0.0), vec2(1.0))) * 0.070270;\n" +
             "    sum += texture(u_tex, clamp(v_uv - u_texelStep * 3.230769, vec2(0.0), vec2(1.0))) * 0.070270;\n" +
-            "    fragColor = sum;\n" +
+            "    fragColor = vec4(sum.rgb, 1.0);\n" +
             "}\n";
 
     private static final String FRAGMENT_SHADER_SRC =
@@ -94,6 +108,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "out vec4 fragColor;\n" +
             "\n" +
             "uniform vec2  u_resolution;\n" +
+            "uniform vec2  u_portalCenterOffset;\n" +
             "uniform float u_time;\n" +
             "uniform float u_readyMix;\n" +
             "uniform float u_previewMix;\n" +
@@ -134,15 +149,16 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "    vec3 col = vec3(0.0);\n" +
             "    vec3 pTintA = u_ringCol;\n" +
             "    vec3 pTintB = u_particleCol;\n" +
-            "    float dens = clamp(u_particleDensity, 0.25, 4.0);\n" +
-            "    float sz = clamp(u_particleSize, 0.25, 4.0);\n" +
-            "    float gridMul = sqrt(dens);\n" +
-            "    float spawnThreshold = clamp(1.0 - 0.45 * dens, 0.04, 0.89);\n" +
-            "    float bound = max(0.13, 0.13 * sz);\n" +
+            "    float amount = clamp(u_particleDensity, 0.0, 20.0);\n" +
+            "    if (amount <= 0.001) return col;\n" +
+            "    float sz = clamp(u_particleSize, 0.1, 8.0);\n" +
+            "    float totalExpected = 0.45 * amount;\n" +
+            "    float bound = min(0.48, max(0.13, 0.13 * sz));\n" +
             "\n" +
             "    for (int layer = 0; layer < 3; layer++) {\n" +
             "        float fl = float(layer);\n" +
-            "        float scale = (14.0 + fl * 9.0) * gridMul;\n" +
+            "        // Constant grid scale so increasing Particle Amount never zooms out!\n" +
+            "        float scale = 14.0 + fl * 9.0;\n" +
             "        float rotSpeed = (0.04 + fl * 0.018) * (layer == 1 ? -1.0 : 1.0);\n" +
             "\n" +
             "        vec2 p = rot2d(time * rotSpeed + fl * 1.7) * uv;\n" +
@@ -156,26 +172,32 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "            for (int x = -1; x <= 1; x++) {\n" +
             "                vec2 offs = vec2(float(x), float(y));\n" +
             "                vec2 cellId = id + offs;\n" +
-            "                vec2 rnd = hash22(cellId + fl * 37.0);\n" +
             "\n" +
-            "                if (rnd.x < spawnThreshold) continue;\n" +
+            "                for (int sub = 0; sub < 6; sub++) {\n" +
+            "                    float fSub = float(sub);\n" +
+            "                    float slotProb = clamp(totalExpected - fSub, 0.0, 1.0);\n" +
+            "                    if (slotProb <= 0.001) break;\n" +
             "\n" +
-            "                vec2 drift = vec2(\n" +
-            "                    sin(time * (0.4 + rnd.y * 0.5) + rnd.x * TAU),\n" +
-            "                    cos(time * (0.35 + rnd.x * 0.5) + rnd.y * TAU)\n" +
-            "                ) * 0.22;\n" +
+            "                    vec2 rnd = hash22(cellId + vec2(fl * 37.0 + fSub * 71.0, fSub * 113.0));\n" +
+            "                    if (rnd.x > slotProb) continue;\n" +
             "\n" +
-            "                vec2 pos = offs + (rnd - 0.5) * 0.55 + drift;\n" +
-            "                vec2 diff = gv - pos;\n" +
-            "                if (abs(diff.x) > bound || abs(diff.y) > bound) continue;\n" +
-            "                float dist = length(diff);\n" +
+            "                    vec2 drift = vec2(\n" +
+            "                        sin(time * (0.4 + rnd.y * 0.5) + rnd.x * TAU),\n" +
+            "                        cos(time * (0.35 + rnd.x * 0.5) + rnd.y * TAU)\n" +
+            "                    ) * 0.22;\n" +
             "\n" +
-            "                float radius = mix(0.035, 0.11, fract(rnd.x * 13.7)) * sz;\n" +
-            "                float bokeh = smoothstep(radius, radius * 0.15, dist);\n" +
-            "                float twinkle = 0.55 + 0.45 * sin(time * (1.8 + rnd.y * 3.0) + rnd.x * TAU);\n" +
+            "                    vec2 pos = offs + (rnd - 0.5) * 0.55 + drift;\n" +
+            "                    vec2 diff = gv - pos;\n" +
+            "                    if (abs(diff.x) > bound || abs(diff.y) > bound) continue;\n" +
+            "                    float dist = length(diff);\n" +
             "\n" +
-            "                vec3 pCol = mix(pTintA, pTintB, rnd.y);\n" +
-            "                col += pCol * bokeh * twinkle * (0.45 - fl * 0.08);\n" +
+            "                    float radius = mix(0.035, 0.11, fract(rnd.x * 13.7)) * sz;\n" +
+            "                    float bokeh = smoothstep(radius, radius * 0.15, dist);\n" +
+            "                    float twinkle = 0.55 + 0.45 * sin(time * (1.8 + rnd.y * 3.0) + rnd.x * TAU);\n" +
+            "\n" +
+            "                    vec3 pCol = mix(pTintA, pTintB, rnd.y);\n" +
+            "                    col += pCol * bokeh * twinkle * (0.45 - fl * 0.08);\n" +
+            "                }\n" +
             "            }\n" +
             "        }\n" +
             "    }\n" +
@@ -186,12 +208,13 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "    // Normalize by shortest screen dimension so iris & particles stay identical in portrait and landscape\n" +
             "    float minDim = min(u_resolution.x, u_resolution.y);\n" +
             "    vec2 uv = (gl_FragCoord.xy - 0.5 * u_resolution) / minDim;\n" +
-            "    float d = length(uv);\n" +
-            "    float angle = atan(uv.y, uv.x);\n" +
+            "    vec2 portalUv = uv - u_portalCenterOffset;\n" +
+            "    float d = length(portalUv);\n" +
+            "    float angle = atan(portalUv.y, portalUv.x);\n" +
             "\n" +
-            "    float halfDiag = length(0.5 * u_resolution / minDim);\n" +
+            "    float halfDiag = length(0.5 * u_resolution / minDim) + length(u_portalCenterOffset);\n" +
             "    float maxRadius = halfDiag + 0.18;\n" +
-            "    float baseRadius = 0.25 * clamp(u_portalScale, 0.5, 1.6);\n" +
+            "    float baseRadius = 0.25 * clamp(u_portalScale, 0.2, 4.0);\n" +
             "    float expandEase = easeInOutCubic(clamp(u_expandProgress, 0.0, 1.0));\n" +
             "    float radius = mix(baseRadius, maxRadius, expandEase);\n" +
             "\n" +
@@ -356,6 +379,8 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
     private volatile float uReadyMix = 0f;
     private volatile float uPreviewMix = 0f;
     private volatile float uExpandProgress = 1f;
+    private volatile float uPortalCenterOffsetX = 0f;
+    private volatile float uPortalCenterOffsetY = 0f;
     private volatile float uPortalScale = 1f;
     private volatile float uGlowIntensity = 1f;
     private volatile float uParticleBrightness = 1f;
@@ -377,7 +402,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
     private int activeHeight = 0;
     private Runnable firstFrameListener;
 
-    // Off-UI-thread blurred refraction bitmap (adaptive inverse-resolution @ ~15 FPS)
+    // Off-UI-thread blurred refraction bitmap (adaptive inverse-resolution @ ~60 FPS)
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final CopyOnWriteArrayList<WeakReference<Drawable>> frostedDrawables = new CopyOnWriteArrayList<>();
     private volatile Bitmap publishedBlurBitmap;
@@ -431,14 +456,16 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
 
     private void applyPaletteUniforms(@NonNull AppThemePalette palette) {
         uIsLight = palette.isLight ? 1f : 0f;
+        // Strictly derive background gradient from palette.background (never palette.surface!)
+        // so Background and Surface remain 100% independent channels.
         if (palette.isLight) {
-            uBgEdgeColor = AppThemePalette.blendColors(palette.background, palette.secondary, 0.35f);
-            uBgCenterColor = palette.surface;
+            uBgEdgeColor = AppThemePalette.blendColors(palette.background, palette.accent, 0.08f);
+            uBgCenterColor = AppThemePalette.blendColors(palette.background, 0xFFFFFFFF, 0.22f);
             uBgInnerColor = palette.background;
         } else {
             uBgEdgeColor = palette.background;
-            uBgCenterColor = AppThemePalette.blendColors(palette.surface, palette.secondary, 0.45f);
-            uBgInnerColor = AppThemePalette.blendColors(palette.background, 0xFF060812, 0.30f);
+            uBgCenterColor = AppThemePalette.blendColors(palette.background, palette.accent, 0.14f);
+            uBgInnerColor = AppThemePalette.blendColors(palette.background, 0xFF04060C, 0.28f);
         }
         uParticleRgb = palette.particleColor;
         uRingRgb = palette.ringColor;
@@ -446,13 +473,13 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
     }
 
     public void applyPreviewOverride(@NonNull AppThemePalette.ThemeBundle bundle) {
-        uPortalScale = Math.max(0.6f, Math.min(1.5f, bundle.portalWindowScalePercent / 100f));
-        uGlowIntensity = Math.max(0.2f, Math.min(2.5f, bundle.portalGlowIntensityPercent / 100f));
-        uParticleBrightness = Math.max(0.0f, Math.min(4.0f, bundle.portalParticleBrightnessPercent / 100f));
-        uParticleSize = Math.max(0.25f, Math.min(4.0f, bundle.portalParticleSizePercent / 100f));
-        uParticleDensity = Math.max(0.25f, Math.min(4.0f, bundle.portalParticleDensityPercent / 100f));
-        uSonarSpeed = Math.max(0.2f, Math.min(2.5f, bundle.portalSonarSpeedPercent / 100f));
-        blurAmountPercent = Math.max(0, Math.min(200, bundle.blurAmountPercent));
+        uPortalScale = Math.max(0.2f, Math.min(20.0f, bundle.portalWindowScalePercent / 100f));
+        uGlowIntensity = Math.max(0.0f, Math.min(20.0f, bundle.portalGlowIntensityPercent / 100f));
+        uParticleBrightness = Math.max(0.0f, Math.min(20.0f, bundle.portalParticleBrightnessPercent / 100f));
+        uParticleSize = Math.max(0.1f, Math.min(20.0f, bundle.portalParticleSizePercent / 100f));
+        uParticleDensity = Math.max(0.0f, Math.min(20.0f, bundle.portalParticleDensityPercent / 100f));
+        uSonarSpeed = Math.max(0.0f, Math.min(20.0f, bundle.portalSonarSpeedPercent / 100f));
+        blurAmountPercent = Math.max(0, Math.min(2000, bundle.blurAmountPercent));
         frostedTintAmountPercent = Math.max(0, Math.min(100, bundle.frostedTintAmountPercent));
         blurDirty = true;
         if (blurAmountPercent <= 0 || frostedTintAmountPercent >= 100) {
@@ -470,13 +497,13 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
     public void refreshFromPrefs() {
         PreferenceConfiguration cfg = PreferenceConfiguration.readPreferences(getContext());
         AppThemePalette palette = AppThemePalette.getCurrent(getContext());
-        uPortalScale = Math.max(0.6f, Math.min(1.5f, cfg.portalWindowScalePercent / 100f));
-        uGlowIntensity = Math.max(0.2f, Math.min(2.5f, cfg.portalGlowIntensityPercent / 100f));
-        uParticleBrightness = Math.max(0.0f, Math.min(4.0f, cfg.portalParticleBrightnessPercent / 100f));
-        uParticleSize = Math.max(0.25f, Math.min(4.0f, cfg.portalParticleSizePercent / 100f));
-        uParticleDensity = Math.max(0.25f, Math.min(4.0f, cfg.portalParticleDensityPercent / 100f));
-        uSonarSpeed = Math.max(0.2f, Math.min(2.5f, cfg.portalSonarSpeedPercent / 100f));
-        blurAmountPercent = Math.max(0, Math.min(200, cfg.blurAmountPercent));
+        uPortalScale = Math.max(0.2f, Math.min(20.0f, cfg.portalWindowScalePercent / 100f));
+        uGlowIntensity = Math.max(0.0f, Math.min(20.0f, cfg.portalGlowIntensityPercent / 100f));
+        uParticleBrightness = Math.max(0.0f, Math.min(20.0f, cfg.portalParticleBrightnessPercent / 100f));
+        uParticleSize = Math.max(0.1f, Math.min(20.0f, cfg.portalParticleSizePercent / 100f));
+        uParticleDensity = Math.max(0.0f, Math.min(20.0f, cfg.portalParticleDensityPercent / 100f));
+        uSonarSpeed = Math.max(0.0f, Math.min(20.0f, cfg.portalSonarSpeedPercent / 100f));
+        blurAmountPercent = Math.max(0, Math.min(2000, cfg.blurAmountPercent));
         frostedTintAmountPercent = palette.getEffectiveTintAmount();
         blurDirty = true;
         if (blurAmountPercent <= 0 || frostedTintAmountPercent >= 100) {
@@ -497,6 +524,11 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
         uPreviewMix = 0f;
         uExpandProgress = 1f;
         refreshFromPrefs();
+    }
+
+    public void setPortalCenterOffset(float offsetX, float offsetY) {
+        this.uPortalCenterOffsetX = offsetX;
+        this.uPortalCenterOffsetY = offsetY;
     }
 
     public void setUniforms(float readyMix, float previewMix, float expandProgress) {
@@ -724,6 +756,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
         private int program = 0;
         private int aPosLoc = -1;
         private int uResolutionLoc = -1;
+        private int uPortalCenterOffsetLoc = -1;
         private int uTimeLoc = -1;
         private int uReadyMixLoc = -1;
         private int uPreviewMixLoc = -1;
@@ -752,6 +785,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
         private int blurPosLoc = -1;
         private int blurTexLoc = -1;
         private int blurStepLoc = -1;
+        private int blurFlipYLoc = -1;
 
         // Offscreen scaled background FBO
         private int bgFbo = 0;
@@ -767,11 +801,8 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
         private int blurW = 0;
         private int blurH = 0;
         private ByteBuffer readbackBuf;
-        private byte[] readbackBytes;
-        private int[] blurPixelsA;
-        private Bitmap blurBitmapWorkA;
-        private Bitmap blurBitmapWorkB;
-        private boolean useWorkA = true;
+        private final Bitmap[] blurBitmapRing = new Bitmap[3];
+        private int blurRingIndex = 0;
         private long lastBlurUpdateMs = 0L;
 
         private FloatBuffer quadBuffer;
@@ -838,7 +869,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
                     GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT);
                     drawBlitTexture(bgFboTex);
 
-                    // 3. Periodically update adaptive-resolution GPU blurred refraction bitmap (~15 FPS)
+                    // 3. Update adaptive-resolution GPU blurred refraction bitmap (~60 FPS, zero Java loops)
                     int blurPct = (frostedTintAmountPercent >= 100) ? 0 : blurAmountPercent;
                     long nowMs = SystemClock.uptimeMillis();
                     if (blurPct <= 0) {
@@ -891,6 +922,9 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
         private void drawPortalShader(int w, int h, float sharedTime) {
             GLES30.glUseProgram(program);
             GLES30.glUniform2f(uResolutionLoc, (float) w, (float) h);
+            if (uPortalCenterOffsetLoc >= 0) {
+                GLES30.glUniform2f(uPortalCenterOffsetLoc, uPortalCenterOffsetX, uPortalCenterOffsetY);
+            }
             GLES30.glUniform1f(uTimeLoc, sharedTime);
             GLES30.glUniform1f(uReadyMixLoc, uReadyMix);
             GLES30.glUniform1f(uPreviewMixLoc, uPreviewMix);
@@ -967,12 +1001,15 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0);
         }
 
-        private void drawBlurPass(int texId, float stepX, float stepY) {
+        private void drawBlurPass(int texId, float stepX, float stepY, float flipY) {
             GLES30.glUseProgram(blurProgram);
             GLES30.glActiveTexture(GLES30.GL_TEXTURE0);
             GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, texId);
             GLES30.glUniform1i(blurTexLoc, 0);
             GLES30.glUniform2f(blurStepLoc, stepX, stepY);
+            if (blurFlipYLoc >= 0) {
+                GLES30.glUniform1f(blurFlipYLoc, flipY);
+            }
 
             quadBuffer.position(0);
             GLES30.glEnableVertexAttribArray(blurPosLoc);
@@ -1016,10 +1053,10 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0);
 
             readbackBuf = ByteBuffer.allocateDirect(w * h * 4).order(ByteOrder.nativeOrder());
-            readbackBytes = new byte[w * h * 4];
-            blurPixelsA = new int[w * h];
-            blurBitmapWorkA = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
-            blurBitmapWorkB = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+            for (int i = 0; i < blurBitmapRing.length; i++) {
+                blurBitmapRing[i] = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+            }
+            blurRingIndex = 0;
         }
 
         private int chooseAdaptiveBlurShortEdge(int blurPct) {
@@ -1050,42 +1087,29 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             GLES30.glViewport(0, 0, tw, th);
             drawBlitTexture(bgFboTex);
 
-            // 2. Two GPU 9-tap separable Gaussian blur passes scaled to keep perceived blur continuous
+            // 2. Two GPU 9-tap separable Gaussian blur passes scaled to keep perceived blur continuous.
+            // On the final vertical pass, flip Y on the GPU so glReadPixels directly matches Android top-left origin!
             float normRadius = (blurPct / 100f) * 0.024f;
             float texelRadius = Math.max(0.35f, normRadius * shortEdge);
             float[] passScales = { 0.28f, 0.56f };
-            for (float ps : passScales) {
-                float step = texelRadius * ps;
+            for (int pIdx = 0; pIdx < passScales.length; pIdx++) {
+                float step = texelRadius * passScales[pIdx];
+                boolean isLastVertical = (pIdx == passScales.length - 1);
                 GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, blurFboB);
-                drawBlurPass(blurFboTex, step / tw, 0f);
+                drawBlurPass(blurFboTex, step / tw, 0f, 0f);
                 GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, blurFbo);
-                drawBlurPass(blurFboTexB, 0f, step / th);
+                drawBlurPass(blurFboTexB, 0f, step / th, isLastVertical ? 1f : 0f);
             }
 
-            // 3. Read back final GPU-blurred FBO off the UI thread
+            // 3. Read back final GPU-blurred FBO off the UI thread & copy directly into triple-buffered Bitmap
             readbackBuf.position(0);
             GLES30.glReadPixels(0, 0, tw, th, GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, readbackBuf);
             GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0);
 
             readbackBuf.position(0);
-            readbackBuf.get(readbackBytes);
-
-            // Flip Y (GL bottom-left -> Android top-left) & pack RGBA -> ARGB
-            for (int y = 0; y < th; y++) {
-                int srcRow = (th - 1 - y) * tw * 4;
-                int dstRow = y * tw;
-                for (int x = 0; x < tw; x++) {
-                    int idx = srcRow + x * 4;
-                    int r = readbackBytes[idx] & 0xFF;
-                    int g = readbackBytes[idx + 1] & 0xFF;
-                    int b = readbackBytes[idx + 2] & 0xFF;
-                    blurPixelsA[dstRow + x] = 0xFF000000 | (r << 16) | (g << 8) | b;
-                }
-            }
-
-            Bitmap target = useWorkA ? blurBitmapWorkA : blurBitmapWorkB;
-            useWorkA = !useWorkA;
-            target.setPixels(blurPixelsA, 0, tw, 0, 0, tw, th);
+            Bitmap target = blurBitmapRing[blurRingIndex];
+            blurRingIndex = (blurRingIndex + 1) % blurBitmapRing.length;
+            target.copyPixelsFromBuffer(readbackBuf);
             publishedBlurBitmap = target;
             mainHandler.post(invalidateFrostedRunnable);
         }
@@ -1200,13 +1224,14 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             if (blitProgram == 0) {
                 return false;
             }
-            blurProgram = linkProgram(BLIT_VERTEX_SHADER_SRC, BLUR_FRAGMENT_SHADER_SRC);
+            blurProgram = linkProgram(BLUR_VERTEX_SHADER_SRC, BLUR_FRAGMENT_SHADER_SRC);
             if (blurProgram == 0) {
                 return false;
             }
 
             aPosLoc = GLES30.glGetAttribLocation(program, "a_pos");
             uResolutionLoc = GLES30.glGetUniformLocation(program, "u_resolution");
+            uPortalCenterOffsetLoc = GLES30.glGetUniformLocation(program, "u_portalCenterOffset");
             uTimeLoc = GLES30.glGetUniformLocation(program, "u_time");
             uReadyMixLoc = GLES30.glGetUniformLocation(program, "u_readyMix");
             uPreviewMixLoc = GLES30.glGetUniformLocation(program, "u_previewMix");
@@ -1231,6 +1256,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             blurPosLoc = GLES30.glGetAttribLocation(blurProgram, "a_pos");
             blurTexLoc = GLES30.glGetUniformLocation(blurProgram, "u_tex");
             blurStepLoc = GLES30.glGetUniformLocation(blurProgram, "u_texelStep");
+            blurFlipYLoc = GLES30.glGetUniformLocation(blurProgram, "u_flipY");
 
             quadBuffer = ByteBuffer.allocateDirect(FULLSCREEN_QUAD.length * 4)
                     .order(ByteOrder.nativeOrder())
