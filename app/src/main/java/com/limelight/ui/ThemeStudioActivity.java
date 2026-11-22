@@ -83,7 +83,7 @@ public class ThemeStudioActivity extends AppCompatActivity {
     private static final String[] CHANNEL_LABELS = {
             "Accent", "Background", "Surface", "Popup Tint",
             "Primary Text", "Secondary Text", "Card Outline",
-            "Highlight", "Particles", "Ring"
+            "Highlight", "Particles", "Iris Rim & Pulses"
     };
 
     private static final int[] QUICK_SWATCHES = {
@@ -107,7 +107,6 @@ public class ThemeStudioActivity extends AppCompatActivity {
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private ValueAnimator irisAnimator;
-    private final PathInterpolator cubicOutEase = new PathInterpolator(0.22f, 1f, 0.36f, 1f);
 
     // Preview stage views
     private FrameLayout outerRoot;
@@ -162,13 +161,19 @@ public class ThemeStudioActivity extends AppCompatActivity {
     private TextView uiBatterySaverHeading;
     private TextView[] uiBatterySaverPills;
 
-    // Tab 3: Portal FX (Visual shader controls)
+    // Tab 3: Portal FX (Visual shader controls + Energy Pulses)
     private SliderRow rowParticleBright;
     private SliderRow rowParticleSize;
     private SliderRow rowParticleDensity;
     private SliderRow rowRingGlow;
     private SliderRow rowPortalScale;
     private SliderRow rowSonarSpeed;
+    private TextView energyPulsesHeading;
+    private SliderRow rowPulseAmount;
+    private SliderRow rowPulseBrightness;
+    private SliderRow rowPulseLength;
+    private SliderRow rowPulseSpeed;
+    private SliderRow rowWaveAmp;
     private TextView btnResetPortal;
 
     // Tab 4: Animation (Per-phase transition speeds & preview playback)
@@ -181,7 +186,6 @@ public class ThemeStudioActivity extends AppCompatActivity {
     private SliderRow rowReadyMs;
     private SliderRow rowChargeMs;
     private SliderRow rowFadeMs;
-    private SliderRow rowHoldMs;
     private SliderRow rowExpandMs;
     private SliderRow rowDisconnectCloseMs;
     private SliderRow rowDisconnectFadeMs;
@@ -930,6 +934,26 @@ public class ThemeStudioActivity extends AppCompatActivity {
         rowSonarSpeed = addSliderRow(col, "Sonar Pulse Speed", 20, 250, 5, 0, 2000, "%",
                 v -> { bundle.portalSonarSpeedPercent = v; refreshAll(); });
 
+        energyPulsesHeading = new TextView(this);
+        energyPulsesHeading.setText("ENERGY PULSES");
+        energyPulsesHeading.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f);
+        energyPulsesHeading.setTypeface(Typeface.DEFAULT_BOLD);
+        LinearLayout.LayoutParams epLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        epLp.topMargin = dp(14f);
+        col.addView(energyPulsesHeading, epLp);
+
+        rowPulseAmount = addSliderRow(col, "Amount", 0, 10, 1, 0, 10, "",
+                v -> { bundle.portalPulseAmount = v; refreshAll(); });
+        rowPulseBrightness = addSliderRow(col, "Brightness", 0, 200, 5, 0, 500, "%",
+                v -> { bundle.portalPulseBrightnessPercent = v; refreshAll(); });
+        rowPulseLength = addSliderRow(col, "Length", 25, 220, 5, 10, 500, "%",
+                v -> { bundle.portalPulseLengthPercent = v; refreshAll(); });
+        rowPulseSpeed = addSliderRow(col, "Speed", 20, 250, 5, 0, 1000, "%",
+                v -> { bundle.portalPulseSpeedPercent = v; refreshAll(); });
+        rowWaveAmp = addSliderRow(col, "Wave", 0, 200, 5, 0, 500, "%",
+                v -> { bundle.portalWaveAmpPercent = v; refreshAll(); });
+
         btnResetPortal = createPillButton("Reset Portal FX Defaults");
         btnResetPortal.setOnClickListener(v -> {
             bundle.portalParticleBrightnessPercent = PreferenceConfiguration.DEFAULT_PORTAL_PARTICLE_BRIGHTNESS;
@@ -938,6 +962,11 @@ public class ThemeStudioActivity extends AppCompatActivity {
             bundle.portalGlowIntensityPercent = PreferenceConfiguration.DEFAULT_PORTAL_GLOW_INTENSITY;
             bundle.portalWindowScalePercent = PreferenceConfiguration.DEFAULT_PORTAL_WINDOW_SCALE;
             bundle.portalSonarSpeedPercent = PreferenceConfiguration.DEFAULT_PORTAL_SONAR_SPEED;
+            bundle.portalPulseAmount = PreferenceConfiguration.DEFAULT_PORTAL_PULSE_AMOUNT;
+            bundle.portalPulseBrightnessPercent = PreferenceConfiguration.DEFAULT_PORTAL_PULSE_BRIGHTNESS;
+            bundle.portalPulseLengthPercent = PreferenceConfiguration.DEFAULT_PORTAL_PULSE_LENGTH;
+            bundle.portalPulseSpeedPercent = PreferenceConfiguration.DEFAULT_PORTAL_PULSE_SPEED;
+            bundle.portalWaveAmpPercent = PreferenceConfiguration.DEFAULT_PORTAL_WAVE_AMP;
             refreshAll();
         });
         LinearLayout.LayoutParams rstLp = new LinearLayout.LayoutParams(
@@ -970,7 +999,7 @@ public class ThemeStudioActivity extends AppCompatActivity {
         playRow.addView(btnAnimPlayDisconnect, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         col.addView(playRow);
 
-        // Section 1: Launch Sequence Timings (6 phases)
+        // Section 1: Launch Sequence Timings (6 phases — Phase 3 runs Charge & Stream Fade simultaneously)
         animLaunchHeading = new TextView(this);
         animLaunchHeading.setText("LAUNCH SEQUENCE TIMINGS");
         animLaunchHeading.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f);
@@ -980,19 +1009,17 @@ public class ThemeStudioActivity extends AppCompatActivity {
         lhLp.topMargin = dp(12f);
         col.addView(animLaunchHeading, lhLp);
 
-        rowLaunchCloseMs = addSliderRow(col, "1. Launch Iris Close-In", 150, 1500, 25, 0, 30000, " ms",
+        rowLaunchCloseMs = addSliderRow(col, "1. Launch Iris Close & Coil", 150, 1500, 25, 0, 30000, " ms",
                 v -> { bundle.portalLaunchCloseMs = v; refreshAll(); });
         rowSonarHoldMs = addSliderRow(col, "2. Sonar Pulse Hold", 0, 2000, 50, 0, 30000, " ms",
                 v -> { bundle.portalSonarHoldMs = v; refreshAll(); });
-        rowReadyMs = addSliderRow(col, "3. Sonar \u2192 Ready Glow", 50, 1500, 25, 0, 30000, " ms",
+        rowReadyMs = addSliderRow(col, "3. Sonar \u2192 Ready Glow (Linear)", 50, 1500, 25, 0, 30000, " ms",
                 v -> { bundle.portalReadyMs = v; refreshAll(); });
-        rowChargeMs = addSliderRow(col, "4. Ready \u2192 Charge", 50, 1500, 25, 0, 30000, " ms",
+        rowChargeMs = addSliderRow(col, "4a. Ready \u2192 Charge (Linear)", 50, 2000, 25, 0, 30000, " ms",
                 v -> { bundle.portalChargeMs = v; refreshAll(); });
-        rowFadeMs = addSliderRow(col, "5. Stream Fade-In", 50, 1500, 25, 0, 30000, " ms",
+        rowFadeMs = addSliderRow(col, "4b. Stream Fade-In (Linear)", 50, 2000, 25, 0, 30000, " ms",
                 v -> { bundle.portalPreviewFadeMs = v; refreshAll(); });
-        rowHoldMs = addSliderRow(col, "6. Peephole Preview Hold", 0, 2000, 50, 0, 30000, " ms",
-                v -> { bundle.portalPreviewHoldMs = v; refreshAll(); });
-        rowExpandMs = addSliderRow(col, "7. Iris Wipe Expand Open", 150, 1800, 25, 0, 30000, " ms",
+        rowExpandMs = addSliderRow(col, "5. Iris Wipe Expand Open", 150, 1800, 25, 0, 30000, " ms",
                 v -> { bundle.portalExpandMs = v; refreshAll(); });
 
         // Section 2: Disconnect Sequence Timings (3 steps)
@@ -1012,14 +1039,14 @@ public class ThemeStudioActivity extends AppCompatActivity {
                             + bundle.portalDisconnectFadeMs + bundle.portalDisconnectOpenMs;
                     refreshAll();
                 });
-        rowDisconnectFadeMs = addSliderRow(col, "2. Stream \u2192 Starfield Fade", 100, 1500, 25, 0, 30000, " ms",
+        rowDisconnectFadeMs = addSliderRow(col, "2. Stream \u2192 Starfield Fade (Linear)", 100, 1500, 25, 0, 30000, " ms",
                 v -> {
                     bundle.portalDisconnectFadeMs = v;
                     bundle.portalDisconnectMs = bundle.portalDisconnectCloseMs
                             + bundle.portalDisconnectFadeMs + bundle.portalDisconnectOpenMs;
                     refreshAll();
                 });
-        rowDisconnectOpenMs = addSliderRow(col, "3. Iris Reopen to Menu", 100, 1500, 25, 0, 30000, " ms",
+        rowDisconnectOpenMs = addSliderRow(col, "3. Iris Uncoil to Menu", 100, 1500, 25, 0, 30000, " ms",
                 v -> {
                     bundle.portalDisconnectOpenMs = v;
                     bundle.portalDisconnectMs = bundle.portalDisconnectCloseMs
@@ -1318,22 +1345,21 @@ public class ThemeStudioActivity extends AppCompatActivity {
         updatePortalStageCenterOffset();
 
         if (!disconnectMode) {
-            // Exact 7-phase Launch state machine in milliseconds:
-            // 1. Launch Iris Close-In (1.0 -> 0.0 expand)
+            // Exact linear Launch state machine in milliseconds:
+            // 1. Launch Iris Close & Coil (1.0 -> 0.0 expand)
             // 2. Sonar Pulse Hold (0.0 expand, 0.0 ready, 0.0 charge, 0.0 preview)
-            // 3. Sonar -> Ready Glow (0.0 -> 1.0 ready)
-            // 4. Ready -> Charge (0.0 -> 1.0 charge)
-            // 5. Stream Fade-In (0.0 -> 1.0 preview)
-            // 6. Peephole Preview Hold (1.0 ready, 1.0 charge, 1.0 preview, 0.0 expand)
-            // 7. Iris Wipe Expand Open (0.0 -> 1.0 expand)
+            // 3. Sonar -> Ready Glow (Linear 0.0 -> 1.0 ready)
+            // 4. Simultaneous Ready -> Charge (Linear 0.0 -> 1.0) + Stream Fade-In (Linear 0.0 -> 1.0)
+            // 5. Iris Wipe Expand Open (0.0 -> 1.0 expand)
             final long t0 = Math.max(0L, bundle.portalLaunchCloseMs);
             final long t1 = t0 + Math.max(0L, bundle.portalSonarHoldMs);
             final long t2 = t1 + Math.max(0L, bundle.portalReadyMs);
-            final long t3 = t2 + Math.max(0L, bundle.portalChargeMs);
-            final long t4 = t3 + Math.max(0L, bundle.portalPreviewFadeMs);
-            final long t5 = t4 + Math.max(0L, bundle.portalPreviewHoldMs);
-            final long t6 = t5 + Math.max(0L, bundle.portalExpandMs);
-            final long totalMs = Math.max(100L, t6);
+            final long chargeDur = Math.max(0L, bundle.portalChargeMs);
+            final long fadeDur = Math.max(0L, bundle.portalPreviewFadeMs);
+            final long phase3Dur = Math.max(chargeDur, fadeDur);
+            final long t3 = t2 + phase3Dur;
+            final long t4 = t3 + Math.max(0L, bundle.portalExpandMs);
+            final long totalMs = Math.max(100L, t4);
 
             previewPortal.setUniforms(0f, 0f, 0f, 1f);
             irisAnimator = ValueAnimator.ofFloat(0f, (float) totalMs);
@@ -1347,29 +1373,23 @@ public class ThemeStudioActivity extends AppCompatActivity {
                 } else if (elapsed < t1) {
                     previewPortal.setUniforms(0f, 0f, 0f, 0f);
                 } else if (elapsed < t2) {
-                    float raw = (t2 > t1) ? ((elapsed - t1) / (float) (t2 - t1)) : 1f;
-                    float r = cubicOutEase.getInterpolation(Math.max(0f, Math.min(1f, raw)));
+                    float r = (t2 > t1) ? Math.max(0f, Math.min(1f, (elapsed - t1) / (float) (t2 - t1))) : 1f;
                     previewPortal.setUniforms(r, 0f, 0f, 0f);
                 } else if (elapsed < t3) {
-                    float raw = (t3 > t2) ? ((elapsed - t2) / (float) (t3 - t2)) : 1f;
-                    float c = cubicOutEase.getInterpolation(Math.max(0f, Math.min(1f, raw)));
-                    previewPortal.setUniforms(1f, c, 0f, 0f);
-                } else if (elapsed < t4) {
-                    float raw = (t4 > t3) ? ((elapsed - t3) / (float) (t4 - t3)) : 1f;
-                    float p = cubicOutEase.getInterpolation(Math.max(0f, Math.min(1f, raw)));
-                    previewPortal.setUniforms(1f, 1f, p, 0f);
-                } else if (elapsed < t5) {
-                    previewPortal.setUniforms(1f, 1f, 1f, 0f);
+                    float p3Elapsed = elapsed - t2;
+                    float c = chargeDur > 0L ? Math.max(0f, Math.min(1f, p3Elapsed / (float) chargeDur)) : 1f;
+                    float p = fadeDur > 0L ? Math.max(0f, Math.min(1f, p3Elapsed / (float) fadeDur)) : 1f;
+                    previewPortal.setUniforms(1f, c, p, 0f);
                 } else {
-                    float e = (t6 > t5) ? ((elapsed - t5) / (float) (t6 - t5)) : 1f;
-                    previewPortal.setUniforms(1f, 1f, 1f, Math.max(0f, Math.min(1f, e)));
+                    float e = (t4 > t3) ? Math.max(0f, Math.min(1f, (elapsed - t3) / (float) (t4 - t3))) : 1f;
+                    previewPortal.setUniforms(1f, 1f, 1f, e);
                 }
             });
         } else {
             // Exact 3-step Disconnect state machine in milliseconds:
             // 1. Disconnect Iris Close Over Stream (1.0 -> 0.0 expand, ready=1, charge=1, preview=1)
-            // 2. Stream -> Starfield Fade (1.0 -> 0.0 ready, charge & preview)
-            // 3. Iris Reopen to Menu (0.0 -> 1.0 expand)
+            // 2. Stream -> Starfield Fade (Linear 1.0 -> 0.0 ready, charge & preview)
+            // 3. Iris Uncoil to Menu (0.0 -> 1.0 expand)
             final long d1 = Math.max(0L, bundle.portalDisconnectCloseMs);
             final long d2 = d1 + Math.max(0L, bundle.portalDisconnectFadeMs);
             final long d3 = d2 + Math.max(0L, bundle.portalDisconnectOpenMs);
@@ -1386,7 +1406,7 @@ public class ThemeStudioActivity extends AppCompatActivity {
                     previewPortal.setUniforms(1f, 1f, 1f, 1f - Math.max(0f, Math.min(1f, prog)));
                 } else if (elapsed < d2) {
                     float raw = (d2 > d1) ? ((elapsed - d1) / (float) (d2 - d1)) : 1f;
-                    float v = 1f - cubicOutEase.getInterpolation(Math.max(0f, Math.min(1f, raw)));
+                    float v = 1f - Math.max(0f, Math.min(1f, raw));
                     previewPortal.setUniforms(v, v, v, 0f);
                 } else {
                     float e = (d3 > d2) ? ((elapsed - d2) / (float) (d3 - d2)) : 1f;
@@ -1609,15 +1629,21 @@ public class ThemeStudioActivity extends AppCompatActivity {
             stylePillButton(uiBatterySaverPills[i], active, p.accent, p.isLight);
         }
 
-        // Tab 3: Portal FX
+        // Tab 3: Portal FX + Energy Pulses
+        energyPulsesHeading.setTextColor(p.getSecondaryTextColor());
         SliderRow[] portalRows = {
                 rowParticleBright, rowParticleSize, rowParticleDensity,
-                rowRingGlow, rowPortalScale, rowSonarSpeed
+                rowRingGlow, rowPortalScale, rowSonarSpeed,
+                rowPulseAmount, rowPulseBrightness, rowPulseLength,
+                rowPulseSpeed, rowWaveAmp
         };
         int[] portalVals = {
                 bundle.portalParticleBrightnessPercent, bundle.portalParticleSizePercent,
                 bundle.portalParticleDensityPercent, bundle.portalGlowIntensityPercent,
-                bundle.portalWindowScalePercent, bundle.portalSonarSpeedPercent
+                bundle.portalWindowScalePercent, bundle.portalSonarSpeedPercent,
+                bundle.portalPulseAmount, bundle.portalPulseBrightnessPercent,
+                bundle.portalPulseLengthPercent, bundle.portalPulseSpeedPercent,
+                bundle.portalWaveAmpPercent
         };
         for (int i = 0; i < portalRows.length; i++) {
             portalRows[i].setValue(portalVals[i]);
@@ -1632,12 +1658,12 @@ public class ThemeStudioActivity extends AppCompatActivity {
         animDisconnectHeading.setTextColor(p.getSecondaryTextColor());
         SliderRow[] animRows = {
                 rowLaunchCloseMs, rowSonarHoldMs, rowReadyMs,
-                rowChargeMs, rowFadeMs, rowHoldMs, rowExpandMs,
+                rowChargeMs, rowFadeMs, rowExpandMs,
                 rowDisconnectCloseMs, rowDisconnectFadeMs, rowDisconnectOpenMs
         };
         int[] animVals = {
                 bundle.portalLaunchCloseMs, bundle.portalSonarHoldMs, bundle.portalReadyMs,
-                bundle.portalChargeMs, bundle.portalPreviewFadeMs, bundle.portalPreviewHoldMs, bundle.portalExpandMs,
+                bundle.portalChargeMs, bundle.portalPreviewFadeMs, bundle.portalExpandMs,
                 bundle.portalDisconnectCloseMs, bundle.portalDisconnectFadeMs, bundle.portalDisconnectOpenMs
         };
         for (int i = 0; i < animRows.length; i++) {

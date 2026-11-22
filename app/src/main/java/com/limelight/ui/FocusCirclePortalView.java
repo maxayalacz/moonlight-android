@@ -368,44 +368,52 @@ public class FocusCirclePortalView extends View {
         int saveCount = canvas.save();
         canvas.clipPath(circleClipPath);
 
-        View backdropView = null;
-        Bitmap blurred = null;
-        PortalShaderView portal = resolvePortalView();
-        if (portal != null) {
-            backdropView = portal;
-            blurred = portal.getBlurredBitmap();
-        }
-        if (backdropView == null || blurred == null) {
-            FlowingAuroraView aurora = resolveAuroraView();
-            if (aurora != null) {
-                backdropView = aurora;
-                blurred = aurora.getBlurredFieldBitmap();
+        boolean batterySaverSolid = PreferenceConfiguration.isUiBatterySaverEffective(getContext());
+        if (!batterySaverSolid) {
+            View backdropView = null;
+            Bitmap blurred = null;
+            PortalShaderView portal = resolvePortalView();
+            if (portal != null) {
+                backdropView = portal;
+                blurred = portal.getBlurredBitmap();
             }
-        }
-        if (backdropView != null && backdropView.getWidth() > 0 && backdropView.getHeight() > 0
-                && blurred != null && !blurred.isRecycled()) {
-            getLocationInWindow(hostLoc);
-            backdropView.getLocationInWindow(auroraLoc);
-            float relX = (hostLoc[0] - auroraLoc[0]) + (cx - innerRadius);
-            float relY = (hostLoc[1] - auroraLoc[1]) + (cy - innerRadius);
-            float diameter = innerRadius * 2f;
-            float sx = blurred.getWidth() / (float) backdropView.getWidth();
-            float sy = blurred.getHeight() / (float) backdropView.getHeight();
-            auroraSrcRect.set(
-                    Math.max(0, Math.round(relX * sx)),
-                    Math.max(0, Math.round(relY * sy)),
-                    Math.min(blurred.getWidth(), Math.round((relX + diameter) * sx)),
-                    Math.min(blurred.getHeight(), Math.round((relY + diameter) * sy)));
-            if (!auroraSrcRect.isEmpty()) {
-                circleDstRect.set(cx - innerRadius, cy - innerRadius, cx + innerRadius, cy + innerRadius);
-                canvas.drawBitmap(blurred, auroraSrcRect, circleDstRect, frostedBitmapPaint);
+            if (backdropView == null || blurred == null) {
+                FlowingAuroraView aurora = resolveAuroraView();
+                if (aurora != null) {
+                    backdropView = aurora;
+                    blurred = aurora.getBlurredFieldBitmap();
+                }
             }
+            if (backdropView != null && backdropView.getWidth() > 0 && backdropView.getHeight() > 0
+                    && blurred != null && !blurred.isRecycled()) {
+                getLocationInWindow(hostLoc);
+                backdropView.getLocationInWindow(auroraLoc);
+                float relX = (hostLoc[0] - auroraLoc[0]) + (cx - innerRadius);
+                float relY = (hostLoc[1] - auroraLoc[1]) + (cy - innerRadius);
+                float diameter = innerRadius * 2f;
+                float sx = blurred.getWidth() / (float) backdropView.getWidth();
+                float sy = blurred.getHeight() / (float) backdropView.getHeight();
+                auroraSrcRect.set(
+                        Math.max(0, Math.round(relX * sx)),
+                        Math.max(0, Math.round(relY * sy)),
+                        Math.min(blurred.getWidth(), Math.round((relX + diameter) * sx)),
+                        Math.min(blurred.getHeight(), Math.round((relY + diameter) * sy)));
+                if (!auroraSrcRect.isEmpty()) {
+                    circleDstRect.set(cx - innerRadius, cy - innerRadius, cx + innerRadius, cy + innerRadius);
+                    canvas.drawBitmap(blurred, auroraSrcRect, circleDstRect, frostedBitmapPaint);
+                }
+            }
+            // Frosted glass tint + ambient radial interior + vignette
+            canvas.drawCircle(cx, cy, innerRadius, frostedTintPaint);
+            canvas.drawCircle(cx, cy, innerRadius, interiorPaint);
+            canvas.drawCircle(cx, cy, innerRadius, vignettePaint);
+        } else {
+            int savedColor = frostedTintPaint.getColor();
+            frostedTintPaint.setColor(palette.surface | 0xFF000000);
+            canvas.drawCircle(cx, cy, innerRadius, frostedTintPaint);
+            frostedTintPaint.setColor(savedColor);
+            canvas.drawCircle(cx, cy, innerRadius, interiorPaint);
         }
-
-        // Dark frosted glass tint + ambient radial interior + vignette
-        canvas.drawCircle(cx, cy, innerRadius, frostedTintPaint);
-        canvas.drawCircle(cx, cy, innerRadius, interiorPaint);
-        canvas.drawCircle(cx, cy, innerRadius, vignettePaint);
         canvas.restoreToCount(saveCount);
 
         // 4. Center PC emblem

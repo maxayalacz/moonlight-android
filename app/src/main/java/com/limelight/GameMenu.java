@@ -537,12 +537,11 @@ public class GameMenu implements Game.GameMenuCallbacks {
             }
 
             boolean matteFallback = !drewBlur && blurController.isBatterySaver();
-            int tintColor = palette.getQuickMenuCardTint(drewBlur || (blurController.blurPct <= 0 && !matteFallback));
+            int tintColor;
             if (matteFallback) {
-                int matteMinAlpha = palette.isLight ? 0xEA : 0xDE;
-                if ((tintColor >>> 24) < matteMinAlpha) {
-                    tintColor = AppThemePalette.withAlphaInt(tintColor, matteMinAlpha);
-                }
+                tintColor = palette.surface | 0xFF000000;
+            } else {
+                tintColor = palette.getQuickMenuCardTint(drewBlur || blurController.blurPct <= 0);
             }
             if ((tintColor >>> 24) > 0) {
                 fillPaint.setColor(tintColor);

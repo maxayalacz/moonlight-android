@@ -434,7 +434,7 @@ public class PortalConnectionOverlay extends FrameLayout {
         cancelActiveAnimator();
         activeAnimator = ValueAnimator.ofFloat(shaderView.getReadyMix(), 1f);
         activeAnimator.setDuration(phase2ReadyMs);
-        activeAnimator.setInterpolator(new PathInterpolator(0.22f, 1f, 0.36f, 1f));
+        activeAnimator.setInterpolator(new LinearInterpolator());
         activeAnimator.addUpdateListener(anim -> shaderView.setReadyMix((float) anim.getAnimatedValue()));
         activeAnimator.addListener(new AnimatorListenerAdapter() {
             private boolean canceled = false;
@@ -450,39 +450,6 @@ public class PortalConnectionOverlay extends FrameLayout {
                     return;
                 }
                 shaderView.setReadyMix(1f);
-                startPhase3Charge();
-            }
-        });
-        activeAnimator.start();
-    }
-
-    /**
-     * Phase 3a — Ready -> Charge transition (ring Highlight glow + sweeping rim arcs).
-     */
-    private void startPhase3Charge() {
-        if (!active || disconnecting || canceling || phase3ChargeStarted) {
-            return;
-        }
-        phase3ChargeStarted = true;
-        cancelActiveAnimator();
-        activeAnimator = ValueAnimator.ofFloat(shaderView.getChargeMix(), 1f);
-        activeAnimator.setDuration(phase3ChargeMs);
-        activeAnimator.setInterpolator(new PathInterpolator(0.22f, 1f, 0.36f, 1f));
-        activeAnimator.addUpdateListener(anim -> shaderView.setChargeMix((float) anim.getAnimatedValue()));
-        activeAnimator.addListener(new AnimatorListenerAdapter() {
-            private boolean canceled = false;
-
-            @Override
-            public void onAnimationCancel(Animator animation) {
-                canceled = true;
-            }
-
-            @Override
-            public void onAnimationEnd(Animator animation) {
-                if (canceled || !active || disconnecting || canceling) {
-                    return;
-                }
-                shaderView.setChargeMix(1f);
                 phase3ChargeCompleted = true;
                 if (firstFrameReceived) {
                     startPhase3();
@@ -511,16 +478,17 @@ public class PortalConnectionOverlay extends FrameLayout {
     }
 
     /**
-     * Phase 3b — Stream Fade-In (Live Stream Peephole reveal).
+     * Phase 3 — Simultaneous linear Ready -> Charge + Stream Fade-In flowing straight into Phase 4.
      */
     private void startPhase3() {
         if (!active || disconnecting || canceling || phase3Started) {
             return;
         }
         phase3Started = true;
+        phase3ChargeStarted = true;
         mainHandler.removeCallbacks(firstFrameFallbackRunnable);
 
-        // Fade all HUD elements to 0 alpha smoothly
+        // Fade all HUD elements to 0 alpha smoothly at the start of Phase 3
         PathInterpolator fadeOut = new PathInterpolator(0.4f, 0f, 1f, 1f);
         topHudContainer.animate()
                 .alpha(0f)
@@ -536,15 +504,34 @@ public class PortalConnectionOverlay extends FrameLayout {
                 .withEndAction(() -> cancelButton.setVisibility(GONE))
                 .start();
 
-        // Pass input through as soon as the live peephole opens
+        // Pass input through as soon as the live peephole begins opening
         setClickable(false);
         setFocusable(false);
 
+        final long chargeDur = Math.max(0L, phase3ChargeMs);
+        final long fadeDur = Math.max(0L, phase3PreviewFadeMs);
+        final long totalPhase3Ms = Math.max(chargeDur, fadeDur);
+
         cancelActiveAnimator();
-        activeAnimator = ValueAnimator.ofFloat(shaderView.getPreviewMix(), 1f);
-        activeAnimator.setDuration(phase3PreviewFadeMs);
-        activeAnimator.setInterpolator(new PathInterpolator(0.22f, 1f, 0.36f, 1f));
-        activeAnimator.addUpdateListener(anim -> shaderView.setPreviewMix((float) anim.getAnimatedValue()));
+        if (totalPhase3Ms <= 0L) {
+            shaderView.setChargeMix(1f);
+            shaderView.setPreviewMix(1f);
+            startPhase4();
+            return;
+        }
+
+        final float startCharge = shaderView.getChargeMix();
+        final float startPreview = shaderView.getPreviewMix();
+        activeAnimator = ValueAnimator.ofFloat(0f, (float) totalPhase3Ms);
+        activeAnimator.setDuration(totalPhase3Ms);
+        activeAnimator.setInterpolator(new LinearInterpolator());
+        activeAnimator.addUpdateListener(anim -> {
+            float elapsed = (float) anim.getAnimatedValue();
+            float cT = chargeDur > 0L ? Math.max(0f, Math.min(1f, elapsed / (float) chargeDur)) : 1f;
+            float pT = fadeDur > 0L ? Math.max(0f, Math.min(1f, elapsed / (float) fadeDur)) : 1f;
+            shaderView.setChargeMix(startCharge + (1f - startCharge) * cT);
+            shaderView.setPreviewMix(startPreview + (1f - startPreview) * pT);
+        });
         activeAnimator.addListener(new AnimatorListenerAdapter() {
             private boolean canceled = false;
 
@@ -558,12 +545,9 @@ public class PortalConnectionOverlay extends FrameLayout {
                 if (canceled || !active || disconnecting || canceling) {
                     return;
                 }
+                shaderView.setChargeMix(1f);
                 shaderView.setPreviewMix(1f);
-                if (phase3HoldMs <= 0L) {
-                    startPhase4();
-                } else {
-                    mainHandler.postDelayed(phase3HoldRunnable, phase3HoldMs);
-                }
+                startPhase4();
             }
         });
         activeAnimator.start();
@@ -672,7 +656,7 @@ public class PortalConnectionOverlay extends FrameLayout {
      * Bidirectional Disconnect / Close Sequence (Live Stream -> App Menu):
      *  - Wait for first transparent GL frame so Step 1 starts smoothly from expand = 1.0
      *  - Step 1: Iris close over live stream (u_expandProgress 1 -> 0, preview & charge & ready = 1)
-     *  - Step 2: Fade back to starfield (u_previewMix & u_chargeMix & u_readyMix 1 -> 0)
+     *  - Step 2: Fade back to starfield (u_previewMix & u_chargeMix & u_readyMix 1 -> 0, LinearInterpolator)
      *  - Step 3: Iris open to full-screen synced starfield (u_expandProgress 0 -> 1) + capture handoff
      * Keeps the overlay opaque holding the full-screen starfield through Game.finish() so the
      * underlying video SurfaceView never flashes a frame during window teardown.
@@ -754,10 +738,10 @@ public class PortalConnectionOverlay extends FrameLayout {
     }
 
     private void runDisconnectStep2(@Nullable final Runnable onComplete) {
-        // Step 2: Fade Back to Starfield
+        // Step 2: Linearly fade back to starfield
         activeAnimator = ValueAnimator.ofFloat(1f, 0f);
         activeAnimator.setDuration(disconnectStep2FadeStarfieldMs);
-        activeAnimator.setInterpolator(new PathInterpolator(0.22f, 1f, 0.36f, 1f));
+        activeAnimator.setInterpolator(new LinearInterpolator());
         activeAnimator.addUpdateListener(a -> {
             float v = (float) a.getAnimatedValue();
             shaderView.setPreviewMix(v);

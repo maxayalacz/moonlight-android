@@ -646,7 +646,9 @@ public class FlowingAuroraView extends View {
             View host = hostViewRef.get();
             PortalShaderView portal = portalRef.get();
             FlowingAuroraView aurora = auroraRef.get();
-            if (host != null && portal != null && portal.getWidth() > 0 && portal.getHeight() > 0) {
+            boolean batterySaverSolid = host != null
+                    && com.limelight.preferences.PreferenceConfiguration.isUiBatterySaverEffective(host.getContext());
+            if (!batterySaverSolid && host != null && portal != null && portal.getWidth() > 0 && portal.getHeight() > 0) {
                 Bitmap blurred = portal.getBlurredBitmap();
                 if (blurred != null && !blurred.isRecycled()) {
                     host.getLocationInWindow(hostLoc);
@@ -664,7 +666,7 @@ public class FlowingAuroraView extends View {
                         canvas.drawBitmap(blurred, srcRect, rectF, bitmapPaint);
                     }
                 }
-            } else if (host != null && aurora != null && aurora.getWidth() > 0 && aurora.getHeight() > 0) {
+            } else if (!batterySaverSolid && host != null && aurora != null && aurora.getWidth() > 0 && aurora.getHeight() > 0) {
                 host.getLocationInWindow(hostLoc);
                 aurora.getLocationInWindow(auroraLoc);
                 int relX = hostLoc[0] - auroraLoc[0];
@@ -681,8 +683,15 @@ public class FlowingAuroraView extends View {
                 }
             }
 
-            // Dark midnight glass tint overlay
-            canvas.drawRect(rectF, tintPaint);
+            if (batterySaverSolid) {
+                int savedColor = tintPaint.getColor();
+                tintPaint.setColor(savedColor | 0xFF000000);
+                canvas.drawRect(rectF, tintPaint);
+                tintPaint.setColor(savedColor);
+            } else {
+                // Glass tint overlay
+                canvas.drawRect(rectF, tintPaint);
+            }
             canvas.restoreToCount(saveCount);
 
             // Clean uniform rim stroke (omitted when global card outline is 0%)
