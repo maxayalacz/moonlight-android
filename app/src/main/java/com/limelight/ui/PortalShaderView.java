@@ -134,6 +134,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "uniform float u_previewMix;\n" +
             "uniform float u_expandProgress;\n" +
             "uniform float u_pulseMorph;\n" +
+            "uniform float u_isDisconnecting;\n" +
             "uniform float u_portalScale;\n" +
             "uniform float u_glowIntensity;\n" +
             "uniform float u_particleBrightness;\n" +
@@ -160,6 +161,10 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "const float PI  = 3.14159265359;\n" +
             "const float TAU = 6.28318530718;\n" +
             "\n" +
+            "float safePow(float x, float p) {\n" +
+            "    return x <= 0.0 ? 0.0 : pow(x, p);\n" +
+            "}\n" +
+            "\n" +
             "vec2 hash22(vec2 p) {\n" +
             "    vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));\n" +
             "    p3 += dot(p3, p3.yzx + 33.33);\n" +
@@ -172,7 +177,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "}\n" +
             "\n" +
             "float easeInOutCubic(float t) {\n" +
-            "    return t < 0.5 ? 4.0 * t * t * t : 1.0 - pow(-2.0 * t + 2.0, 3.0) * 0.5;\n" +
+            "    return t < 0.5 ? 4.0 * t * t * t : 1.0 - safePow(-2.0 * t + 2.0, 3.0) * 0.5;\n" +
             "}\n" +
             "\n" +
             "vec3 sampleParticles(vec2 uv, float time) {\n" +
@@ -236,51 +241,90 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "    return col;\n" +
             "}\n" +
             "\n" +
-            "float evalComet(float sVal, float dir, float speed, float span, float phaseOff, float headLen, float tailLen, float time) {\n" +
-            "    float pos = fract((sVal * dir - time * speed) / span + phaseOff);\n" +
+            "float evalCometPhase(float pos, float headLen, float tailLen) {\n" +
             "    float rel = fract(pos + 0.5) - 0.5;\n" +
             "    if (rel > headLen || rel < -tailLen) return 0.0;\n" +
             "    float ahead = 1.0 - smoothstep(0.0, headLen, rel);\n" +
-            "    float tail  = pow(smoothstep(-tailLen, 0.0, rel), 1.65);\n" +
+            "    float tail  = safePow(smoothstep(-tailLen, 0.0, rel), 1.65);\n" +
             "    return ahead * tail;\n" +
             "}\n" +
             "\n" +
-            "// --- Motion-Graphics Morph: Invisible Waving Paths Coil Into the Closing Iris Rim ---\n" +
-            "// morph = 0.0 (open menu waving paths) -> 1.0 (coiled onto exact iris circle d == radius)\n" +
-            "vec3 sampleMorphingEnergyPaths(vec2 uv, float radius, float morph, float readyT, vec3 rimHaloCol, vec3 rimCoreCol, float time) {\n" +
+            "// --- Combined Bidirectional Spiral Morph ---\n" +
+            "// Launch (u_isDisconnecting == 0): rapid center capture + multi-turn inward tightening onto baseRadius\n" +
+            "// Disconnect (u_isDisconnecting == 1): fast forward peel-off + curvature ease-out settling onto menu paths\n" +
+            "vec3 sampleSpiralingEnergyPaths(vec2 uv, float baseRadius, float morph, float readyT, vec3 rimHaloCol, vec3 rimCoreCol, float time) {\n" +
             "    if (u_pulseBrightness <= 0.001 || u_pulseAmount <= 0.001) return vec3(0.0);\n" +
             "\n" +
-            "    float handoffFade = 1.0 - smoothstep(0.86, 1.0, morph);\n" +
+            "    float m = clamp(morph, 0.0, 1.0);\n" +
+            "    bool isDisc = (u_isDisconnecting > 0.5);\n" +
+            "\n" +
+            "    float handoffFade = isDisc\n" +
+            "        ? (1.0 - smoothstep(0.90, 1.0, m))\n" +
+            "        : (1.0 - smoothstep(0.88, 1.0, m));\n" +
             "    if (handoffFade <= 0.001) return vec3(0.0);\n" +
+            "\n" +
+            "    float dirSign = isDisc ? 1.0 : -1.0;\n" +
             "\n" +
             "    vec3 col = vec3(0.0);\n" +
             "\n" +
-            "    const float BASE_ANGLES[10]  = float[10](-0.38,  0.32,  1.12, -1.04,  0.07, -0.68,  0.76, -1.42,  0.54, -0.18);\n" +
-            "    const float BASE_OFFSETS[10] = float[10](-0.30,  0.26, -0.18,  0.22, -0.02,  0.34, -0.34,  0.08, -0.12,  0.40);\n" +
-            "    const float DIRECTIONS[10]   = float[10]( 1.0,  -1.0,   1.0,  -1.0,   1.0,  -1.0,   1.0,  -1.0,   1.0,  -1.0);\n" +
+            "    const float BASE_ANGLES[10]  = float[10](-0.38,  2.76,  1.12, -2.02,  0.07, -0.68,  2.46, -1.42,  0.54, -2.96);\n" +
+            "    const float BASE_OFFSETS[10] = float[10]( 0.28,  0.24,  0.18,  0.22,  0.06,  0.34,  0.32,  0.10,  0.14,  0.38);\n" +
             "\n" +
-            "    float m = easeInOutCubic(clamp(morph, 0.0, 1.0));\n" +
-            "    float invM = 1.0 - m;\n" +
+            "    float tCurve  = smoothstep(0.0, 0.45, m);\n" +
+            "    float launchL = 40.0 * safePow(1.0 - tCurve, 3.4);\n" +
+            "    float discK   = safePow(m, 2.35);\n" +
             "\n" +
-            "    // Continuous curvature morph: L = 45 (waving lines) -> L = 0 (exact iris circle)\n" +
-            "    float L = 45.0 * pow(invM, 3.2);\n" +
-            "    float waveFade = 1.0 - smoothstep(0.05, 0.78, m);\n" +
-            "    float targetBlend = smoothstep(0.0, 0.90, m);\n" +
-            "    float ringFuse = smoothstep(0.45, 0.94, m);\n" +
+            "    float pitch = isDisc\n" +
+            "        ? ((1.0 - smoothstep(0.74, 0.98, m)) * safePow(m, 2.0) * 1.75 * 0.056)\n" +
+            "        : (smoothstep(0.08, 0.36, m) * safePow(1.0 - smoothstep(0.32, 0.97, m), 1.45) * 0.056);\n" +
+            "\n" +
+            "    float thetaLimit = isDisc\n" +
+            "        ? mix(0.85 * PI, 3.65 * PI, safePow(m, 1.85))\n" +
+            "        : mix(0.85 * PI, 3.65 * PI, smoothstep(0.18, 0.62, m));\n" +
+            "\n" +
+            "    float waveFade = isDisc\n" +
+            "        ? (1.0 - safePow(m, 2.2))\n" +
+            "        : (1.0 - smoothstep(0.04, 0.55, m));\n" +
+            "\n" +
+            "    float targetBlend = isDisc\n" +
+            "        ? safePow(m, 2.1)\n" +
+            "        : smoothstep(0.0, 0.55, m);\n" +
+            "\n" +
+            "    float ringFuse = isDisc\n" +
+            "        ? smoothstep(0.76, 0.97, m)\n" +
+            "        : smoothstep(0.68, 0.96, m);\n" +
             "\n" +
             "    float activeCount = clamp(u_pulseAmount, 1.0, 10.0);\n" +
-            "    float stackNorm = mix(1.0, 1.0 / max(1.0, activeCount * 0.55), smoothstep(0.45, 0.95, m));\n" +
+            "    float stackNorm = isDisc\n" +
+            "        ? mix(1.0, 1.0 / max(1.0, activeCount * 0.58), smoothstep(0.62, 0.97, m))\n" +
+            "        : mix(1.0, 1.0 / max(1.0, activeCount * 0.58), smoothstep(0.55, 0.96, m));\n" +
             "\n" +
-            "    float coreBaseW = mix(0.0025, 0.0048, m);\n" +
-            "    float haloBaseW = mix(0.0216, 0.0360, m);\n" +
+            "    float glowMorph  = isDisc ? safePow(m, 2.0) : smoothstep(0.4, 1.0, m);\n" +
+            "    float coreBaseW  = mix(0.00234, 0.0046, glowMorph);\n" +
+            "    float haloBaseW  = mix(0.02025, 0.0360, glowMorph);\n" +
             "    float rejectDist = haloBaseW * 6.5;\n" +
             "\n" +
             "    float baseTail = clamp(0.16 * u_pulseLength, 0.035, 0.44);\n" +
             "    float baseHead = clamp(0.022 * sqrt(max(0.1, u_pulseLength)), 0.008, 0.06);\n" +
-            "    float curTail = mix(baseTail, 0.48, smoothstep(0.25, 0.88, m));\n" +
-            "    float curHead = mix(baseHead, 0.14, smoothstep(0.25, 0.88, m));\n" +
+            "    float stretchT = isDisc ? safePow(m, 2.2) : smoothstep(0.40, 0.92, m);\n" +
+            "    float curTail  = mix(baseTail, 0.46, stretchT);\n" +
+            "    float curHead  = mix(baseHead, 0.14, stretchT);\n" +
             "\n" +
-            "    float swirlTwist = m * 1.15;\n" +
+            "    float frameSpin = isDisc\n" +
+            "        ? (1.35 * safePow(m, 2.8))\n" +
+            "        : (-1.35 * easeInOutCubic(m));\n" +
+            "\n" +
+            "    float chaseOffset = isDisc\n" +
+            "        ? (1.0 - safePow(m, 2.9))\n" +
+            "        : safePow(m, 1.8);\n" +
+            "\n" +
+            "    float spanScale = isDisc\n" +
+            "        ? mix(1.0, 0.76, safePow(m, 2.2))\n" +
+            "        : mix(1.0, 0.72, smoothstep(0.35, 0.90, m));\n" +
+            "\n" +
+            "    const float SOFT_K    = 0.62;\n" +
+            "    const float SOFT_KNEE = 1.25;\n" +
+            "    int kStart = isDisc ? -1 : -2;\n" +
             "\n" +
             "    for (int i = 0; i < 10; i++) {\n" +
             "        float fi = float(i);\n" +
@@ -289,60 +333,93 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "\n" +
             "        vec2 rnd = hash22(vec2(fi * 5.31 + 1.7, 13.37 + fi * 2.1));\n" +
             "\n" +
-            "        float dir = DIRECTIONS[i];\n" +
             "        float ang = BASE_ANGLES[i]\n" +
             "                  + sin(time * (0.045 + rnd.x * 0.025) + fi * 1.9) * 0.16 * waveFade\n" +
-            "                  + swirlTwist * dir * (0.65 + 0.35 * rnd.x);\n" +
+            "                  + frameSpin * (0.85 + 0.30 * rnd.x);\n" +
             "\n" +
             "        vec2 p = rot2d(ang) * uv;\n" +
             "\n" +
-            "        float targetY = mix(BASE_OFFSETS[i], radius, targetBlend);\n" +
-            "        float Rc = max(0.06, L + targetY);\n" +
+            "        float targetR = mix(BASE_OFFSETS[i], baseRadius, targetBlend);\n" +
+            "        float Rc;\n" +
+            "        float L;\n" +
+            "        if (isDisc) {\n" +
+            "            float kappa = mix(1.0 / (40.0 + targetR), 1.0 / max(targetR, 0.05), discK);\n" +
+            "            Rc = 1.0 / kappa;\n" +
+            "            L  = max(0.0, Rc - targetR);\n" +
+            "        } else {\n" +
+            "            L  = launchL;\n" +
+            "            Rc = L + targetR;\n" +
+            "        }\n" +
             "\n" +
             "        vec2 v = vec2(p.x, p.y + L);\n" +
             "        float rLocal = length(v);\n" +
             "        float phi = atan(v.x, v.y);\n" +
-            "        float s = phi * Rc;\n" +
+            "\n" +
+            "        float baseSpan = mix(3.6, 5.0, rnd.y);\n" +
+            "        float curSpan  = baseSpan * spanScale;\n" +
+            "        float speed    = mix(0.28, 0.50, rnd.x) * u_pulseSpeed;\n" +
+            "        float baseFreq = speed / baseSpan;\n" +
+            "        float phaseOff = fi * 0.143 + rnd.x * 0.4;\n" +
             "\n" +
             "        float f1 = mix(1.45, 2.35, rnd.x);\n" +
             "        float f2 = mix(2.80, 4.10, rnd.y);\n" +
             "        float a1 = mix(0.075, 0.130, rnd.y) * u_waveAmp * waveFade;\n" +
             "        float a2 = mix(0.028, 0.055, rnd.x) * u_waveAmp * waveFade;\n" +
-            "\n" +
-            "        float ph1 = s * f1 + time * (0.24 + rnd.x * 0.14) + fi * 2.3;\n" +
-            "        float ph2 = s * f2 - time * (0.18 + rnd.y * 0.12) + fi * 4.1;\n" +
-            "\n" +
             "        float driftY = sin(time * (0.09 + rnd.y * 0.05) + fi * 2.7) * 0.06 * u_waveAmp * waveFade;\n" +
-            "        float waveY  = driftY + sin(ph1) * a1 + sin(ph2) * a2;\n" +
             "\n" +
-            "        float dyds = cos(ph1) * f1 * a1 + cos(ph2) * f2 * a2;\n" +
-            "        float dist = abs((rLocal - Rc) - waveY) * inversesqrt(1.0 + dyds * dyds);\n" +
+            "        vec3 strandCol = vec3(0.0);\n" +
             "\n" +
-            "        if (dist > rejectDist) continue;\n" +
+            "        for (int j = 0; j < 4; j++) {\n" +
+            "            int k = kStart + j;\n" +
+            "            float theta = phi + TAU * float(k);\n" +
             "\n" +
-            "        float span = mix(3.6, 5.2, rnd.y);\n" +
-            "        float speed = mix(0.28, 0.52, rnd.x) * u_pulseSpeed;\n" +
-            "        float phaseOff = fi * 0.143 + rnd.x * 0.4;\n" +
+            "            float endFade = 1.0 - smoothstep(thetaLimit - 0.85, thetaLimit, abs(theta));\n" +
+            "            if (endFade <= 0.001) continue;\n" +
             "\n" +
-            "        float e0 = evalComet(s, dir, speed, span, phaseOff, curHead, curTail, time);\n" +
-            "        float C = TAU * Rc;\n" +
-            "        float eWrap = (C < span * 1.25)\n" +
-            "            ? evalComet(s - sign(s) * C, dir, speed, span, phaseOff, curHead, curTail, time)\n" +
-            "            : 0.0;\n" +
-            "        float cometE = max(e0, eWrap);\n" +
+            "            float x = clamp(dirSign * SOFT_K * (theta + dirSign * SOFT_KNEE), -16.0, 16.0);\n" +
+            "            float soft = (x > 10.0) ? x : log(1.0 + exp(x));\n" +
+            "            float spiralDr = pitch * (soft / SOFT_K);\n" +
             "\n" +
-            "        float energy = mix(cometE, 1.0, ringFuse);\n" +
-            "        if (energy < 0.002) continue;\n" +
+            "            float rBase = Rc + spiralDr;\n" +
+            "            if (abs(rLocal - rBase) > rejectDist + 0.22 * waveFade) continue;\n" +
             "\n" +
-            "        float taper = mix(0.45, 1.0, pow(energy, 0.45));\n" +
-            "        float core  = exp(-dist / (coreBaseW * taper));\n" +
-            "        float halo  = exp(-dist / (haloBaseW * taper)) * 0.78;\n" +
+            "            float s = theta * Rc;\n" +
             "\n" +
-            "        float shimmer = 0.90 + 0.10 * sin(time * 3.1 + fi * 2.4);\n" +
-            "        float coreGain = mix(1.10, mix(0.25, 1.20, readyT), ringFuse);\n" +
-            "        vec3 pulseCol = rimHaloCol * halo + rimCoreCol * core * coreGain;\n" +
+            "            float waveY = 0.0;\n" +
+            "            float dyds  = 0.0;\n" +
+            "            if (waveFade > 0.001) {\n" +
+            "                float ph1 = s * f1 + time * (0.24 + rnd.x * 0.14) + fi * 2.3;\n" +
+            "                float ph2 = s * f2 - time * (0.18 + rnd.y * 0.12) + fi * 4.1;\n" +
+            "                waveY = driftY + sin(ph1) * a1 + sin(ph2) * a2;\n" +
+            "                dyds  = cos(ph1) * f1 * a1 + cos(ph2) * f2 * a2;\n" +
+            "            }\n" +
             "\n" +
-            "        col += pulseCol * energy * shimmer * u_pulseBrightness * pathAlpha * stackNorm;\n" +
+            "            float rCurve = rBase + waveY;\n" +
+            "\n" +
+            "            float sig = 1.0 / (1.0 + exp(-x));\n" +
+            "            float dSpiralDTheta = dirSign * pitch * sig;\n" +
+            "            float slope = (dSpiralDTheta / max(rCurve, 0.06)) + dyds;\n" +
+            "            float dist = abs(rLocal - rCurve) * inversesqrt(1.0 + slope * slope);\n" +
+            "\n" +
+            "            if (dist > rejectDist) continue;\n" +
+            "\n" +
+            "            float pos = fract(s / curSpan - time * baseFreq - chaseOffset + phaseOff);\n" +
+            "            float cometE = evalCometPhase(pos, curHead, curTail);\n" +
+            "            float energy = mix(cometE, 1.0, ringFuse) * endFade;\n" +
+            "            if (energy < 0.002) continue;\n" +
+            "\n" +
+            "            float taper = mix(0.45, 1.0, safePow(energy, 0.45));\n" +
+            "            float core  = exp(-dist / (coreBaseW * taper));\n" +
+            "            float halo  = exp(-dist / (haloBaseW * taper)) * 0.78;\n" +
+            "\n" +
+            "            float shimmer = 0.90 + 0.10 * sin(time * 3.1 + fi * 2.4);\n" +
+            "            float coreGain = mix(1.10, mix(0.28, 1.20, readyT), ringFuse);\n" +
+            "            vec3 turnCol = (rimHaloCol * halo + rimCoreCol * core * coreGain) * energy * shimmer;\n" +
+            "\n" +
+            "            strandCol = max(strandCol, turnCol);\n" +
+            "        }\n" +
+            "\n" +
+            "        col += strandCol * u_pulseBrightness * pathAlpha * stackNorm;\n" +
             "    }\n" +
             "\n" +
             "    return col * handoffFade;\n" +
@@ -359,11 +436,14 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "    float chargeT  = clamp(u_chargeMix, 0.0, 1.0);\n" +
             "    float previewT = clamp(u_previewMix, 0.0, 1.0);\n" +
             "    float expandT  = clamp(u_expandProgress, 0.0, 1.0);\n" +
+            "    bool  isDisc   = (u_isDisconnecting > 0.5);\n" +
             "\n" +
             "    float halfDiag = length(0.5 * u_resolution / minDim) + length(u_portalCenterOffset);\n" +
             "    float maxRadius = halfDiag + 0.18;\n" +
             "    float baseRadius = 0.25 * clamp(u_portalScale, 0.2, 4.0);\n" +
-            "    float expandEase = easeInOutCubic(expandT);\n" +
+            "    float expandEase = (isDisc && previewT < 0.5)\n" +
+            "        ? (1.0 - safePow(1.0 - expandT, 2.6))\n" +
+            "        : easeInOutCubic(expandT);\n" +
             "    float radius = mix(baseRadius, maxRadius, expandEase);\n" +
             "\n" +
             "    float aa = 2.0 / minDim;\n" +
@@ -402,11 +482,11 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "        particles = sampleParticles(uv, u_time) * particleVis * u_particleBrightness;\n" +
             "    }\n" +
             "\n" +
-            "    // --- 4. Motion-Graphics Morphing Energy Pulses (Independent Coil -> Iris, Uncoil on Open) ---\n" +
+            "    // --- 4. Bidirectional Forward-Flowing Spiral Pulses ---\n" +
             "    float morph = clamp(u_pulseMorph, 0.0, 1.0);\n" +
             "    vec3 menuPulses = vec3(0.0);\n" +
             "    if (innerAlpha > 0.001) {\n" +
-            "        menuPulses = sampleMorphingEnergyPaths(portalUv, radius, morph, readyT, haloColor, colCore, u_time) * innerAlpha;\n" +
+            "        menuPulses = sampleSpiralingEnergyPaths(portalUv, baseRadius, morph, readyT, haloColor, colCore, u_time) * innerAlpha;\n" +
             "    }\n" +
             "\n" +
             "    // --- 5-7. Portal Sonar, Ring & Shockwaves (Skipped completely when iris is fully open) ---\n" +
@@ -415,7 +495,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "    if (globalRingFade > 0.001 && u_glowIntensity > 0.001) {\n" +
             "        // --- 5. Phase 1 Connecting Sonar Ripples (Linearly Fades Out Across Sonar -> Ready) ---\n" +
             "        vec3 sonar = vec3(0.0);\n" +
-            "        float sonarVis = (1.0 - readyT) * (1.0 - smoothstep(0.0, 0.45, expandT));\n" +
+            "        float sonarVis = (1.0 - readyT) * (1.0 - smoothstep(0.0, 0.35, expandT));\n" +
             "        if (sonarVis > 0.001 && d > radius) {\n" +
             "            for (int i = 0; i < 2; i++) {\n" +
             "                float phase = fract(u_time * 0.42 * u_sonarSpeed + float(i) * 0.5);\n" +
@@ -441,11 +521,11 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "            readyT\n" +
             "        );\n" +
             "\n" +
-            "        // Let mainRing emerge smoothly as the morphing strands converge onto the iris\n" +
+            "        // Let mainRing emerge smoothly as the spiraling strands converge onto the iris\n" +
             "        float hasPulses = clamp(u_pulseAmount, 0.0, 1.0) * smoothstep(0.0, 0.15, u_pulseBrightness);\n" +
             "        float ringConverge = mix(\n" +
             "            1.0,\n" +
-            "            smoothstep(0.55, 0.96, morph),\n" +
+            "            isDisc ? smoothstep(0.78, 0.98, morph) : smoothstep(0.72, 0.98, morph),\n" +
             "            hasPulses * innerAlpha\n" +
             "        );\n" +
             "        mainRing *= ringConverge;\n" +
@@ -456,23 +536,25 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "            float angle = atan(portalUv.y, portalUv.x);\n" +
             "            float a1 = 0.5 + 0.5 * sin(angle * 2.0 + u_time * 3.4);\n" +
             "            float a2 = 0.5 + 0.5 * sin(angle * 3.0 - u_time * 2.1 + 1.2);\n" +
-            "            float arcMask = pow(a1, 5.0) + 0.6 * pow(a2, 6.0);\n" +
+            "            float arcMask = safePow(a1, 5.0) + 0.6 * safePow(a2, 6.0);\n" +
             "            float rimBand = exp(-ringDist * 75.0);\n" +
             "            arcs = mix(haloColor, colCore, 0.45) * rimBand * arcMask * 1.0 * chargeVis;\n" +
             "        }\n" +
             "\n" +
-            "        // --- 7. Iris Open/Close Trailing Concentric Shockwaves ---\n" +
+            "        // --- 7. Iris Open/Close Trailing Concentric Shockwaves (Stream Wipe Only) ---\n" +
             "        vec3 shockwaves = vec3(0.0);\n" +
             "        if (expandT > 0.001) {\n" +
             "            float expandFade = sin(expandT * PI);\n" +
-            "            float shockBoost = mix(0.35, 1.0, previewT);\n" +
-            "            for (int i = 1; i <= 3; i++) {\n" +
-            "                float fi = float(i);\n" +
-            "                float lag = fi * 0.045 * (0.4 + 0.6 * expandT);\n" +
-            "                float rShock = max(0.0, radius - lag);\n" +
-            "                float w = exp(-abs(d - rShock) * (85.0 - fi * 12.0));\n" +
-            "                vec3 sCol = mix(haloColor, colCore, 0.15 * (1.0 - fi / 3.0));\n" +
-            "                shockwaves += sCol * w * (0.65 / fi) * expandFade * shockBoost;\n" +
+            "            float shockBoost = mix(0.0, 1.0, previewT);\n" +
+            "            if (shockBoost > 0.001) {\n" +
+            "                for (int i = 1; i <= 3; i++) {\n" +
+            "                    float fi = float(i);\n" +
+            "                    float lag = fi * 0.045 * (0.4 + 0.6 * expandT);\n" +
+            "                    float rShock = max(0.0, radius - lag);\n" +
+            "                    float w = exp(-abs(d - rShock) * (85.0 - fi * 12.0));\n" +
+            "                    vec3 sCol = mix(haloColor, colCore, 0.15 * (1.0 - fi / 3.0));\n" +
+            "                    shockwaves += sCol * w * (0.65 / fi) * expandFade * shockBoost;\n" +
+            "                }\n" +
             "            }\n" +
             "        }\n" +
             "\n" +
@@ -556,6 +638,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
     private volatile float uPreviewMix = 0f;
     private volatile float uExpandProgress = 1f;
     private volatile float uPulseMorph = 0f;
+    private volatile float uIsDisconnecting = 0f;
     private volatile float uPortalCenterOffsetX = 0f;
     private volatile float uPortalCenterOffsetY = 0f;
     private volatile float uPortalScale = 1f;
@@ -724,6 +807,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
         uPreviewMix = 0f;
         uExpandProgress = 1f;
         uPulseMorph = 0f;
+        uIsDisconnecting = 0f;
         refreshFromPrefs();
     }
 
@@ -773,6 +857,10 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
         this.uPulseMorph = pulseMorph;
     }
 
+    public void setIsDisconnecting(boolean disconnecting) {
+        this.uIsDisconnecting = disconnecting ? 1f : 0f;
+    }
+
     public float getReadyMix() {
         return uReadyMix;
     }
@@ -791,6 +879,10 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
 
     public float getPulseMorph() {
         return uPulseMorph;
+    }
+
+    public boolean isDisconnecting() {
+        return uIsDisconnecting > 0.5f;
     }
 
     public void registerFrostedDrawable(@NonNull Drawable drawable) {
@@ -995,6 +1087,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
         private int uPreviewMixLoc = -1;
         private int uExpandProgressLoc = -1;
         private int uPulseMorphLoc = -1;
+        private int uIsDisconnectingLoc = -1;
         private int uPortalScaleLoc = -1;
         private int uGlowIntensityLoc = -1;
         private int uParticleBrightnessLoc = -1;
@@ -1219,6 +1312,9 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             GLES30.glUniform1f(uExpandProgressLoc, uExpandProgress);
             if (uPulseMorphLoc >= 0) {
                 GLES30.glUniform1f(uPulseMorphLoc, uPulseMorph);
+            }
+            if (uIsDisconnectingLoc >= 0) {
+                GLES30.glUniform1f(uIsDisconnectingLoc, uIsDisconnecting);
             }
             GLES30.glUniform1f(uPortalScaleLoc, uPortalScale);
             GLES30.glUniform1f(uGlowIntensityLoc, uGlowIntensity);
@@ -1636,6 +1732,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             uPreviewMixLoc = GLES30.glGetUniformLocation(program, "u_previewMix");
             uExpandProgressLoc = GLES30.glGetUniformLocation(program, "u_expandProgress");
             uPulseMorphLoc = GLES30.glGetUniformLocation(program, "u_pulseMorph");
+            uIsDisconnectingLoc = GLES30.glGetUniformLocation(program, "u_isDisconnecting");
             uPortalScaleLoc = GLES30.glGetUniformLocation(program, "u_portalScale");
             uGlowIntensityLoc = GLES30.glGetUniformLocation(program, "u_glowIntensity");
             uParticleBrightnessLoc = GLES30.glGetUniformLocation(program, "u_particleBrightness");

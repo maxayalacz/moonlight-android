@@ -50,6 +50,7 @@ public class PortalConnectionOverlay extends FrameLayout {
     // Configurable durations loaded from Theme Studio -> Animation tab
     private long phase0IrisCloseMs = com.limelight.preferences.PreferenceConfiguration.DEFAULT_PORTAL_LAUNCH_CLOSE_MS;
     private long phase0PulseCoilMs = com.limelight.preferences.PreferenceConfiguration.DEFAULT_PORTAL_PULSE_COIL_MS;
+    private boolean decouplePulseCoil = com.limelight.preferences.PreferenceConfiguration.DEFAULT_PORTAL_DECOUPLE_PULSE_COIL;
     private long phase1SonarHoldMs = com.limelight.preferences.PreferenceConfiguration.DEFAULT_PORTAL_SONAR_HOLD_MS;
     private long phase2ReadyMs = com.limelight.preferences.PreferenceConfiguration.DEFAULT_PORTAL_READY_MS;
     private long phase3ChargeMs = com.limelight.preferences.PreferenceConfiguration.DEFAULT_PORTAL_CHARGE_MS;
@@ -65,6 +66,7 @@ public class PortalConnectionOverlay extends FrameLayout {
                 com.limelight.preferences.PreferenceConfiguration.readPreferences(getContext());
         phase0IrisCloseMs = Math.max(0L, cfg.portalLaunchCloseMs);
         phase0PulseCoilMs = Math.max(0L, cfg.portalPulseCoilMs);
+        decouplePulseCoil = cfg.portalDecouplePulseCoil;
         phase1SonarHoldMs = Math.max(0L, cfg.portalSonarHoldMs);
         phase2ReadyMs = Math.max(0L, cfg.portalReadyMs);
         phase3ChargeMs = Math.max(0L, cfg.portalChargeMs);
@@ -282,6 +284,7 @@ public class PortalConnectionOverlay extends FrameLayout {
         this.onRevealCompleteAction = onRevealComplete;
 
         // Start visually identical to the app's synced starfield background
+        shaderView.setIsDisconnecting(false);
         shaderView.setUniforms(0f, 0f, 0f, 1f, 0f);
 
         boolean landscape = getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE;
@@ -344,13 +347,21 @@ public class PortalConnectionOverlay extends FrameLayout {
                 .setInterpolator(hudEase)
                 .start();
 
-        // Run pulse coil independently so pulses morph gently into the rim across Phase 0 & Phase 1
-        startPulseCoilAnimator(phase0PulseCoilMs);
+        // Optional decoupled pulse coil; by default morph is coupled directly to Launch Iris Close (1 - expand)
+        if (decouplePulseCoil) {
+            startPulseCoilAnimator(phase0PulseCoilMs);
+        }
 
         activeAnimator = ValueAnimator.ofFloat(1f, 0f);
         activeAnimator.setDuration(phase0IrisCloseMs);
         activeAnimator.setInterpolator(new LinearInterpolator());
-        activeAnimator.addUpdateListener(anim -> shaderView.setExpandProgress((float) anim.getAnimatedValue()));
+        activeAnimator.addUpdateListener(anim -> {
+            float e = (float) anim.getAnimatedValue();
+            shaderView.setExpandProgress(e);
+            if (!decouplePulseCoil) {
+                shaderView.setPulseMorph(1f - e);
+            }
+        });
         activeAnimator.addListener(new AnimatorListenerAdapter() {
             private boolean canceled = false;
 
@@ -365,6 +376,9 @@ public class PortalConnectionOverlay extends FrameLayout {
                     return;
                 }
                 shaderView.setExpandProgress(0f);
+                if (!decouplePulseCoil) {
+                    shaderView.setPulseMorph(1f);
+                }
                 phase0Completed = true;
                 if (phase1SonarHoldMs <= 0L) {
                     sonarHoldCompleted = true;
@@ -415,8 +429,10 @@ public class PortalConnectionOverlay extends FrameLayout {
         }
         phase2Started = true;
 
-        // Gently speed up pulse coil if needed so it finishes before Charge completes (~85% of Charge)
-        acceleratePulseCoilIfNeeded(phase2ReadyMs + Math.round(phase3ChargeMs * 0.85f));
+        // When decoupled, gently speed up pulse coil if needed so it finishes before Charge completes (~85% of Charge)
+        if (decouplePulseCoil) {
+            acceleratePulseCoilIfNeeded(phase2ReadyMs + Math.round(phase3ChargeMs * 0.85f));
+        }
 
         // Cross-fade status text to "Ready"
         statusTitleView.animate()
@@ -498,8 +514,10 @@ public class PortalConnectionOverlay extends FrameLayout {
         phase3ChargeStarted = true;
         mainHandler.removeCallbacks(firstFrameFallbackRunnable);
 
-        // Hard guarantee: pulse coil must finish before the Charge sequence ends (~85% of Charge)
-        acceleratePulseCoilIfNeeded(Math.round(phase3ChargeMs * 0.85f));
+        // Hard guarantee when decoupled: pulse coil must finish before the Charge sequence ends (~85% of Charge)
+        if (decouplePulseCoil) {
+            acceleratePulseCoilIfNeeded(Math.round(phase3ChargeMs * 0.85f));
+        }
 
         // Fade all HUD elements to 0 alpha smoothly at the start of Phase 3
         PathInterpolator fadeOut = new PathInterpolator(0.4f, 0f, 1f, 1f);
@@ -625,6 +643,8 @@ public class PortalConnectionOverlay extends FrameLayout {
             topHudContainer.animate().alpha(0f).setDuration(180L).start();
             cancelButton.animate().alpha(0f).setDuration(180L).start();
 
+            shaderView.setIsDisconnecting(true);
+
             final float startPreview = shaderView.getPreviewMix();
             final float startCharge = shaderView.getChargeMix();
             final float startReady = shaderView.getReadyMix();
@@ -633,7 +653,7 @@ public class PortalConnectionOverlay extends FrameLayout {
             final Runnable cancel = onCancelAction;
 
             activeAnimator = ValueAnimator.ofFloat(0f, 1f);
-            activeAnimator.setDuration(CANCEL_REOPEN_MS);
+            activeAnimator.setDuration(disconnectStep3IrisOpenMs);
             activeAnimator.setInterpolator(new LinearInterpolator());
             activeAnimator.addUpdateListener(anim -> {
                 float t = (float) anim.getAnimatedValue();
@@ -656,6 +676,7 @@ public class PortalConnectionOverlay extends FrameLayout {
                     if (innerCanceled) {
                         return;
                     }
+                    shaderView.setIsDisconnecting(false);
                     shaderView.setUniforms(0f, 0f, 0f, 1f, 0f);
                     PortalShaderView.captureHandoffFrame(shaderView);
                     if (cancel != null) {
@@ -670,7 +691,7 @@ public class PortalConnectionOverlay extends FrameLayout {
     /**
      * Bidirectional Disconnect / Close Sequence (Live Stream -> App Menu):
      *  - Wait for first transparent GL frame so Step 1 starts smoothly from expand = 1.0
-     *  - Step 1: Iris close over live stream (u_expandProgress 1 -> 0, preview & charge & ready = 1)
+     *  - Step 1: Iris close over live stream (u_expandProgress 1 -> 0, preview & charge & ready = 1, u_isDisconnecting = 1)
      *  - Step 2: Fade back to starfield (u_previewMix & u_chargeMix & u_readyMix 1 -> 0, LinearInterpolator)
      *  - Step 3: Iris open to full-screen synced starfield (u_expandProgress 0 -> 1, u_pulseMorph 1 -> 0) + capture handoff
      * Keeps the overlay opaque holding the full-screen starfield through Game.finish() so the
@@ -695,6 +716,7 @@ public class PortalConnectionOverlay extends FrameLayout {
             this.disconnecting = true;
             this.canceling = false;
             this.disconnectStep1Started = false;
+            shaderView.setIsDisconnecting(true);
             shaderView.setUniforms(1f, 1f, 1f, 1f, 1f);
 
             handoffBackdropView.setVisibility(GONE);
@@ -786,7 +808,7 @@ public class PortalConnectionOverlay extends FrameLayout {
     }
 
     private void runDisconnectStep3(@Nullable final Runnable onComplete) {
-        // Step 3: Iris Open to App Background + synced pulse uncoil (1 -> 0)
+        // Step 3: Iris Open to App Background + synced forward spiral peel-off (1 -> 0)
         activeAnimator = ValueAnimator.ofFloat(0f, 1f);
         activeAnimator.setDuration(disconnectStep3IrisOpenMs);
         activeAnimator.setInterpolator(new LinearInterpolator());
@@ -810,6 +832,7 @@ public class PortalConnectionOverlay extends FrameLayout {
                 }
                 // Keep overlay visible at full-screen synced starfield until Game.onStop()
                 // and capture the handoff frame so AppView resumes with zero solid-color flash.
+                shaderView.setIsDisconnecting(false);
                 shaderView.setUniforms(0f, 0f, 0f, 1f, 0f);
                 PortalShaderView.captureHandoffFrame(shaderView);
                 if (onComplete != null) {
@@ -827,6 +850,7 @@ public class PortalConnectionOverlay extends FrameLayout {
     public void releaseAndHide() {
         cancelAnimatorsAndCallbacks();
         if (shaderView != null) {
+            shaderView.setIsDisconnecting(false);
             shaderView.stopRendering();
         }
         if (handoffBackdropView != null) {

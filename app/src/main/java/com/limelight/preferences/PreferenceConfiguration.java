@@ -87,6 +87,7 @@ public class PreferenceConfiguration {
     public static final String PORTAL_DISCONNECT_OPEN_MS_PREF_STRING = "seekbar_portal_disconnect_open_ms";
     public static final String PORTAL_LAUNCH_CLOSE_MS_PREF_STRING = "seekbar_portal_launch_close_ms";
     public static final String PORTAL_PULSE_COIL_MS_PREF_STRING = "seekbar_portal_pulse_coil_ms";
+    public static final String PORTAL_DECOUPLE_PULSE_COIL_PREF_STRING = "checkbox_portal_decouple_pulse_coil";
     public static final String PORTAL_WINDOW_SCALE_PREF_STRING = "seekbar_portal_window_scale";
     public static final String PORTAL_GLOW_INTENSITY_PREF_STRING = "seekbar_portal_glow_intensity";
     public static final String PORTAL_PARTICLE_BRIGHTNESS_PREF_STRING = "seekbar_portal_particle_brightness";
@@ -105,19 +106,20 @@ public class PreferenceConfiguration {
     public static final String OSC_OUTLINE_THICKNESS_PREF_STRING = "seekbar_osc_outline_thickness";
     public static final String CARD_OUTLINE_THICKNESS_PREF_STRING = "seekbar_card_outline_thickness";
     public static final String UI_BATTERY_SAVER_PREF_STRING = "list_ui_battery_saver";
-    public static final int DEFAULT_PORTAL_READY_MS = 350;
+    public static final int DEFAULT_PORTAL_READY_MS = 450;
     public static final int DEFAULT_PORTAL_CHARGE_MS = 1300;
     public static final int DEFAULT_PORTAL_SONAR_HOLD_MS = 600;
     public static final int DEFAULT_PORTAL_PREVIEW_FADE_MS = 1300;
     public static final int DEFAULT_PORTAL_PREVIEW_HOLD_MS = 0;
     public static final int DEFAULT_PORTAL_EXPAND_MS = 550;
     public static final int DEFAULT_PORTAL_SWIRL_SPEED = 35;
-    public static final int DEFAULT_PORTAL_DISCONNECT_MS = 1550;
+    public static final int DEFAULT_PORTAL_DISCONNECT_MS = 2000;
     public static final int DEFAULT_PORTAL_DISCONNECT_CLOSE_MS = 450;
     public static final int DEFAULT_PORTAL_DISCONNECT_FADE_MS = 350;
-    public static final int DEFAULT_PORTAL_DISCONNECT_OPEN_MS = 750;
-    public static final int DEFAULT_PORTAL_LAUNCH_CLOSE_MS = 700;
+    public static final int DEFAULT_PORTAL_DISCONNECT_OPEN_MS = 1200;
+    public static final int DEFAULT_PORTAL_LAUNCH_CLOSE_MS = 950;
     public static final int DEFAULT_PORTAL_PULSE_COIL_MS = 1800;
+    public static final boolean DEFAULT_PORTAL_DECOUPLE_PULSE_COIL = false;
     public static final int DEFAULT_PORTAL_WINDOW_SCALE = 100;
     public static final int DEFAULT_PORTAL_GLOW_INTENSITY = 100;
     public static final int DEFAULT_PORTAL_PARTICLE_BRIGHTNESS = 100;
@@ -356,6 +358,7 @@ public class PreferenceConfiguration {
     public int portalDisconnectOpenMs;
     public int portalLaunchCloseMs;
     public int portalPulseCoilMs;
+    public boolean portalDecouplePulseCoil;
     public int portalWindowScalePercent;
     public int portalGlowIntensityPercent;
     public int portalParticleBrightnessPercent;
@@ -1042,6 +1045,7 @@ private static int getFramePacingValue(Context context) {
         config.portalDisconnectOpenMs = prefs.getInt(PORTAL_DISCONNECT_OPEN_MS_PREF_STRING, DEFAULT_PORTAL_DISCONNECT_OPEN_MS);
         config.portalLaunchCloseMs = prefs.getInt(PORTAL_LAUNCH_CLOSE_MS_PREF_STRING, DEFAULT_PORTAL_LAUNCH_CLOSE_MS);
         config.portalPulseCoilMs = prefs.getInt(PORTAL_PULSE_COIL_MS_PREF_STRING, DEFAULT_PORTAL_PULSE_COIL_MS);
+        config.portalDecouplePulseCoil = prefs.getBoolean(PORTAL_DECOUPLE_PULSE_COIL_PREF_STRING, DEFAULT_PORTAL_DECOUPLE_PULSE_COIL);
         config.portalWindowScalePercent = prefs.getInt(PORTAL_WINDOW_SCALE_PREF_STRING, DEFAULT_PORTAL_WINDOW_SCALE);
         config.portalGlowIntensityPercent = prefs.getInt(PORTAL_GLOW_INTENSITY_PREF_STRING, DEFAULT_PORTAL_GLOW_INTENSITY);
         config.portalParticleBrightnessPercent = prefs.getInt(PORTAL_PARTICLE_BRIGHTNESS_PREF_STRING, DEFAULT_PORTAL_PARTICLE_BRIGHTNESS);

@@ -182,6 +182,8 @@ public class ThemeStudioActivity extends AppCompatActivity {
     private TextView animLaunchHeading;
     private TextView animDisconnectHeading;
     private SliderRow rowLaunchCloseMs;
+    private TextView btnDecouplePulseCoil;
+    private LinearLayout pulseCoilContainer;
     private SliderRow rowPulseCoilMs;
     private SliderRow rowSonarHoldMs;
     private SliderRow rowReadyMs;
@@ -1010,10 +1012,26 @@ public class ThemeStudioActivity extends AppCompatActivity {
         lhLp.topMargin = dp(12f);
         col.addView(animLaunchHeading, lhLp);
 
-        rowLaunchCloseMs = addSliderRow(col, "1a. Launch Iris Close", 150, 1500, 25, 0, 30000, " ms",
+        rowLaunchCloseMs = addSliderRow(col, "1. Launch Iris Close & Spiral", 150, 2000, 25, 0, 30000, " ms",
                 v -> { bundle.portalLaunchCloseMs = v; refreshAll(); });
-        rowPulseCoilMs = addSliderRow(col, "1b. Pulse Coil (Independent)", 300, 4000, 50, 0, 30000, " ms",
+
+        btnDecouplePulseCoil = createPillButton("Decouple Spiral Morph: OFF");
+        btnDecouplePulseCoil.setOnClickListener(v -> {
+            bundle.portalDecouplePulseCoil = !bundle.portalDecouplePulseCoil;
+            refreshAll();
+        });
+        LinearLayout.LayoutParams decLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        decLp.topMargin = dp(8f);
+        col.addView(btnDecouplePulseCoil, decLp);
+
+        pulseCoilContainer = new LinearLayout(this);
+        pulseCoilContainer.setOrientation(LinearLayout.VERTICAL);
+        rowPulseCoilMs = addSliderRow(pulseCoilContainer, "1b. Independent Spiral Coil", 300, 4000, 50, 0, 30000, " ms",
                 v -> { bundle.portalPulseCoilMs = v; refreshAll(); });
+        col.addView(pulseCoilContainer, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
         rowSonarHoldMs = addSliderRow(col, "2. Sonar Pulse Hold", 0, 2000, 50, 0, 30000, " ms",
                 v -> { bundle.portalSonarHoldMs = v; refreshAll(); });
         rowReadyMs = addSliderRow(col, "3. Sonar \u2192 Ready Glow (Linear)", 50, 1500, 25, 0, 30000, " ms",
@@ -1049,7 +1067,7 @@ public class ThemeStudioActivity extends AppCompatActivity {
                             + bundle.portalDisconnectFadeMs + bundle.portalDisconnectOpenMs;
                     refreshAll();
                 });
-        rowDisconnectOpenMs = addSliderRow(col, "3. Iris Uncoil to Menu", 100, 1500, 25, 0, 30000, " ms",
+        rowDisconnectOpenMs = addSliderRow(col, "3. Iris Spiral Uncoil to Menu", 100, 2500, 25, 0, 30000, " ms",
                 v -> {
                     bundle.portalDisconnectOpenMs = v;
                     bundle.portalDisconnectMs = bundle.portalDisconnectCloseMs
@@ -1061,6 +1079,7 @@ public class ThemeStudioActivity extends AppCompatActivity {
         btnResetAnimation.setOnClickListener(v -> {
             bundle.portalLaunchCloseMs = PreferenceConfiguration.DEFAULT_PORTAL_LAUNCH_CLOSE_MS;
             bundle.portalPulseCoilMs = PreferenceConfiguration.DEFAULT_PORTAL_PULSE_COIL_MS;
+            bundle.portalDecouplePulseCoil = PreferenceConfiguration.DEFAULT_PORTAL_DECOUPLE_PULSE_COIL;
             bundle.portalSonarHoldMs = PreferenceConfiguration.DEFAULT_PORTAL_SONAR_HOLD_MS;
             bundle.portalReadyMs = PreferenceConfiguration.DEFAULT_PORTAL_READY_MS;
             bundle.portalChargeMs = PreferenceConfiguration.DEFAULT_PORTAL_CHARGE_MS;
@@ -1350,13 +1369,13 @@ public class ThemeStudioActivity extends AppCompatActivity {
 
         if (!disconnectMode) {
             // Exact linear Launch state machine in milliseconds:
-            // 1a. Launch Iris Close (1.0 -> 0.0 expand)
-            // 1b. Independent Pulse Coil (0.0 -> 1.0 pulseMorph; gently catches up from Ready to ~85% of Charge if needed)
+            // 1. Launch Iris Close & Spiral (1.0 -> 0.0 expand; optional decoupled coil with Ready/Charge catch-up)
             // 2. Sonar Pulse Hold (0.0 expand, 0.0 ready, 0.0 charge, 0.0 preview)
             // 3. Sonar -> Ready Glow (Linear 0.0 -> 1.0 ready)
             // 4. Simultaneous Ready -> Charge (Linear 0.0 -> 1.0) + Stream Fade-In (Linear 0.0 -> 1.0)
             // 5. Iris Wipe Expand Open (0.0 -> 1.0 expand)
             final long t0 = Math.max(0L, bundle.portalLaunchCloseMs);
+            final boolean decoupled = bundle.portalDecouplePulseCoil;
             final long coilDur = Math.max(0L, bundle.portalPulseCoilMs);
             final long t1 = t0 + Math.max(0L, bundle.portalSonarHoldMs);
             final long t2 = t1 + Math.max(0L, bundle.portalReadyMs);
@@ -1368,6 +1387,7 @@ public class ThemeStudioActivity extends AppCompatActivity {
             final long coilTargetEnd = t2 + Math.round(chargeDur * 0.85f);
             final long totalMs = Math.max(100L, t4);
 
+            previewPortal.setIsDisconnecting(false);
             previewPortal.setUniforms(0f, 0f, 0f, 1f, 0f);
             irisAnimator = ValueAnimator.ofFloat(0f, (float) totalMs);
             irisAnimator.setDuration(totalMs);
@@ -1375,7 +1395,11 @@ public class ThemeStudioActivity extends AppCompatActivity {
             irisAnimator.addUpdateListener(anim -> {
                 float elapsed = (float) anim.getAnimatedValue();
                 float morph;
-                if (coilDur <= 0L) {
+                if (!decoupled) {
+                    morph = (elapsed < t0)
+                            ? (t0 > 0L ? Math.max(0f, Math.min(1f, elapsed / (float) t0)) : 1f)
+                            : 1f;
+                } else if (coilDur <= 0L) {
                     morph = 1f;
                 } else if (coilDur <= coilTargetEnd) {
                     morph = Math.max(0f, Math.min(1f, elapsed / (float) coilDur));
@@ -1410,14 +1434,15 @@ public class ThemeStudioActivity extends AppCompatActivity {
             });
         } else {
             // Exact 3-step Disconnect state machine in milliseconds:
-            // 1. Disconnect Iris Close Over Stream (1.0 -> 0.0 expand, ready=1, charge=1, preview=1, pulseMorph=1)
-            // 2. Stream -> Starfield Fade (Linear 1.0 -> 0.0 ready, charge & preview, pulseMorph=1)
-            // 3. Iris Uncoil to Menu (0.0 -> 1.0 expand, 1.0 -> 0.0 pulseMorph)
+            // 1. Disconnect Iris Close Over Stream (1.0 -> 0.0 expand, ready=1, charge=1, preview=1, pulseMorph=1, isDisc=1)
+            // 2. Stream -> Starfield Fade (Linear 1.0 -> 0.0 ready, charge & preview, pulseMorph=1, isDisc=1)
+            // 3. Iris Spiral Uncoil to Menu (0.0 -> 1.0 expand, 1.0 -> 0.0 pulseMorph, isDisc=1 -> 0 on end)
             final long d1 = Math.max(0L, bundle.portalDisconnectCloseMs);
             final long d2 = d1 + Math.max(0L, bundle.portalDisconnectFadeMs);
             final long d3 = d2 + Math.max(0L, bundle.portalDisconnectOpenMs);
             final long totalMs = Math.max(100L, d3);
 
+            previewPortal.setIsDisconnecting(true);
             previewPortal.setUniforms(1f, 1f, 1f, 1f, 1f);
             irisAnimator = ValueAnimator.ofFloat(0f, (float) totalMs);
             irisAnimator.setDuration(totalMs);
@@ -1465,6 +1490,7 @@ public class ThemeStudioActivity extends AppCompatActivity {
         }
         if (previewPortal != null) {
             previewPortal.setPortalCenterOffset(0f, 0f);
+            previewPortal.setIsDisconnecting(false);
             previewPortal.setUniforms(0f, 0f, 0f, 1f, 0f);
         }
         if (previewCardsRow != null) {
@@ -1679,6 +1705,20 @@ public class ThemeStudioActivity extends AppCompatActivity {
         stylePillButton(btnAnimPlayDisconnect, playingIris && playingDisconnectMode, p.highlight, p.isLight);
         animLaunchHeading.setTextColor(p.getSecondaryTextColor());
         animDisconnectHeading.setTextColor(p.getSecondaryTextColor());
+        if (btnDecouplePulseCoil != null) {
+            btnDecouplePulseCoil.setText(bundle.portalDecouplePulseCoil
+                    ? "Decouple Spiral Morph: ON"
+                    : "Decouple Spiral Morph: OFF");
+            stylePillButton(btnDecouplePulseCoil, bundle.portalDecouplePulseCoil, p.accent, p.isLight);
+        }
+        if (rowLaunchCloseMs != null) {
+            rowLaunchCloseMs.titleTv.setText(bundle.portalDecouplePulseCoil
+                    ? "1a. Launch Iris Close"
+                    : "1. Launch Iris Close & Spiral");
+        }
+        if (pulseCoilContainer != null) {
+            pulseCoilContainer.setVisibility(bundle.portalDecouplePulseCoil ? View.VISIBLE : View.GONE);
+        }
         SliderRow[] animRows = {
                 rowLaunchCloseMs, rowPulseCoilMs, rowSonarHoldMs, rowReadyMs,
                 rowChargeMs, rowFadeMs, rowExpandMs,
