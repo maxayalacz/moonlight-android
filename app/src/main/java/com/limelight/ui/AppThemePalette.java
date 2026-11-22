@@ -141,6 +141,7 @@ public final class AppThemePalette {
         public int portalDisconnectFadeMs;
         public int portalDisconnectOpenMs;
         public int portalLaunchCloseMs;
+        public int portalPulseCoilMs;
 
         public ThemeBundle(@NonNull String id, @NonNull String name, @NonNull CustomPaletteSpec colors) {
             this.id = id;
@@ -173,6 +174,7 @@ public final class AppThemePalette {
             this.portalDisconnectFadeMs = PreferenceConfiguration.DEFAULT_PORTAL_DISCONNECT_FADE_MS;
             this.portalDisconnectOpenMs = PreferenceConfiguration.DEFAULT_PORTAL_DISCONNECT_OPEN_MS;
             this.portalLaunchCloseMs = PreferenceConfiguration.DEFAULT_PORTAL_LAUNCH_CLOSE_MS;
+            this.portalPulseCoilMs = PreferenceConfiguration.DEFAULT_PORTAL_PULSE_COIL_MS;
         }
 
         @NonNull
@@ -222,6 +224,7 @@ public final class AppThemePalette {
             obj.put("discFadeMs", portalDisconnectFadeMs);
             obj.put("discOpenMs", portalDisconnectOpenMs);
             obj.put("launchMs", portalLaunchCloseMs);
+            obj.put("pulseCoilMs", portalPulseCoilMs);
             return obj;
         }
 
@@ -299,6 +302,7 @@ public final class AppThemePalette {
                         0, 30000);
                 b.portalDisconnectMs = b.portalDisconnectCloseMs + b.portalDisconnectFadeMs + b.portalDisconnectOpenMs;
                 b.portalLaunchCloseMs = clamp(obj.optInt("launchMs", PreferenceConfiguration.DEFAULT_PORTAL_LAUNCH_CLOSE_MS), 0, 30000);
+                b.portalPulseCoilMs = clamp(obj.optInt("pulseCoilMs", PreferenceConfiguration.DEFAULT_PORTAL_PULSE_COIL_MS), 0, 30000);
                 return b;
             } catch (Exception e) {
                 return null;
@@ -662,6 +666,7 @@ public final class AppThemePalette {
         b.portalDisconnectOpenMs = clamp(cfg.portalDisconnectOpenMs, 0, 30000);
         b.portalDisconnectMs = b.portalDisconnectCloseMs + b.portalDisconnectFadeMs + b.portalDisconnectOpenMs;
         b.portalLaunchCloseMs = clamp(cfg.portalLaunchCloseMs, 0, 30000);
+        b.portalPulseCoilMs = clamp(cfg.portalPulseCoilMs, 0, 30000);
         return b;
     }
 
@@ -715,6 +720,7 @@ public final class AppThemePalette {
         ed.putInt(PreferenceConfiguration.PORTAL_DISCONNECT_OPEN_MS_PREF_STRING, openMs);
         ed.putInt(PreferenceConfiguration.PORTAL_DISCONNECT_MS_PREF_STRING, closeMs + fadeMs + openMs);
         ed.putInt(PreferenceConfiguration.PORTAL_LAUNCH_CLOSE_MS_PREF_STRING, clamp(bundle.portalLaunchCloseMs, 0, 30000));
+        ed.putInt(PreferenceConfiguration.PORTAL_PULSE_COIL_MS_PREF_STRING, clamp(bundle.portalPulseCoilMs, 0, 30000));
         ed.apply();
     }
 

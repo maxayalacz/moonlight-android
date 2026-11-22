@@ -86,6 +86,7 @@ public class PreferenceConfiguration {
     public static final String PORTAL_DISCONNECT_FADE_MS_PREF_STRING = "seekbar_portal_disconnect_fade_ms";
     public static final String PORTAL_DISCONNECT_OPEN_MS_PREF_STRING = "seekbar_portal_disconnect_open_ms";
     public static final String PORTAL_LAUNCH_CLOSE_MS_PREF_STRING = "seekbar_portal_launch_close_ms";
+    public static final String PORTAL_PULSE_COIL_MS_PREF_STRING = "seekbar_portal_pulse_coil_ms";
     public static final String PORTAL_WINDOW_SCALE_PREF_STRING = "seekbar_portal_window_scale";
     public static final String PORTAL_GLOW_INTENSITY_PREF_STRING = "seekbar_portal_glow_intensity";
     public static final String PORTAL_PARTICLE_BRIGHTNESS_PREF_STRING = "seekbar_portal_particle_brightness";
@@ -116,6 +117,7 @@ public class PreferenceConfiguration {
     public static final int DEFAULT_PORTAL_DISCONNECT_FADE_MS = 350;
     public static final int DEFAULT_PORTAL_DISCONNECT_OPEN_MS = 750;
     public static final int DEFAULT_PORTAL_LAUNCH_CLOSE_MS = 700;
+    public static final int DEFAULT_PORTAL_PULSE_COIL_MS = 1800;
     public static final int DEFAULT_PORTAL_WINDOW_SCALE = 100;
     public static final int DEFAULT_PORTAL_GLOW_INTENSITY = 100;
     public static final int DEFAULT_PORTAL_PARTICLE_BRIGHTNESS = 100;
@@ -353,6 +355,7 @@ public class PreferenceConfiguration {
     public int portalDisconnectFadeMs;
     public int portalDisconnectOpenMs;
     public int portalLaunchCloseMs;
+    public int portalPulseCoilMs;
     public int portalWindowScalePercent;
     public int portalGlowIntensityPercent;
     public int portalParticleBrightnessPercent;
@@ -1038,6 +1041,7 @@ private static int getFramePacingValue(Context context) {
         config.portalDisconnectFadeMs = prefs.getInt(PORTAL_DISCONNECT_FADE_MS_PREF_STRING, DEFAULT_PORTAL_DISCONNECT_FADE_MS);
         config.portalDisconnectOpenMs = prefs.getInt(PORTAL_DISCONNECT_OPEN_MS_PREF_STRING, DEFAULT_PORTAL_DISCONNECT_OPEN_MS);
         config.portalLaunchCloseMs = prefs.getInt(PORTAL_LAUNCH_CLOSE_MS_PREF_STRING, DEFAULT_PORTAL_LAUNCH_CLOSE_MS);
+        config.portalPulseCoilMs = prefs.getInt(PORTAL_PULSE_COIL_MS_PREF_STRING, DEFAULT_PORTAL_PULSE_COIL_MS);
         config.portalWindowScalePercent = prefs.getInt(PORTAL_WINDOW_SCALE_PREF_STRING, DEFAULT_PORTAL_WINDOW_SCALE);
         config.portalGlowIntensityPercent = prefs.getInt(PORTAL_GLOW_INTENSITY_PREF_STRING, DEFAULT_PORTAL_GLOW_INTENSITY);
         config.portalParticleBrightnessPercent = prefs.getInt(PORTAL_PARTICLE_BRIGHTNESS_PREF_STRING, DEFAULT_PORTAL_PARTICLE_BRIGHTNESS);

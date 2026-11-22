@@ -133,6 +133,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "uniform float u_chargeMix;\n" +
             "uniform float u_previewMix;\n" +
             "uniform float u_expandProgress;\n" +
+            "uniform float u_pulseMorph;\n" +
             "uniform float u_portalScale;\n" +
             "uniform float u_glowIntensity;\n" +
             "uniform float u_particleBrightness;\n" +
@@ -320,7 +321,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "        if (dist > rejectDist) continue;\n" +
             "\n" +
             "        float span = mix(3.6, 5.2, rnd.y);\n" +
-            "        float speed = mix(0.28, 0.52, rnd.x) * u_pulseSpeed * (1.0 + 1.35 * m);\n" +
+            "        float speed = mix(0.28, 0.52, rnd.x) * u_pulseSpeed;\n" +
             "        float phaseOff = fi * 0.143 + rnd.x * 0.4;\n" +
             "\n" +
             "        float e0 = evalComet(s, dir, speed, span, phaseOff, curHead, curTail, time);\n" +
@@ -401,8 +402,8 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "        particles = sampleParticles(uv, u_time) * particleVis * u_particleBrightness;\n" +
             "    }\n" +
             "\n" +
-            "    // --- 4. Motion-Graphics Morphing Energy Pulses (Coils Into Iris on Close, Uncoils on Open) ---\n" +
-            "    float morph = 1.0 - expandT;\n" +
+            "    // --- 4. Motion-Graphics Morphing Energy Pulses (Independent Coil -> Iris, Uncoil on Open) ---\n" +
+            "    float morph = clamp(u_pulseMorph, 0.0, 1.0);\n" +
             "    vec3 menuPulses = vec3(0.0);\n" +
             "    if (innerAlpha > 0.001) {\n" +
             "        menuPulses = sampleMorphingEnergyPaths(portalUv, radius, morph, readyT, haloColor, colCore, u_time) * innerAlpha;\n" +
@@ -554,6 +555,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
     private volatile float uChargeMix = 0f;
     private volatile float uPreviewMix = 0f;
     private volatile float uExpandProgress = 1f;
+    private volatile float uPulseMorph = 0f;
     private volatile float uPortalCenterOffsetX = 0f;
     private volatile float uPortalCenterOffsetY = 0f;
     private volatile float uPortalScale = 1f;
@@ -721,6 +723,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
         uChargeMix = 0f;
         uPreviewMix = 0f;
         uExpandProgress = 1f;
+        uPulseMorph = 0f;
         refreshFromPrefs();
     }
 
@@ -741,6 +744,15 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
         this.uExpandProgress = expandProgress;
     }
 
+    public void setUniforms(float readyMix, float chargeMix, float previewMix, float expandProgress, float pulseMorph) {
+        markUserInteraction();
+        this.uReadyMix = readyMix;
+        this.uChargeMix = chargeMix;
+        this.uPreviewMix = previewMix;
+        this.uExpandProgress = expandProgress;
+        this.uPulseMorph = pulseMorph;
+    }
+
     public void setReadyMix(float readyMix) {
         this.uReadyMix = readyMix;
     }
@@ -757,6 +769,10 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
         this.uExpandProgress = expandProgress;
     }
 
+    public void setPulseMorph(float pulseMorph) {
+        this.uPulseMorph = pulseMorph;
+    }
+
     public float getReadyMix() {
         return uReadyMix;
     }
@@ -771,6 +787,10 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
 
     public float getExpandProgress() {
         return uExpandProgress;
+    }
+
+    public float getPulseMorph() {
+        return uPulseMorph;
     }
 
     public void registerFrostedDrawable(@NonNull Drawable drawable) {
@@ -974,6 +994,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
         private int uChargeMixLoc = -1;
         private int uPreviewMixLoc = -1;
         private int uExpandProgressLoc = -1;
+        private int uPulseMorphLoc = -1;
         private int uPortalScaleLoc = -1;
         private int uGlowIntensityLoc = -1;
         private int uParticleBrightnessLoc = -1;
@@ -1079,7 +1100,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
                 float sharedTime = getSharedTimeSec();
 
                 int shortEdge = Math.min(w, h);
-                boolean irisTransitioning = (uExpandProgress < 0.999f);
+                boolean irisTransitioning = (uExpandProgress < 0.999f || uPulseMorph > 0.001f);
                 boolean saverActive = batterySaverEffective;
                 if (backgroundMode) {
                     int cap = bgMaxShortEdge;
@@ -1196,6 +1217,9 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             }
             GLES30.glUniform1f(uPreviewMixLoc, uPreviewMix);
             GLES30.glUniform1f(uExpandProgressLoc, uExpandProgress);
+            if (uPulseMorphLoc >= 0) {
+                GLES30.glUniform1f(uPulseMorphLoc, uPulseMorph);
+            }
             GLES30.glUniform1f(uPortalScaleLoc, uPortalScale);
             GLES30.glUniform1f(uGlowIntensityLoc, uGlowIntensity);
             GLES30.glUniform1f(uParticleBrightnessLoc, uParticleBrightness);
@@ -1611,6 +1635,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             uChargeMixLoc = GLES30.glGetUniformLocation(program, "u_chargeMix");
             uPreviewMixLoc = GLES30.glGetUniformLocation(program, "u_previewMix");
             uExpandProgressLoc = GLES30.glGetUniformLocation(program, "u_expandProgress");
+            uPulseMorphLoc = GLES30.glGetUniformLocation(program, "u_pulseMorph");
             uPortalScaleLoc = GLES30.glGetUniformLocation(program, "u_portalScale");
             uGlowIntensityLoc = GLES30.glGetUniformLocation(program, "u_glowIntensity");
             uParticleBrightnessLoc = GLES30.glGetUniformLocation(program, "u_particleBrightness");

@@ -182,6 +182,7 @@ public class ThemeStudioActivity extends AppCompatActivity {
     private TextView animLaunchHeading;
     private TextView animDisconnectHeading;
     private SliderRow rowLaunchCloseMs;
+    private SliderRow rowPulseCoilMs;
     private SliderRow rowSonarHoldMs;
     private SliderRow rowReadyMs;
     private SliderRow rowChargeMs;
@@ -1009,8 +1010,10 @@ public class ThemeStudioActivity extends AppCompatActivity {
         lhLp.topMargin = dp(12f);
         col.addView(animLaunchHeading, lhLp);
 
-        rowLaunchCloseMs = addSliderRow(col, "1. Launch Iris Close & Coil", 150, 1500, 25, 0, 30000, " ms",
+        rowLaunchCloseMs = addSliderRow(col, "1a. Launch Iris Close", 150, 1500, 25, 0, 30000, " ms",
                 v -> { bundle.portalLaunchCloseMs = v; refreshAll(); });
+        rowPulseCoilMs = addSliderRow(col, "1b. Pulse Coil (Independent)", 300, 4000, 50, 0, 30000, " ms",
+                v -> { bundle.portalPulseCoilMs = v; refreshAll(); });
         rowSonarHoldMs = addSliderRow(col, "2. Sonar Pulse Hold", 0, 2000, 50, 0, 30000, " ms",
                 v -> { bundle.portalSonarHoldMs = v; refreshAll(); });
         rowReadyMs = addSliderRow(col, "3. Sonar \u2192 Ready Glow (Linear)", 50, 1500, 25, 0, 30000, " ms",
@@ -1057,6 +1060,7 @@ public class ThemeStudioActivity extends AppCompatActivity {
         btnResetAnimation = createPillButton("Reset Animation Timings");
         btnResetAnimation.setOnClickListener(v -> {
             bundle.portalLaunchCloseMs = PreferenceConfiguration.DEFAULT_PORTAL_LAUNCH_CLOSE_MS;
+            bundle.portalPulseCoilMs = PreferenceConfiguration.DEFAULT_PORTAL_PULSE_COIL_MS;
             bundle.portalSonarHoldMs = PreferenceConfiguration.DEFAULT_PORTAL_SONAR_HOLD_MS;
             bundle.portalReadyMs = PreferenceConfiguration.DEFAULT_PORTAL_READY_MS;
             bundle.portalChargeMs = PreferenceConfiguration.DEFAULT_PORTAL_CHARGE_MS;
@@ -1346,12 +1350,14 @@ public class ThemeStudioActivity extends AppCompatActivity {
 
         if (!disconnectMode) {
             // Exact linear Launch state machine in milliseconds:
-            // 1. Launch Iris Close & Coil (1.0 -> 0.0 expand)
+            // 1a. Launch Iris Close (1.0 -> 0.0 expand)
+            // 1b. Independent Pulse Coil (0.0 -> 1.0 pulseMorph; gently catches up from Ready to ~85% of Charge if needed)
             // 2. Sonar Pulse Hold (0.0 expand, 0.0 ready, 0.0 charge, 0.0 preview)
             // 3. Sonar -> Ready Glow (Linear 0.0 -> 1.0 ready)
             // 4. Simultaneous Ready -> Charge (Linear 0.0 -> 1.0) + Stream Fade-In (Linear 0.0 -> 1.0)
             // 5. Iris Wipe Expand Open (0.0 -> 1.0 expand)
             final long t0 = Math.max(0L, bundle.portalLaunchCloseMs);
+            final long coilDur = Math.max(0L, bundle.portalPulseCoilMs);
             final long t1 = t0 + Math.max(0L, bundle.portalSonarHoldMs);
             final long t2 = t1 + Math.max(0L, bundle.portalReadyMs);
             final long chargeDur = Math.max(0L, bundle.portalChargeMs);
@@ -1359,43 +1365,60 @@ public class ThemeStudioActivity extends AppCompatActivity {
             final long phase3Dur = Math.max(chargeDur, fadeDur);
             final long t3 = t2 + phase3Dur;
             final long t4 = t3 + Math.max(0L, bundle.portalExpandMs);
+            final long coilTargetEnd = t2 + Math.round(chargeDur * 0.85f);
             final long totalMs = Math.max(100L, t4);
 
-            previewPortal.setUniforms(0f, 0f, 0f, 1f);
+            previewPortal.setUniforms(0f, 0f, 0f, 1f, 0f);
             irisAnimator = ValueAnimator.ofFloat(0f, (float) totalMs);
             irisAnimator.setDuration(totalMs);
             irisAnimator.setInterpolator(new android.view.animation.LinearInterpolator());
             irisAnimator.addUpdateListener(anim -> {
                 float elapsed = (float) anim.getAnimatedValue();
+                float morph;
+                if (coilDur <= 0L) {
+                    morph = 1f;
+                } else if (coilDur <= coilTargetEnd) {
+                    morph = Math.max(0f, Math.min(1f, elapsed / (float) coilDur));
+                } else if (elapsed <= t1) {
+                    morph = Math.max(0f, Math.min(1f, elapsed / (float) coilDur));
+                } else if (elapsed < coilTargetEnd) {
+                    float mAtT1 = Math.max(0f, Math.min(1f, t1 / (float) coilDur));
+                    float span = Math.max(1f, (float) (coilTargetEnd - t1));
+                    float frac = Math.max(0f, Math.min(1f, (elapsed - t1) / span));
+                    morph = mAtT1 + (1f - mAtT1) * frac;
+                } else {
+                    morph = 1f;
+                }
+
                 if (elapsed < t0) {
                     float prog = t0 > 0 ? (elapsed / (float) t0) : 1f;
-                    previewPortal.setUniforms(0f, 0f, 0f, 1f - Math.max(0f, Math.min(1f, prog)));
+                    previewPortal.setUniforms(0f, 0f, 0f, 1f - Math.max(0f, Math.min(1f, prog)), morph);
                 } else if (elapsed < t1) {
-                    previewPortal.setUniforms(0f, 0f, 0f, 0f);
+                    previewPortal.setUniforms(0f, 0f, 0f, 0f, morph);
                 } else if (elapsed < t2) {
                     float r = (t2 > t1) ? Math.max(0f, Math.min(1f, (elapsed - t1) / (float) (t2 - t1))) : 1f;
-                    previewPortal.setUniforms(r, 0f, 0f, 0f);
+                    previewPortal.setUniforms(r, 0f, 0f, 0f, morph);
                 } else if (elapsed < t3) {
                     float p3Elapsed = elapsed - t2;
                     float c = chargeDur > 0L ? Math.max(0f, Math.min(1f, p3Elapsed / (float) chargeDur)) : 1f;
                     float p = fadeDur > 0L ? Math.max(0f, Math.min(1f, p3Elapsed / (float) fadeDur)) : 1f;
-                    previewPortal.setUniforms(1f, c, p, 0f);
+                    previewPortal.setUniforms(1f, c, p, 0f, morph);
                 } else {
                     float e = (t4 > t3) ? Math.max(0f, Math.min(1f, (elapsed - t3) / (float) (t4 - t3))) : 1f;
-                    previewPortal.setUniforms(1f, 1f, 1f, e);
+                    previewPortal.setUniforms(1f, 1f, 1f, e, 1f);
                 }
             });
         } else {
             // Exact 3-step Disconnect state machine in milliseconds:
-            // 1. Disconnect Iris Close Over Stream (1.0 -> 0.0 expand, ready=1, charge=1, preview=1)
-            // 2. Stream -> Starfield Fade (Linear 1.0 -> 0.0 ready, charge & preview)
-            // 3. Iris Uncoil to Menu (0.0 -> 1.0 expand)
+            // 1. Disconnect Iris Close Over Stream (1.0 -> 0.0 expand, ready=1, charge=1, preview=1, pulseMorph=1)
+            // 2. Stream -> Starfield Fade (Linear 1.0 -> 0.0 ready, charge & preview, pulseMorph=1)
+            // 3. Iris Uncoil to Menu (0.0 -> 1.0 expand, 1.0 -> 0.0 pulseMorph)
             final long d1 = Math.max(0L, bundle.portalDisconnectCloseMs);
             final long d2 = d1 + Math.max(0L, bundle.portalDisconnectFadeMs);
             final long d3 = d2 + Math.max(0L, bundle.portalDisconnectOpenMs);
             final long totalMs = Math.max(100L, d3);
 
-            previewPortal.setUniforms(1f, 1f, 1f, 1f);
+            previewPortal.setUniforms(1f, 1f, 1f, 1f, 1f);
             irisAnimator = ValueAnimator.ofFloat(0f, (float) totalMs);
             irisAnimator.setDuration(totalMs);
             irisAnimator.setInterpolator(new android.view.animation.LinearInterpolator());
@@ -1403,14 +1426,14 @@ public class ThemeStudioActivity extends AppCompatActivity {
                 float elapsed = (float) anim.getAnimatedValue();
                 if (elapsed < d1) {
                     float prog = d1 > 0 ? (elapsed / (float) d1) : 1f;
-                    previewPortal.setUniforms(1f, 1f, 1f, 1f - Math.max(0f, Math.min(1f, prog)));
+                    previewPortal.setUniforms(1f, 1f, 1f, 1f - Math.max(0f, Math.min(1f, prog)), 1f);
                 } else if (elapsed < d2) {
                     float raw = (d2 > d1) ? ((elapsed - d1) / (float) (d2 - d1)) : 1f;
                     float v = 1f - Math.max(0f, Math.min(1f, raw));
-                    previewPortal.setUniforms(v, v, v, 0f);
+                    previewPortal.setUniforms(v, v, v, 0f, 1f);
                 } else {
-                    float e = (d3 > d2) ? ((elapsed - d2) / (float) (d3 - d2)) : 1f;
-                    previewPortal.setUniforms(0f, 0f, 0f, Math.max(0f, Math.min(1f, e)));
+                    float e = (d3 > d2) ? Math.max(0f, Math.min(1f, (elapsed - d2) / (float) (d3 - d2))) : 1f;
+                    previewPortal.setUniforms(0f, 0f, 0f, e, 1f - e);
                 }
             });
         }
@@ -1442,7 +1465,7 @@ public class ThemeStudioActivity extends AppCompatActivity {
         }
         if (previewPortal != null) {
             previewPortal.setPortalCenterOffset(0f, 0f);
-            previewPortal.setUniforms(0f, 0f, 1f);
+            previewPortal.setUniforms(0f, 0f, 0f, 1f, 0f);
         }
         if (previewCardsRow != null) {
             previewCardsRow.animate().alpha(1f).setDuration(200L).start();
@@ -1657,12 +1680,12 @@ public class ThemeStudioActivity extends AppCompatActivity {
         animLaunchHeading.setTextColor(p.getSecondaryTextColor());
         animDisconnectHeading.setTextColor(p.getSecondaryTextColor());
         SliderRow[] animRows = {
-                rowLaunchCloseMs, rowSonarHoldMs, rowReadyMs,
+                rowLaunchCloseMs, rowPulseCoilMs, rowSonarHoldMs, rowReadyMs,
                 rowChargeMs, rowFadeMs, rowExpandMs,
                 rowDisconnectCloseMs, rowDisconnectFadeMs, rowDisconnectOpenMs
         };
         int[] animVals = {
-                bundle.portalLaunchCloseMs, bundle.portalSonarHoldMs, bundle.portalReadyMs,
+                bundle.portalLaunchCloseMs, bundle.portalPulseCoilMs, bundle.portalSonarHoldMs, bundle.portalReadyMs,
                 bundle.portalChargeMs, bundle.portalPreviewFadeMs, bundle.portalExpandMs,
                 bundle.portalDisconnectCloseMs, bundle.portalDisconnectFadeMs, bundle.portalDisconnectOpenMs
         };
