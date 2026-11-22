@@ -410,6 +410,7 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
                             if (getWindow() != null) {
                                 getWindow().setBackgroundDrawableResource(R.drawable.bg_oneui_ambient_surface);
                             }
+                            UiHelper.notifyStreamEnded(this);
                             UiHelper.markReturningFromStream();
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                                 UiHelper.disableActivityTransition(this, true);
@@ -1835,6 +1836,7 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
     @Override
     protected void onPause() {
         if (isFinishing()) {
+            UiHelper.notifyStreamEnded(this);
             // Stop any further input device notifications before we lose focus (and pointer capture)
             if (controllerHandler != null) {
                 controllerHandler.stop();
@@ -4980,6 +4982,7 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
                 getWindow().setBackgroundDrawableResource(R.drawable.bg_oneui_ambient_surface);
             }
             maybeLaunchSessionMetrics();
+            UiHelper.notifyStreamEnded(this);
             UiHelper.markReturningFromStream();
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                 UiHelper.disableActivityTransition(this, true);

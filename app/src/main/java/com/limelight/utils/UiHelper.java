@@ -1195,6 +1195,16 @@ public class UiHelper {
     public static void notifyStreamEnded(Context context) {
         sStreamActive = false;
         setGameModeStatus(context, false, false);
+        final Activity resumed = sResumedMenuActivity != null ? sResumedMenuActivity.get() : null;
+        if (resumed != null && !resumed.isFinishing() && !resumed.isDestroyed()) {
+            resumed.runOnUiThread(() -> {
+                if (!sStreamActive && !resumed.isFinishing() && !resumed.isDestroyed()
+                        && sResumedMenuActivity.get() == resumed) {
+                    sActivePortalOwner = new java.lang.ref.WeakReference<>(resumed);
+                    setPortalBackdropRendering(resumed, true);
+                }
+            });
+        }
     }
 
     public static void setLocale(Activity activity)
@@ -1248,6 +1258,7 @@ public class UiHelper {
     private static volatile boolean portalLifecycleRegistered = false;
     private static volatile boolean sStreamActive = false;
     private static java.lang.ref.WeakReference<Activity> sActivePortalOwner = new java.lang.ref.WeakReference<>(null);
+    private static java.lang.ref.WeakReference<Activity> sResumedMenuActivity = new java.lang.ref.WeakReference<>(null);
     private static int animGenerationCounter = 0;
 
     private static int nextAnimGeneration() {
@@ -1285,6 +1296,7 @@ public class UiHelper {
                 if (a == null || a instanceof Game || a instanceof ExternalDisplayControlActivity) {
                     return;
                 }
+                sResumedMenuActivity = new java.lang.ref.WeakReference<>(a);
                 com.limelight.ui.PortalShaderView.markUserInteraction();
                 Activity prev = sActivePortalOwner.get();
                 if (prev != null && prev != a) {
@@ -1300,6 +1312,9 @@ public class UiHelper {
 
             @Override
             public void onActivityPaused(Activity a) {
+                if (sResumedMenuActivity.get() == a) {
+                    sResumedMenuActivity.clear();
+                }
                 // Handoff to a new foreground Activity is handled cleanly in onActivityResumed
                 // via sActivePortalOwner so translucent dialogs stay backed while double GL threads are prevented.
             }
@@ -1307,6 +1322,9 @@ public class UiHelper {
             @Override
             public void onActivityStopped(Activity a) {
                 setPortalBackdropRendering(a, false);
+                if (sResumedMenuActivity.get() == a) {
+                    sResumedMenuActivity.clear();
+                }
                 if (sActivePortalOwner.get() == a) {
                     sActivePortalOwner.clear();
                 }
@@ -1318,6 +1336,9 @@ public class UiHelper {
             @Override
             public void onActivityDestroyed(Activity a) {
                 setPortalBackdropRendering(a, false);
+                if (sResumedMenuActivity.get() == a) {
+                    sResumedMenuActivity.clear();
+                }
                 if (sActivePortalOwner.get() == a) {
                     sActivePortalOwner.clear();
                 }

@@ -149,7 +149,8 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "uniform vec3  u_bgEdge;\n" +
             "uniform vec3  u_bgCenter;\n" +
             "uniform vec3  u_bgInner;\n" +
-            "uniform vec3  u_particleCol;\n" +
+            "uniform vec3  u_particleCols[3];\n" +
+            "uniform vec3  u_pulseCol;\n" +
             "uniform vec3  u_ringCol;\n" +
             "uniform vec3  u_chargeCol;\n" +
             "uniform float u_isLight;\n" +
@@ -157,6 +158,11 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "uniform vec2  u_layerShift[3];\n" +
             "uniform int   u_maxLayers;\n" +
             "uniform int   u_maxSubParticles;\n" +
+            "uniform int   u_activeStrands;\n" +
+            "uniform vec4  u_strandRot[10];\n" +
+            "uniform vec4  u_strandGeom[10];\n" +
+            "uniform vec4  u_strandWave[10];\n" +
+            "uniform vec4  u_strandPhase[10];\n" +
             "\n" +
             "const float PI  = 3.14159265359;\n" +
             "const float TAU = 6.28318530718;\n" +
@@ -171,19 +177,12 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "    return fract((p3.xx + p3.yz) * p3.zy);\n" +
             "}\n" +
             "\n" +
-            "mat2 rot2d(float a) {\n" +
-            "    float s = sin(a), c = cos(a);\n" +
-            "    return mat2(c, -s, s, c);\n" +
-            "}\n" +
-            "\n" +
             "float easeInOutCubic(float t) {\n" +
             "    return t < 0.5 ? 4.0 * t * t * t : 1.0 - safePow(-2.0 * t + 2.0, 3.0) * 0.5;\n" +
             "}\n" +
             "\n" +
             "vec3 sampleParticles(vec2 uv, float time) {\n" +
             "    vec3 col = vec3(0.0);\n" +
-            "    vec3 pTintA = u_ringCol;\n" +
-            "    vec3 pTintB = u_particleCol;\n" +
             "    float amount = clamp(u_particleDensity, 0.0, 20.0);\n" +
             "    if (amount <= 0.001) return col;\n" +
             "    float sz = clamp(u_particleSize, 0.1, 8.0);\n" +
@@ -193,6 +192,9 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "    for (int layer = 0; layer < 3; layer++) {\n" +
             "        if (layer >= u_maxLayers) break;\n" +
             "        float fl = float(layer);\n" +
+            "        vec3 layerCol = u_particleCols[layer];\n" +
+            "        vec3 pTintA = layerCol * 0.78;\n" +
+            "        vec3 pTintB = min(layerCol * 1.15 + vec3(0.08), vec3(1.0));\n" +
             "        // Constant grid scale so increasing Particle Amount never zooms out!\n" +
             "        float scale = 14.0 + fl * 9.0;\n" +
             "        vec4 lr = u_layerRot[layer];\n" +
@@ -249,30 +251,68 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "    return ahead * tail;\n" +
             "}\n" +
             "\n" +
-            "// --- Combined Bidirectional Spiral Morph ---\n" +
+            "// --- Combined Bidirectional Spiral Morph (CPU-precomputed strands + Menu Fast-Path + Early Culling) ---\n" +
             "// Launch (u_isDisconnecting == 0): rapid center capture + multi-turn inward tightening onto baseRadius\n" +
             "// Disconnect (u_isDisconnecting == 1): fast forward peel-off + curvature ease-out settling onto menu paths\n" +
-            "vec3 sampleSpiralingEnergyPaths(vec2 uv, float baseRadius, float morph, float readyT, vec3 rimHaloCol, vec3 rimCoreCol, float time) {\n" +
-            "    if (u_pulseBrightness <= 0.001 || u_pulseAmount <= 0.001) return vec3(0.0);\n" +
+            "vec3 sampleSpiralingEnergyPaths(vec2 uv, float morph, float readyT, vec3 pulseCol, vec3 rimHaloCol, vec3 rimCoreCol) {\n" +
+            "    if (u_pulseBrightness <= 0.001 || u_activeStrands <= 0) return vec3(0.0);\n" +
             "\n" +
             "    float m = clamp(morph, 0.0, 1.0);\n" +
-            "    bool isDisc = (u_isDisconnecting > 0.5);\n" +
+            "    float baseTail = clamp(0.16 * u_pulseLength, 0.035, 0.44);\n" +
+            "    float baseHead = clamp(0.022 * sqrt(max(0.1, u_pulseLength)), 0.008, 0.06);\n" +
             "\n" +
+            "    // Zero-quality-loss Menu Fast-Path (morph == 0): skips 4-turn spiral loop, exp/log softplus & endFade\n" +
+            "    if (m <= 0.0005) {\n" +
+            "        vec3 col = vec3(0.0);\n" +
+            "        const float coreBaseW = 0.00234;\n" +
+            "        const float haloBaseW = 0.02025;\n" +
+            "        const float rejectDist = haloBaseW * 6.5;\n" +
+            "\n" +
+            "        for (int i = 0; i < 10; i++) {\n" +
+            "            if (i >= u_activeStrands) break;\n" +
+            "            vec4 sr = u_strandRot[i];\n" +
+            "            vec2 p = mat2(sr.x, sr.y, sr.z, sr.w) * uv;\n" +
+            "\n" +
+            "            vec4 g = u_strandGeom[i];\n" +
+            "            vec4 w = u_strandWave[i];\n" +
+            "            float targetR = g.y - 40.0;\n" +
+            "            float maxSlope = w.x * w.z + w.y * w.w;\n" +
+            "            float bandMargin = rejectDist * (1.0 + maxSlope) + w.z + w.w + 0.06;\n" +
+            "            if (abs((p.y - targetR) - g.z) > bandMargin) continue;\n" +
+            "\n" +
+            "            vec2 v = vec2(p.x, p.y + 40.0);\n" +
+            "            float rLocal = length(v);\n" +
+            "            float s = atan(v.x, v.y) * g.y;\n" +
+            "\n" +
+            "            vec4 ph = u_strandPhase[i];\n" +
+            "            float ph1 = s * w.x + ph.x;\n" +
+            "            float ph2 = s * w.y + ph.y;\n" +
+            "            float waveY = g.z + sin(ph1) * w.z + sin(ph2) * w.w;\n" +
+            "            float dyds  = cos(ph1) * w.x * w.z + cos(ph2) * w.y * w.w;\n" +
+            "            float dist  = abs((rLocal - g.y) - waveY) * inversesqrt(1.0 + dyds * dyds);\n" +
+            "            if (dist > rejectDist) continue;\n" +
+            "\n" +
+            "            float pos = fract(s * g.w + ph.z);\n" +
+            "            float energy = evalCometPhase(pos, baseHead, baseTail);\n" +
+            "            if (energy < 0.002) continue;\n" +
+            "\n" +
+            "            float taper = mix(0.45, 1.0, safePow(energy, 0.45));\n" +
+            "            float core  = exp(-dist / (coreBaseW * taper));\n" +
+            "            float halo  = exp(-dist / (haloBaseW * taper)) * 0.78;\n" +
+            "            vec3 turnCol = (pulseCol * halo + rimCoreCol * core * 1.10) * energy;\n" +
+            "            col += turnCol * (u_pulseBrightness * ph.w);\n" +
+            "        }\n" +
+            "        return col;\n" +
+            "    }\n" +
+            "\n" +
+            "    bool isDisc = (u_isDisconnecting > 0.5);\n" +
             "    float handoffFade = isDisc\n" +
             "        ? (1.0 - smoothstep(0.90, 1.0, m))\n" +
             "        : (1.0 - smoothstep(0.88, 1.0, m));\n" +
             "    if (handoffFade <= 0.001) return vec3(0.0);\n" +
             "\n" +
             "    float dirSign = isDisc ? 1.0 : -1.0;\n" +
-            "\n" +
             "    vec3 col = vec3(0.0);\n" +
-            "\n" +
-            "    const float BASE_ANGLES[10]  = float[10](-0.38,  2.76,  1.12, -2.02,  0.07, -0.68,  2.46, -1.42,  0.54, -2.96);\n" +
-            "    const float BASE_OFFSETS[10] = float[10]( 0.28,  0.24,  0.18,  0.22,  0.06,  0.34,  0.32,  0.10,  0.14,  0.38);\n" +
-            "\n" +
-            "    float tCurve  = smoothstep(0.0, 0.45, m);\n" +
-            "    float launchL = 40.0 * safePow(1.0 - tCurve, 3.4);\n" +
-            "    float discK   = safePow(m, 2.35);\n" +
             "\n" +
             "    float pitch = isDisc\n" +
             "        ? ((1.0 - smoothstep(0.74, 0.98, m)) * safePow(m, 2.0) * 1.75 * 0.056)\n" +
@@ -285,10 +325,6 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "    float waveFade = isDisc\n" +
             "        ? (1.0 - safePow(m, 2.2))\n" +
             "        : (1.0 - smoothstep(0.04, 0.55, m));\n" +
-            "\n" +
-            "    float targetBlend = isDisc\n" +
-            "        ? safePow(m, 2.1)\n" +
-            "        : smoothstep(0.0, 0.55, m);\n" +
             "\n" +
             "    float ringFuse = isDisc\n" +
             "        ? smoothstep(0.76, 0.97, m)\n" +
@@ -304,69 +340,35 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "    float haloBaseW  = mix(0.02025, 0.0360, glowMorph);\n" +
             "    float rejectDist = haloBaseW * 6.5;\n" +
             "\n" +
-            "    float baseTail = clamp(0.16 * u_pulseLength, 0.035, 0.44);\n" +
-            "    float baseHead = clamp(0.022 * sqrt(max(0.1, u_pulseLength)), 0.008, 0.06);\n" +
             "    float stretchT = isDisc ? safePow(m, 2.2) : smoothstep(0.40, 0.92, m);\n" +
             "    float curTail  = mix(baseTail, 0.46, stretchT);\n" +
             "    float curHead  = mix(baseHead, 0.14, stretchT);\n" +
             "\n" +
-            "    float frameSpin = isDisc\n" +
-            "        ? (1.35 * safePow(m, 2.8))\n" +
-            "        : (-1.35 * easeInOutCubic(m));\n" +
-            "\n" +
-            "    float chaseOffset = isDisc\n" +
-            "        ? (1.0 - safePow(m, 2.9))\n" +
-            "        : safePow(m, 1.8);\n" +
-            "\n" +
-            "    float spanScale = isDisc\n" +
-            "        ? mix(1.0, 0.76, safePow(m, 2.2))\n" +
-            "        : mix(1.0, 0.72, smoothstep(0.35, 0.90, m));\n" +
+            "    // Smoothly blend Energy Pulses color into Iris Rim color as strands fuse onto the rim\n" +
+            "    vec3 activeHaloCol = mix(pulseCol, rimHaloCol, ringFuse);\n" +
+            "    float coreGain = mix(1.10, mix(0.28, 1.20, readyT), ringFuse);\n" +
             "\n" +
             "    const float SOFT_K    = 0.62;\n" +
             "    const float SOFT_KNEE = 1.25;\n" +
+            "    float maxSpiralDr = pitch * (thetaLimit + SOFT_KNEE + 1.20);\n" +
             "    int kStart = isDisc ? -1 : -2;\n" +
             "\n" +
             "    for (int i = 0; i < 10; i++) {\n" +
-            "        float fi = float(i);\n" +
-            "        if (fi >= u_pulseAmount) break;\n" +
-            "        float pathAlpha = clamp(u_pulseAmount - fi, 0.0, 1.0);\n" +
+            "        if (i >= u_activeStrands) break;\n" +
+            "        vec4 sr = u_strandRot[i];\n" +
+            "        vec2 p = mat2(sr.x, sr.y, sr.z, sr.w) * uv;\n" +
             "\n" +
-            "        vec2 rnd = hash22(vec2(fi * 5.31 + 1.7, 13.37 + fi * 2.1));\n" +
-            "\n" +
-            "        float ang = BASE_ANGLES[i]\n" +
-            "                  + sin(time * (0.045 + rnd.x * 0.025) + fi * 1.9) * 0.16 * waveFade\n" +
-            "                  + frameSpin * (0.85 + 0.30 * rnd.x);\n" +
-            "\n" +
-            "        vec2 p = rot2d(ang) * uv;\n" +
-            "\n" +
-            "        float targetR = mix(BASE_OFFSETS[i], baseRadius, targetBlend);\n" +
-            "        float Rc;\n" +
-            "        float L;\n" +
-            "        if (isDisc) {\n" +
-            "            float kappa = mix(1.0 / (40.0 + targetR), 1.0 / max(targetR, 0.05), discK);\n" +
-            "            Rc = 1.0 / kappa;\n" +
-            "            L  = max(0.0, Rc - targetR);\n" +
-            "        } else {\n" +
-            "            L  = launchL;\n" +
-            "            Rc = L + targetR;\n" +
-            "        }\n" +
-            "\n" +
-            "        vec2 v = vec2(p.x, p.y + L);\n" +
+            "        vec4 g = u_strandGeom[i];\n" +
+            "        vec4 w = u_strandWave[i];\n" +
+            "        vec2 v = vec2(p.x, p.y + g.x);\n" +
             "        float rLocal = length(v);\n" +
+            "\n" +
+            "        // Conservative radial envelope cull before atan() and 4-turn loop\n" +
+            "        float envMargin = rejectDist * (2.7 + w.x * w.z + w.y * w.w) + abs(g.z) + w.z + w.w;\n" +
+            "        if (rLocal < g.y - envMargin || rLocal > g.y + maxSpiralDr + envMargin) continue;\n" +
+            "\n" +
             "        float phi = atan(v.x, v.y);\n" +
-            "\n" +
-            "        float baseSpan = mix(3.6, 5.0, rnd.y);\n" +
-            "        float curSpan  = baseSpan * spanScale;\n" +
-            "        float speed    = mix(0.28, 0.50, rnd.x) * u_pulseSpeed;\n" +
-            "        float baseFreq = speed / baseSpan;\n" +
-            "        float phaseOff = fi * 0.143 + rnd.x * 0.4;\n" +
-            "\n" +
-            "        float f1 = mix(1.45, 2.35, rnd.x);\n" +
-            "        float f2 = mix(2.80, 4.10, rnd.y);\n" +
-            "        float a1 = mix(0.075, 0.130, rnd.y) * u_waveAmp * waveFade;\n" +
-            "        float a2 = mix(0.028, 0.055, rnd.x) * u_waveAmp * waveFade;\n" +
-            "        float driftY = sin(time * (0.09 + rnd.y * 0.05) + fi * 2.7) * 0.06 * u_waveAmp * waveFade;\n" +
-            "\n" +
+            "        vec4 ph = u_strandPhase[i];\n" +
             "        vec3 strandCol = vec3(0.0);\n" +
             "\n" +
             "        for (int j = 0; j < 4; j++) {\n" +
@@ -380,18 +382,18 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "            float soft = (x > 10.0) ? x : log(1.0 + exp(x));\n" +
             "            float spiralDr = pitch * (soft / SOFT_K);\n" +
             "\n" +
-            "            float rBase = Rc + spiralDr;\n" +
+            "            float rBase = g.y + spiralDr;\n" +
             "            if (abs(rLocal - rBase) > rejectDist + 0.22 * waveFade) continue;\n" +
             "\n" +
-            "            float s = theta * Rc;\n" +
+            "            float s = theta * g.y;\n" +
             "\n" +
             "            float waveY = 0.0;\n" +
             "            float dyds  = 0.0;\n" +
             "            if (waveFade > 0.001) {\n" +
-            "                float ph1 = s * f1 + time * (0.24 + rnd.x * 0.14) + fi * 2.3;\n" +
-            "                float ph2 = s * f2 - time * (0.18 + rnd.y * 0.12) + fi * 4.1;\n" +
-            "                waveY = driftY + sin(ph1) * a1 + sin(ph2) * a2;\n" +
-            "                dyds  = cos(ph1) * f1 * a1 + cos(ph2) * f2 * a2;\n" +
+            "                float ph1 = s * w.x + ph.x;\n" +
+            "                float ph2 = s * w.y + ph.y;\n" +
+            "                waveY = g.z + sin(ph1) * w.z + sin(ph2) * w.w;\n" +
+            "                dyds  = cos(ph1) * w.x * w.z + cos(ph2) * w.y * w.w;\n" +
             "            }\n" +
             "\n" +
             "            float rCurve = rBase + waveY;\n" +
@@ -403,7 +405,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "\n" +
             "            if (dist > rejectDist) continue;\n" +
             "\n" +
-            "            float pos = fract(s / curSpan - time * baseFreq - chaseOffset + phaseOff);\n" +
+            "            float pos = fract(s * g.w + ph.z);\n" +
             "            float cometE = evalCometPhase(pos, curHead, curTail);\n" +
             "            float energy = mix(cometE, 1.0, ringFuse) * endFade;\n" +
             "            if (energy < 0.002) continue;\n" +
@@ -411,15 +413,12 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "            float taper = mix(0.45, 1.0, safePow(energy, 0.45));\n" +
             "            float core  = exp(-dist / (coreBaseW * taper));\n" +
             "            float halo  = exp(-dist / (haloBaseW * taper)) * 0.78;\n" +
-            "\n" +
-            "            float shimmer = 0.90 + 0.10 * sin(time * 3.1 + fi * 2.4);\n" +
-            "            float coreGain = mix(1.10, mix(0.28, 1.20, readyT), ringFuse);\n" +
-            "            vec3 turnCol = (rimHaloCol * halo + rimCoreCol * core * coreGain) * energy * shimmer;\n" +
+            "            vec3 turnCol = (activeHaloCol * halo + rimCoreCol * core * coreGain) * energy;\n" +
             "\n" +
             "            strandCol = max(strandCol, turnCol);\n" +
             "        }\n" +
             "\n" +
-            "        col += strandCol * u_pulseBrightness * pathAlpha * stackNorm;\n" +
+            "        col += strandCol * (u_pulseBrightness * ph.w * stackNorm);\n" +
             "    }\n" +
             "\n" +
             "    return col * handoffFade;\n" +
@@ -461,10 +460,10 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "    float menuOpenVis = insideMask * innerAlpha * smoothstep(0.55, 1.0, expandT);\n" +
             "    vec2 sheenDir     = vec2(cos(u_time * 0.07 + 0.45), sin(u_time * 0.07 + 0.45));\n" +
             "    float sheenGrad   = smoothstep(-0.45, 0.95, dot(portalUv, sheenDir));\n" +
-            "    vec3  menuInner   = innerBg + (u_ringCol * mix(0.11, 0.06, u_isLight)) * sheenGrad * menuOpenVis;\n" +
+            "    vec3  menuInner   = innerBg + (u_pulseCol * mix(0.11, 0.06, u_isLight)) * sheenGrad * menuOpenVis;\n" +
             "    vec3  bgColor     = mix(menuInner, outerBg, outsideMask);\n" +
             "\n" +
-            "    // --- 2. Shared Iris Rim & Energy Pulse Color (Always Synchronized) ---\n" +
+            "    // --- 2. Iris Rim & Charge Ring Colors (Independent from Energy Pulses & UI Highlight) ---\n" +
             "    vec3 colIdle   = u_ringCol;\n" +
             "    vec3 colReady  = mix(u_ringCol, vec3(0.45, 0.36, 1.00), 0.35);\n" +
             "    vec3 colCharge = u_chargeCol;\n" +
@@ -473,7 +472,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "    vec3 haloColor = mix(colIdle, colReady, readyT);\n" +
             "    haloColor      = mix(haloColor, colCharge, chargeT);\n" +
             "\n" +
-            "    // --- 3. Interior Starfield (Keeps dustmotes floating over stream during iris expand) ---\n" +
+            "    // --- 3. Interior Starfield (3 Independent Particle Layer Colors) ---\n" +
             "    float streamParticleFade = 1.0 - smoothstep(0.0, 1.0, expandEase);\n" +
             "    float particleOpacity = mix(1.0, streamParticleFade, previewT);\n" +
             "    float particleVis = insideMask * particleOpacity * smoothstep(radius, radius - 0.04, d);\n" +
@@ -486,7 +485,7 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "    float morph = clamp(u_pulseMorph, 0.0, 1.0);\n" +
             "    vec3 menuPulses = vec3(0.0);\n" +
             "    if (innerAlpha > 0.001) {\n" +
-            "        menuPulses = sampleSpiralingEnergyPaths(portalUv, baseRadius, morph, readyT, haloColor, colCore, u_time) * innerAlpha;\n" +
+            "        menuPulses = sampleSpiralingEnergyPaths(portalUv, morph, readyT, u_pulseCol, haloColor, colCore) * innerAlpha;\n" +
             "    }\n" +
             "\n" +
             "    // --- 5-7. Portal Sonar, Ring & Shockwaves (Skipped completely when iris is fully open) ---\n" +
@@ -563,8 +562,10 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             "\n" +
             "    if (u_isLight > 0.5) {\n" +
             "        // Light Mode: softly tint motes, energy pulses & ring into airy backdrop when opaque, additive over live stream\n" +
-            "        float pStrength = clamp(max(particles.r, max(particles.g, particles.b)) * 0.85, 0.0, 0.65);\n" +
-            "        vec3 lightBgWithMotes = mix(bgColor, u_particleCol, pStrength);\n" +
+            "        float pMax = max(particles.r, max(particles.g, particles.b));\n" +
+            "        float pStrength = clamp(pMax * 0.85, 0.0, 0.65);\n" +
+            "        vec3 pTint = pMax > 0.001 ? clamp(particles / pMax, 0.0, 1.0) : u_particleCols[0];\n" +
+            "        vec3 lightBgWithMotes = mix(bgColor, pTint, pStrength);\n" +
             "        vec3 combinedGlow = menuPulses + ringGlow;\n" +
             "        float rStrength = clamp(max(combinedGlow.r, max(combinedGlow.g, combinedGlow.b)) * 0.85, 0.0, 0.92);\n" +
             "        vec3 lightComposed = mix(lightBgWithMotes, clamp(combinedGlow, 0.0, 1.0), rStrength);\n" +
@@ -712,7 +713,10 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
     private volatile int uBgEdgeColor = 0xFF12141E;
     private volatile int uBgCenterColor = 0xFF1C2038;
     private volatile int uBgInnerColor = 0xFF0C0E1C;
-    private volatile int uParticleRgb = 0xFFC7D8FF;
+    private volatile int uParticleNearRgb = 0xFFC7D8FF;
+    private volatile int uParticleMidRgb = 0xFF8AA8FF;
+    private volatile int uParticleFarRgb = 0xFF5E6BFF;
+    private volatile int uPulseRgb = 0xFF5C72FF;
     private volatile int uRingRgb = 0xFF5C72FF;
     private volatile int uChargeRgb = 0xFF38B5FF;
     private volatile float uIsLight = 0f;
@@ -734,9 +738,12 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             uBgCenterColor = AppThemePalette.blendColors(palette.background, palette.accent, 0.14f);
             uBgInnerColor = AppThemePalette.blendColors(palette.background, 0xFF04060C, 0.28f);
         }
-        uParticleRgb = palette.particleColor;
+        uParticleNearRgb = palette.particleColor;
+        uParticleMidRgb = palette.particleColorMid;
+        uParticleFarRgb = palette.particleColorFar;
+        uPulseRgb = palette.pulseColor;
         uRingRgb = palette.ringColor;
-        uChargeRgb = palette.highlight;
+        uChargeRgb = palette.chargeColor;
     }
 
     public void applyPreviewOverride(@NonNull AppThemePalette.ThemeBundle bundle) {
@@ -1064,6 +1071,59 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
         super.onDetachedFromWindow();
     }
 
+    private static final float[] STRAND_BASE_ANGLES = {
+            -0.38f, 2.76f, 1.12f, -2.02f, 0.07f, -0.68f, 2.46f, -1.42f, 0.54f, -2.96f
+    };
+    private static final float[] STRAND_BASE_OFFSETS = {
+            0.28f, 0.24f, 0.18f, 0.22f, 0.06f, 0.34f, 0.32f, 0.10f, 0.14f, 0.38f
+    };
+    private static final float[] STRAND_RND_X = new float[10];
+    private static final float[] STRAND_RND_Y = new float[10];
+    static {
+        for (int i = 0; i < 10; i++) {
+            float fi = (float) i;
+            float px = fi * 5.31f + 1.7f;
+            float py = 13.37f + fi * 2.1f;
+            float x = px * 0.1031f;
+            x -= (float) Math.floor(x);
+            float y = py * 0.1030f;
+            y -= (float) Math.floor(y);
+            float z = px * 0.0973f;
+            z -= (float) Math.floor(z);
+            float d = x * (y + 33.33f) + y * (z + 33.33f) + z * (x + 33.33f);
+            x += d;
+            y += d;
+            z += d;
+            float rx = (x + y) * z;
+            rx -= (float) Math.floor(rx);
+            float ry = (x + z) * y;
+            ry -= (float) Math.floor(ry);
+            STRAND_RND_X[i] = rx;
+            STRAND_RND_Y[i] = ry;
+        }
+    }
+
+    private static float clampF(float v, float lo, float hi) {
+        return Math.max(lo, Math.min(hi, v));
+    }
+
+    private static float mixF(float a, float b, float t) {
+        return a + (b - a) * t;
+    }
+
+    private static float smoothstepF(float e0, float e1, float x) {
+        float t = clampF((x - e0) / (e1 - e0), 0f, 1f);
+        return t * t * (3f - 2f * t);
+    }
+
+    private static float safePowF(float x, float p) {
+        return x <= 0f ? 0f : (float) Math.pow(x, p);
+    }
+
+    private static float easeInOutCubicF(float t) {
+        return t < 0.5f ? 4f * t * t * t : 1f - safePowF(-2f * t + 2f, 3f) * 0.5f;
+    }
+
     private final class PortalGlThread extends Thread {
         private static final int EGL_OPENGL_ES3_BIT_KHR = 0x0040;
 
@@ -1102,7 +1162,8 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
         private int uBgEdgeLoc = -1;
         private int uBgCenterLoc = -1;
         private int uBgInnerLoc = -1;
-        private int uParticleColLoc = -1;
+        private int uParticleColsLoc = -1;
+        private int uPulseColLoc = -1;
         private int uRingColLoc = -1;
         private int uChargeColLoc = -1;
         private int uIsLightLoc = -1;
@@ -1110,8 +1171,18 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
         private int uLayerShiftLoc = -1;
         private int uMaxLayersLoc = -1;
         private int uMaxSubParticlesLoc = -1;
+        private int uActiveStrandsLoc = -1;
+        private int uStrandRotLoc = -1;
+        private int uStrandGeomLoc = -1;
+        private int uStrandWaveLoc = -1;
+        private int uStrandPhaseLoc = -1;
+        private final float[] particleColsBuf = new float[9];
         private final float[] layerRotBuf = new float[12];
         private final float[] layerShiftBuf = new float[6];
+        private final float[] strandRotBuf = new float[40];
+        private final float[] strandGeomBuf = new float[40];
+        private final float[] strandWaveBuf = new float[40];
+        private final float[] strandPhaseBuf = new float[40];
 
         // Fullscreen linear blit program for scaled background FBO
         private int blitProgram = 0;
@@ -1323,8 +1394,9 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             GLES30.glUniform1f(uParticleDensityLoc, uParticleDensity);
             GLES30.glUniform1f(uSonarSpeedLoc, uSonarSpeed);
             boolean saver = batterySaverEffective;
+            float effectivePulseAmount = saver ? Math.min(uPulseAmount, 3.0f) : uPulseAmount;
             if (uPulseAmountLoc >= 0) {
-                GLES30.glUniform1f(uPulseAmountLoc, saver ? Math.min(uPulseAmount, 3.0f) : uPulseAmount);
+                GLES30.glUniform1f(uPulseAmountLoc, effectivePulseAmount);
             }
             if (uPulseBrightnessLoc >= 0) {
                 GLES30.glUniform1f(uPulseBrightnessLoc, uPulseBrightness);
@@ -1341,7 +1413,13 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             uploadColor3f(uBgEdgeLoc, uBgEdgeColor);
             uploadColor3f(uBgCenterLoc, uBgCenterColor);
             uploadColor3f(uBgInnerLoc, uBgInnerColor);
-            uploadColor3f(uParticleColLoc, uParticleRgb);
+            if (uParticleColsLoc >= 0) {
+                fillColor3(particleColsBuf, 0, uParticleNearRgb);
+                fillColor3(particleColsBuf, 3, uParticleMidRgb);
+                fillColor3(particleColsBuf, 6, uParticleFarRgb);
+                GLES30.glUniform3fv(uParticleColsLoc, 3, particleColsBuf, 0);
+            }
+            uploadColor3f(uPulseColLoc, uPulseRgb);
             uploadColor3f(uRingColLoc, uRingRgb);
             uploadColor3f(uChargeColLoc, uChargeRgb);
             GLES30.glUniform1f(uIsLightLoc, uIsLight);
@@ -1374,11 +1452,129 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
                 GLES30.glUniform1i(uMaxSubParticlesLoc, saver ? 2 : 6);
             }
 
+            // CPU-precomputed per-frame strand uniforms (zero per-pixel hash/trig overhead)
+            int activeStrands = (uPreviewMix >= 0.999f || uPulseBrightness <= 0.001f || effectivePulseAmount <= 0.001f)
+                    ? 0
+                    : Math.min(10, (int) Math.ceil(effectivePulseAmount));
+            if (uActiveStrandsLoc >= 0) {
+                GLES30.glUniform1i(uActiveStrandsLoc, activeStrands);
+            }
+            if (activeStrands > 0) {
+                float m = clampF(uPulseMorph, 0f, 1f);
+                boolean isDisc = (uIsDisconnecting > 0.5f);
+                float baseRadius = 0.25f * clampF(uPortalScale, 0.2f, 4.0f);
+                float waveAmp = uWaveAmp;
+                float pulseSpeed = uPulseSpeed;
+                double t = sharedTime;
+                double tau = Math.PI * 2.0;
+
+                float tCurve = smoothstepF(0f, 0.45f, m);
+                float launchL = 40.0f * safePowF(1.0f - tCurve, 3.4f);
+                float discK = safePowF(m, 2.35f);
+                float waveFade = (m <= 0.0005f) ? 1.0f
+                        : (isDisc ? (1.0f - safePowF(m, 2.2f)) : (1.0f - smoothstepF(0.04f, 0.55f, m)));
+                float targetBlend = (m <= 0.0005f) ? 0.0f
+                        : (isDisc ? safePowF(m, 2.1f) : smoothstepF(0.0f, 0.55f, m));
+                float frameSpin = (m <= 0.0005f) ? 0.0f
+                        : (isDisc ? (1.35f * safePowF(m, 2.8f)) : (-1.35f * easeInOutCubicF(m)));
+                float chaseOffset = (m <= 0.0005f) ? 0.0f
+                        : (isDisc ? (1.0f - safePowF(m, 2.9f)) : safePowF(m, 1.8f));
+                float spanScale = (m <= 0.0005f) ? 1.0f
+                        : (isDisc ? mixF(1.0f, 0.76f, safePowF(m, 2.2f)) : mixF(1.0f, 0.72f, smoothstepF(0.35f, 0.90f, m)));
+
+                for (int i = 0; i < activeStrands; i++) {
+                    float fi = (float) i;
+                    float rndX = STRAND_RND_X[i];
+                    float rndY = STRAND_RND_Y[i];
+                    float pathAlpha = clampF(effectivePulseAmount - fi, 0f, 1f);
+
+                    double ang = STRAND_BASE_ANGLES[i]
+                            + Math.sin(t * (0.045 + rndX * 0.025) + fi * 1.9) * 0.16 * waveFade
+                            + frameSpin * (0.85f + 0.30f * rndX);
+                    float sAng = (float) Math.sin(ang);
+                    float cAng = (float) Math.cos(ang);
+
+                    float targetR = mixF(STRAND_BASE_OFFSETS[i], baseRadius, targetBlend);
+                    float rc;
+                    float lVal;
+                    if (m <= 0.0005f) {
+                        lVal = 40.0f;
+                        rc = 40.0f + STRAND_BASE_OFFSETS[i];
+                    } else if (isDisc) {
+                        float kappa = mixF(1.0f / (40.0f + targetR), 1.0f / Math.max(targetR, 0.05f), discK);
+                        rc = 1.0f / kappa;
+                        lVal = Math.max(0.0f, rc - targetR);
+                    } else {
+                        lVal = launchL;
+                        rc = lVal + targetR;
+                    }
+
+                    float baseSpan = mixF(3.6f, 5.0f, rndY);
+                    float invCurSpan = 1.0f / (baseSpan * spanScale);
+                    float speed = mixF(0.28f, 0.50f, rndX) * pulseSpeed;
+                    double baseFreq = speed / (double) baseSpan;
+                    double phaseOff = fi * 0.143 + rndX * 0.4;
+
+                    float f1 = mixF(1.45f, 2.35f, rndX);
+                    float f2 = mixF(2.80f, 4.10f, rndY);
+                    float a1 = mixF(0.075f, 0.130f, rndY) * waveAmp * waveFade;
+                    float a2 = mixF(0.028f, 0.055f, rndX) * waveAmp * waveFade;
+                    float driftY = (waveFade > 0.0005f)
+                            ? (float) (Math.sin(t * (0.09 + rndY * 0.05) + fi * 2.7) * 0.06 * waveAmp * waveFade)
+                            : 0f;
+
+                    float wavePh1 = (float) ((t * (0.24 + rndX * 0.14) + fi * 2.3) % tau);
+                    float wavePh2 = (float) ((-t * (0.18 + rndY * 0.12) + fi * 4.1) % tau);
+                    double rawComet = -t * baseFreq - chaseOffset + phaseOff;
+                    float cometPhase = (float) (rawComet - Math.floor(rawComet));
+                    float shimmerGain = (float) (0.90 + 0.10 * Math.sin(t * 3.1 + fi * 2.4)) * pathAlpha;
+
+                    int idx = i * 4;
+                    strandRotBuf[idx] = cAng;
+                    strandRotBuf[idx + 1] = -sAng;
+                    strandRotBuf[idx + 2] = sAng;
+                    strandRotBuf[idx + 3] = cAng;
+
+                    strandGeomBuf[idx] = lVal;
+                    strandGeomBuf[idx + 1] = rc;
+                    strandGeomBuf[idx + 2] = driftY;
+                    strandGeomBuf[idx + 3] = invCurSpan;
+
+                    strandWaveBuf[idx] = f1;
+                    strandWaveBuf[idx + 1] = f2;
+                    strandWaveBuf[idx + 2] = a1;
+                    strandWaveBuf[idx + 3] = a2;
+
+                    strandPhaseBuf[idx] = wavePh1;
+                    strandPhaseBuf[idx + 1] = wavePh2;
+                    strandPhaseBuf[idx + 2] = cometPhase;
+                    strandPhaseBuf[idx + 3] = shimmerGain;
+                }
+                if (uStrandRotLoc >= 0) {
+                    GLES30.glUniform4fv(uStrandRotLoc, activeStrands, strandRotBuf, 0);
+                }
+                if (uStrandGeomLoc >= 0) {
+                    GLES30.glUniform4fv(uStrandGeomLoc, activeStrands, strandGeomBuf, 0);
+                }
+                if (uStrandWaveLoc >= 0) {
+                    GLES30.glUniform4fv(uStrandWaveLoc, activeStrands, strandWaveBuf, 0);
+                }
+                if (uStrandPhaseLoc >= 0) {
+                    GLES30.glUniform4fv(uStrandPhaseLoc, activeStrands, strandPhaseBuf, 0);
+                }
+            }
+
             quadBuffer.position(0);
             GLES30.glEnableVertexAttribArray(aPosLoc);
             GLES30.glVertexAttribPointer(aPosLoc, 2, GLES30.GL_FLOAT, false, 0, quadBuffer);
             GLES30.glDrawArrays(GLES30.GL_TRIANGLES, 0, 6);
             GLES30.glDisableVertexAttribArray(aPosLoc);
+        }
+
+        private void fillColor3(float[] buf, int offset, int argb) {
+            buf[offset] = ((argb >> 16) & 0xFF) / 255f;
+            buf[offset + 1] = ((argb >> 8) & 0xFF) / 255f;
+            buf[offset + 2] = (argb & 0xFF) / 255f;
         }
 
         private void uploadColor3f(int loc, int argb) {
@@ -1747,7 +1943,8 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             uBgEdgeLoc = GLES30.glGetUniformLocation(program, "u_bgEdge");
             uBgCenterLoc = GLES30.glGetUniformLocation(program, "u_bgCenter");
             uBgInnerLoc = GLES30.glGetUniformLocation(program, "u_bgInner");
-            uParticleColLoc = GLES30.glGetUniformLocation(program, "u_particleCol");
+            uParticleColsLoc = GLES30.glGetUniformLocation(program, "u_particleCols");
+            uPulseColLoc = GLES30.glGetUniformLocation(program, "u_pulseCol");
             uRingColLoc = GLES30.glGetUniformLocation(program, "u_ringCol");
             uChargeColLoc = GLES30.glGetUniformLocation(program, "u_chargeCol");
             uIsLightLoc = GLES30.glGetUniformLocation(program, "u_isLight");
@@ -1755,6 +1952,11 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             uLayerShiftLoc = GLES30.glGetUniformLocation(program, "u_layerShift");
             uMaxLayersLoc = GLES30.glGetUniformLocation(program, "u_maxLayers");
             uMaxSubParticlesLoc = GLES30.glGetUniformLocation(program, "u_maxSubParticles");
+            uActiveStrandsLoc = GLES30.glGetUniformLocation(program, "u_activeStrands");
+            uStrandRotLoc = GLES30.glGetUniformLocation(program, "u_strandRot");
+            uStrandGeomLoc = GLES30.glGetUniformLocation(program, "u_strandGeom");
+            uStrandWaveLoc = GLES30.glGetUniformLocation(program, "u_strandWave");
+            uStrandPhaseLoc = GLES30.glGetUniformLocation(program, "u_strandPhase");
 
             blitPosLoc = GLES30.glGetAttribLocation(blitProgram, "a_pos");
             blitTexLoc = GLES30.glGetUniformLocation(blitProgram, "u_tex");

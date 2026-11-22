@@ -44,7 +44,11 @@ public final class AppThemePalette {
     public static final String PREF_CUSTOM_TEXT_SECONDARY = "custom_palette_text_secondary";
     public static final String PREF_CUSTOM_CARD_OUTLINE = "custom_palette_card_outline";
     public static final String PREF_CUSTOM_PARTICLE = "custom_palette_particle";
+    public static final String PREF_CUSTOM_PARTICLE_MID = "custom_palette_particle_mid";
+    public static final String PREF_CUSTOM_PARTICLE_FAR = "custom_palette_particle_far";
+    public static final String PREF_CUSTOM_PULSE = "custom_palette_pulse";
     public static final String PREF_CUSTOM_RING = "custom_palette_ring";
+    public static final String PREF_CUSTOM_CHARGE = "custom_palette_charge";
 
     public final String key;
     public final String label;
@@ -64,7 +68,11 @@ public final class AppThemePalette {
     public final int muted;
     public final int warm;
     public final int particleColor;
+    public final int particleColorMid;
+    public final int particleColorFar;
+    public final int pulseColor;
     public final int ringColor;
+    public final int chargeColor;
     public final int frostedTintAmount; // 0..100 (-1 = use preset balanced default)
 
     public static final class CustomPaletteSpec {
@@ -78,7 +86,11 @@ public final class AppThemePalette {
         public int secondaryText;
         public int cardOutline;
         public int particleColor;
+        public int particleColorMid;
+        public int particleColorFar;
+        public int pulseColor;
         public int ringColor;
+        public int chargeColor;
 
         public CustomPaletteSpec(
                 boolean isLight,
@@ -91,7 +103,11 @@ public final class AppThemePalette {
                 int secondaryText,
                 int cardOutline,
                 int particleColor,
-                int ringColor) {
+                int particleColorMid,
+                int particleColorFar,
+                int pulseColor,
+                int ringColor,
+                int chargeColor) {
             this.isLight = isLight;
             this.background = background;
             this.surface = surface;
@@ -102,7 +118,11 @@ public final class AppThemePalette {
             this.secondaryText = secondaryText;
             this.cardOutline = cardOutline;
             this.particleColor = particleColor;
+            this.particleColorMid = particleColorMid;
+            this.particleColorFar = particleColorFar;
+            this.pulseColor = pulseColor;
             this.ringColor = ringColor;
+            this.chargeColor = chargeColor;
         }
     }
 
@@ -195,7 +215,11 @@ public final class AppThemePalette {
             obj.put("textSecondary", hex(colors.secondaryText));
             obj.put("outline", hex(colors.cardOutline));
             obj.put("particle", hex(colors.particleColor));
+            obj.put("particleMid", hex(colors.particleColorMid));
+            obj.put("particleFar", hex(colors.particleColorFar));
+            obj.put("pulse", hex(colors.pulseColor));
             obj.put("ring", hex(colors.ringColor));
+            obj.put("charge", hex(colors.chargeColor));
             obj.put("blur", blurAmountPercent);
             obj.put("blurSat", blurSaturationPercent);
             obj.put("tint", frostedTintAmountPercent);
@@ -249,18 +273,30 @@ public final class AppThemePalette {
                 boolean isLight = obj.optBoolean("isLight", false);
                 int accent = parseColorOr(obj.optString("accent", ""), 0xFF3B6EF5);
                 CustomPaletteSpec def = harmonizeFromAccent(accent, isLight);
+                int highlight = parseColorOr(obj.optString("highlight", ""), def.highlight);
+                int particleNear = parseColorOr(obj.optString("particle", ""), def.particleColor);
+                int ring = parseColorOr(obj.optString("ring", ""), def.ringColor);
+                int particleMid = parseColorOr(obj.optString("particleMid", ""),
+                        blendColors(particleNear, ring, 0.45f));
+                int particleFar = parseColorOr(obj.optString("particleFar", ""), ring);
+                int pulse = parseColorOr(obj.optString("pulse", ""), ring);
+                int charge = parseColorOr(obj.optString("charge", ""), highlight);
                 CustomPaletteSpec spec = new CustomPaletteSpec(
                         isLight,
                         parseColorOr(obj.optString("bg", ""), def.background),
                         parseColorOr(obj.optString("surface", ""), def.surface),
                         parseColorOr(obj.optString("popup", ""), def.popupTint),
                         accent,
-                        parseColorOr(obj.optString("highlight", ""), def.highlight),
+                        highlight,
                         parseColorOr(obj.optString("textPrimary", ""), def.primaryText),
                         parseColorOr(obj.optString("textSecondary", ""), def.secondaryText),
                         parseColorOr(obj.optString("outline", ""), def.cardOutline),
-                        parseColorOr(obj.optString("particle", ""), def.particleColor),
-                        parseColorOr(obj.optString("ring", ""), def.ringColor)
+                        particleNear,
+                        particleMid,
+                        particleFar,
+                        pulse,
+                        ring,
+                        charge
                 );
                 String id = obj.optString("id", "");
                 if (id.trim().isEmpty()) {
@@ -345,7 +381,11 @@ public final class AppThemePalette {
             int muted,
             int warm,
             int particleColor,
+            int particleColorMid,
+            int particleColorFar,
+            int pulseColor,
             int ringColor,
+            int chargeColor,
             int frostedTintAmount) {
         this.key = key;
         this.label = label;
@@ -365,7 +405,11 @@ public final class AppThemePalette {
         this.muted = muted;
         this.warm = warm;
         this.particleColor = particleColor;
+        this.particleColorMid = particleColorMid;
+        this.particleColorFar = particleColorFar;
+        this.pulseColor = pulseColor;
         this.ringColor = ringColor;
+        this.chargeColor = chargeColor;
         this.frostedTintAmount = frostedTintAmount;
     }
 
@@ -388,8 +432,12 @@ public final class AppThemePalette {
             0xFF1B2440,
             0xFF193860,
             0xFF2EA043,
+            0xFFC7D8FF,
             0xFF8AA8FF,
+            0xFF5E6BFF,
             0xFF5C72FF,
+            0xFF5C72FF,
+            0xFF38B5FF,
             -1
     );
 
@@ -412,8 +460,12 @@ public final class AppThemePalette {
             0xFFEBF2FC,
             0xFFCBD9EE,
             0xFF10B981,
-            0xFF4F7CF2,
             0xFF2563EB,
+            0xFF4F7CF2,
+            0xFF818CF8,
+            0xFF3B82F6,
+            0xFF2563EB,
+            0xFF0284C7,
             -1
     );
 
@@ -437,7 +489,11 @@ public final class AppThemePalette {
             0xFF33113B,
             0xFFFFE000,
             0xFF00E5FF,
+            0xFFA855F7,
             0xFFFF2D95,
+            0xFFFF2D95,
+            0xFFFF2D95,
+            0xFF00E5FF,
             -1
     );
 
@@ -460,8 +516,12 @@ public final class AppThemePalette {
             0xFF142B22,
             0xFF1B4332,
             0xFFF59E0B,
-            0xFF6EE7B7,
+            0xFFA7F3D0,
+            0xFF34D399,
+            0xFF059669,
             0xFF10B981,
+            0xFF10B981,
+            0xFF6EE7B7,
             -1
     );
 
@@ -484,8 +544,12 @@ public final class AppThemePalette {
             0xFF2E1810,
             0xFF4A2214,
             0xFFFF5072,
-            0xFFFDBA74,
+            0xFFFDE68A,
+            0xFFFB923C,
+            0xFFF43F5E,
             0xFFF97316,
+            0xFFF97316,
+            0xFFFBBF24,
             -1
     );
 
@@ -542,7 +606,8 @@ public final class AppThemePalette {
         return new AppThemePalette(
                 key, label, shortLabel, isLight, background, surface, popupTint,
                 accent, accentLight, secondary, highlight, primaryText, secondaryText,
-                cardOutline, surfaceVariant, muted, warm, particleColor, ringColor,
+                cardOutline, surfaceVariant, muted, warm,
+                particleColor, particleColorMid, particleColorFar, pulseColor, ringColor, chargeColor,
                 clamp(tintAmount, 0, 100));
     }
 
@@ -579,7 +644,11 @@ public final class AppThemePalette {
                 preset.secondaryText,
                 preset.cardOutline,
                 preset.particleColor,
-                preset.ringColor
+                preset.particleColorMid,
+                preset.particleColorFar,
+                preset.pulseColor,
+                preset.ringColor,
+                preset.chargeColor
         );
     }
 
@@ -589,18 +658,37 @@ public final class AppThemePalette {
         boolean light = prefs.getBoolean(PREF_CUSTOM_IS_LIGHT, false);
         int savedAccent = prefs.getInt(PREF_CUSTOM_ACCENT, 0xFF7C3AED);
         CustomPaletteSpec defaults = harmonizeFromAccent(savedAccent, light);
+        int savedHighlight = prefs.getInt(PREF_CUSTOM_HIGHLIGHT, defaults.highlight);
+        int savedParticleNear = prefs.getInt(PREF_CUSTOM_PARTICLE, defaults.particleColor);
+        int savedRing = prefs.getInt(PREF_CUSTOM_RING, defaults.ringColor);
+        int savedParticleMid = prefs.contains(PREF_CUSTOM_PARTICLE_MID)
+                ? prefs.getInt(PREF_CUSTOM_PARTICLE_MID, defaults.particleColorMid)
+                : blendColors(savedParticleNear, savedRing, 0.45f);
+        int savedParticleFar = prefs.contains(PREF_CUSTOM_PARTICLE_FAR)
+                ? prefs.getInt(PREF_CUSTOM_PARTICLE_FAR, defaults.particleColorFar)
+                : savedRing;
+        int savedPulse = prefs.contains(PREF_CUSTOM_PULSE)
+                ? prefs.getInt(PREF_CUSTOM_PULSE, defaults.pulseColor)
+                : savedRing;
+        int savedCharge = prefs.contains(PREF_CUSTOM_CHARGE)
+                ? prefs.getInt(PREF_CUSTOM_CHARGE, defaults.chargeColor)
+                : savedHighlight;
         return new CustomPaletteSpec(
                 light,
                 prefs.getInt(PREF_CUSTOM_BG, defaults.background),
                 prefs.getInt(PREF_CUSTOM_SURFACE, defaults.surface),
                 prefs.getInt(PREF_CUSTOM_POPUP_TINT, defaults.popupTint),
                 savedAccent,
-                prefs.getInt(PREF_CUSTOM_HIGHLIGHT, defaults.highlight),
+                savedHighlight,
                 prefs.getInt(PREF_CUSTOM_TEXT_PRIMARY, defaults.primaryText),
                 prefs.getInt(PREF_CUSTOM_TEXT_SECONDARY, defaults.secondaryText),
                 prefs.getInt(PREF_CUSTOM_CARD_OUTLINE, defaults.cardOutline),
-                prefs.getInt(PREF_CUSTOM_PARTICLE, defaults.particleColor),
-                prefs.getInt(PREF_CUSTOM_RING, defaults.ringColor)
+                savedParticleNear,
+                savedParticleMid,
+                savedParticleFar,
+                savedPulse,
+                savedRing,
+                savedCharge
         );
     }
 
@@ -618,7 +706,11 @@ public final class AppThemePalette {
                 .putInt(PREF_CUSTOM_TEXT_SECONDARY, spec.secondaryText | 0xFF000000)
                 .putInt(PREF_CUSTOM_CARD_OUTLINE, spec.cardOutline | 0xFF000000)
                 .putInt(PREF_CUSTOM_PARTICLE, spec.particleColor | 0xFF000000)
+                .putInt(PREF_CUSTOM_PARTICLE_MID, spec.particleColorMid | 0xFF000000)
+                .putInt(PREF_CUSTOM_PARTICLE_FAR, spec.particleColorFar | 0xFF000000)
+                .putInt(PREF_CUSTOM_PULSE, spec.pulseColor | 0xFF000000)
                 .putInt(PREF_CUSTOM_RING, spec.ringColor | 0xFF000000)
+                .putInt(PREF_CUSTOM_CHARGE, spec.chargeColor | 0xFF000000)
                 .apply();
     }
 
@@ -691,7 +783,11 @@ public final class AppThemePalette {
         ed.putInt(PREF_CUSTOM_TEXT_SECONDARY, bundle.colors.secondaryText | 0xFF000000);
         ed.putInt(PREF_CUSTOM_CARD_OUTLINE, bundle.colors.cardOutline | 0xFF000000);
         ed.putInt(PREF_CUSTOM_PARTICLE, bundle.colors.particleColor | 0xFF000000);
+        ed.putInt(PREF_CUSTOM_PARTICLE_MID, bundle.colors.particleColorMid | 0xFF000000);
+        ed.putInt(PREF_CUSTOM_PARTICLE_FAR, bundle.colors.particleColorFar | 0xFF000000);
+        ed.putInt(PREF_CUSTOM_PULSE, bundle.colors.pulseColor | 0xFF000000);
         ed.putInt(PREF_CUSTOM_RING, bundle.colors.ringColor | 0xFF000000);
+        ed.putInt(PREF_CUSTOM_CHARGE, bundle.colors.chargeColor | 0xFF000000);
 
         ed.putInt(PreferenceConfiguration.BLUR_AMOUNT_PREF_STRING, clamp(bundle.blurAmountPercent, 0, 2000));
         ed.putInt(PreferenceConfiguration.BLUR_SATURATION_PREF_STRING, clamp(bundle.blurSaturationPercent, 0, 500));
@@ -830,7 +926,7 @@ public final class AppThemePalette {
     }
 
     /**
-     * Derives a cohesive 10-channel palette from a single primary accent color
+     * Derives a cohesive 14-channel palette from a single primary accent color
      * in either Dark or Light base mode.
      */
     @NonNull
@@ -847,8 +943,12 @@ public final class AppThemePalette {
         int textPrimary;
         int textSecondary;
         int outline;
-        int particle;
+        int particleNear;
+        int particleMid;
+        int particleFar;
+        int pulse;
         int ring;
+        int charge;
 
         if (isLight) {
             bg = Color.HSVToColor(new float[]{ hue, Math.min(0.14f, sat * 0.16f), 0.94f });
@@ -858,8 +958,12 @@ public final class AppThemePalette {
             textPrimary = Color.HSVToColor(new float[]{ hue, Math.min(0.28f, sat * 0.35f), 0.14f });
             textSecondary = Color.HSVToColor(new float[]{ hue, Math.min(0.22f, sat * 0.28f), 0.38f });
             outline = Color.HSVToColor(new float[]{ hue, Math.min(0.32f, sat * 0.40f), 0.50f });
-            particle = Color.HSVToColor(new float[]{ (hue + 14f) % 360f, Math.min(0.70f, sat * 0.85f), 0.90f });
+            particleNear = Color.HSVToColor(new float[]{ hue, Math.min(0.82f, sat * 0.92f), 0.86f });
+            particleMid = Color.HSVToColor(new float[]{ (hue + 14f) % 360f, Math.min(0.70f, sat * 0.82f), 0.90f });
+            particleFar = Color.HSVToColor(new float[]{ (hue + 28f) % 360f, Math.min(0.58f, sat * 0.72f), 0.94f });
+            pulse = Color.HSVToColor(new float[]{ (hue + 8f) % 360f, Math.min(0.85f, sat), 0.90f });
             ring = Color.HSVToColor(new float[]{ hue, Math.min(0.85f, sat), 0.88f });
+            charge = Color.HSVToColor(new float[]{ (hue + 32f) % 360f, Math.min(0.90f, sat), 0.84f });
         } else {
             bg = Color.HSVToColor(new float[]{ hue, Math.min(0.45f, sat * 0.55f), 0.09f });
             surf = Color.HSVToColor(new float[]{ hue, Math.min(0.38f, sat * 0.48f), 0.16f });
@@ -868,8 +972,12 @@ public final class AppThemePalette {
             textPrimary = 0xFFFFFFFF;
             textSecondary = Color.HSVToColor(new float[]{ hue, Math.min(0.16f, sat * 0.22f), 0.80f });
             outline = Color.HSVToColor(new float[]{ hue, Math.min(0.28f, sat * 0.35f), 0.92f });
-            particle = Color.HSVToColor(new float[]{ (hue + 18f) % 360f, Math.min(0.55f, sat * 0.72f), 1.0f });
+            particleNear = Color.HSVToColor(new float[]{ (hue + 16f) % 360f, Math.min(0.42f, sat * 0.55f), 1.0f });
+            particleMid = Color.HSVToColor(new float[]{ (hue + 10f) % 360f, Math.min(0.62f, sat * 0.78f), 0.98f });
+            particleFar = Color.HSVToColor(new float[]{ hue, Math.min(0.80f, sat * 0.92f), 0.92f });
+            pulse = Color.HSVToColor(new float[]{ hue, Math.min(0.85f, sat), 0.96f });
             ring = Color.HSVToColor(new float[]{ hue, Math.min(0.85f, sat), 0.96f });
+            charge = Color.HSVToColor(new float[]{ (hue + 34f) % 360f, Math.min(0.86f, sat), 1.0f });
         }
 
         return new CustomPaletteSpec(
@@ -882,8 +990,12 @@ public final class AppThemePalette {
                 textPrimary,
                 textSecondary,
                 outline,
-                particle,
-                ring);
+                particleNear,
+                particleMid,
+                particleFar,
+                pulse,
+                ring,
+                charge);
     }
 
     @NonNull
@@ -931,7 +1043,11 @@ public final class AppThemePalette {
                 muted,
                 0xFF2EA043,
                 spec.particleColor | 0xFF000000,
+                spec.particleColorMid | 0xFF000000,
+                spec.particleColorFar | 0xFF000000,
+                spec.pulseColor | 0xFF000000,
                 spec.ringColor | 0xFF000000,
+                spec.chargeColor | 0xFF000000,
                 frostedTintAmount
         );
     }
@@ -990,7 +1106,9 @@ public final class AppThemePalette {
     public String getSignature() {
         return key + ":" + isLight + ":" + background + ":" + surface + ":" + popupTint
                 + ":" + accent + ":" + highlight + ":" + primaryText + ":" + secondaryText
-                + ":" + cardOutline + ":" + particleColor + ":" + ringColor + ":" + frostedTintAmount;
+                + ":" + cardOutline + ":" + particleColor + ":" + particleColorMid
+                + ":" + particleColorFar + ":" + pulseColor + ":" + ringColor
+                + ":" + chargeColor + ":" + frostedTintAmount;
     }
 
     public int getNeonAccent() {

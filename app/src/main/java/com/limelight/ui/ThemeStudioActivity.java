@@ -77,13 +77,18 @@ public class ThemeStudioActivity extends AppCompatActivity {
     private static final int CH_TEXT_SECONDARY = 5;
     private static final int CH_OUTLINE = 6;
     private static final int CH_HIGHLIGHT = 7;
-    private static final int CH_PARTICLE = 8;
-    private static final int CH_RING = 9;
+    private static final int CH_PARTICLE_NEAR = 8;
+    private static final int CH_PARTICLE_MID = 9;
+    private static final int CH_PARTICLE_FAR = 10;
+    private static final int CH_PULSE = 11;
+    private static final int CH_RING = 12;
+    private static final int CH_CHARGE = 13;
 
     private static final String[] CHANNEL_LABELS = {
             "Accent", "Background", "Surface", "Popup Tint",
-            "Primary Text", "Secondary Text", "Card Outline",
-            "Highlight", "Particles", "Iris Rim & Pulses"
+            "Primary Text", "Secondary Text", "Card Outline", "Highlight",
+            "Particles L1 (Near)", "Particles L2 (Mid)", "Particles L3 (Far)",
+            "Energy Pulses", "Iris Rim", "Charge Ring"
     };
 
     private static final int[] QUICK_SWATCHES = {
@@ -1900,7 +1905,11 @@ public class ThemeStudioActivity extends AppCompatActivity {
         dst.secondaryText = src.secondaryText;
         dst.cardOutline = src.cardOutline;
         dst.particleColor = src.particleColor;
+        dst.particleColorMid = src.particleColorMid;
+        dst.particleColorFar = src.particleColorFar;
+        dst.pulseColor = src.pulseColor;
         dst.ringColor = src.ringColor;
+        dst.chargeColor = src.chargeColor;
     }
 
     private static int getChannelColor(AppThemePalette.CustomPaletteSpec spec, int ch) {
@@ -1912,8 +1921,12 @@ public class ThemeStudioActivity extends AppCompatActivity {
             case CH_TEXT_SECONDARY: return spec.secondaryText;
             case CH_OUTLINE: return spec.cardOutline;
             case CH_HIGHLIGHT: return spec.highlight;
-            case CH_PARTICLE: return spec.particleColor;
+            case CH_PARTICLE_NEAR: return spec.particleColor;
+            case CH_PARTICLE_MID: return spec.particleColorMid;
+            case CH_PARTICLE_FAR: return spec.particleColorFar;
+            case CH_PULSE: return spec.pulseColor;
             case CH_RING: return spec.ringColor;
+            case CH_CHARGE: return spec.chargeColor;
             case CH_ACCENT:
             default: return spec.accent;
         }
@@ -1929,8 +1942,12 @@ public class ThemeStudioActivity extends AppCompatActivity {
             case CH_TEXT_SECONDARY: spec.secondaryText = opaque; break;
             case CH_OUTLINE: spec.cardOutline = opaque; break;
             case CH_HIGHLIGHT: spec.highlight = opaque; break;
-            case CH_PARTICLE: spec.particleColor = opaque; break;
+            case CH_PARTICLE_NEAR: spec.particleColor = opaque; break;
+            case CH_PARTICLE_MID: spec.particleColorMid = opaque; break;
+            case CH_PARTICLE_FAR: spec.particleColorFar = opaque; break;
+            case CH_PULSE: spec.pulseColor = opaque; break;
             case CH_RING: spec.ringColor = opaque; break;
+            case CH_CHARGE: spec.chargeColor = opaque; break;
             case CH_ACCENT:
             default: spec.accent = opaque; break;
         }

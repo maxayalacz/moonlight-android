@@ -730,7 +730,11 @@ public final class CustomPaletteDialog {
         dst.secondaryText = src.secondaryText;
         dst.cardOutline = src.cardOutline;
         dst.particleColor = src.particleColor;
+        dst.particleColorMid = src.particleColorMid;
+        dst.particleColorFar = src.particleColorFar;
+        dst.pulseColor = src.pulseColor;
         dst.ringColor = src.ringColor;
+        dst.chargeColor = src.chargeColor;
     }
 
     private static int getChannelColor(AppThemePalette.CustomPaletteSpec spec, int ch) {
