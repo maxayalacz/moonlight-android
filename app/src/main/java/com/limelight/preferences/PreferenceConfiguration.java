@@ -105,6 +105,7 @@ public class PreferenceConfiguration {
     public static final String BG_QUALITY_PREF_STRING = "list_bg_quality";
     public static final String OSC_OUTLINE_THICKNESS_PREF_STRING = "seekbar_osc_outline_thickness";
     public static final String CARD_OUTLINE_THICKNESS_PREF_STRING = "seekbar_card_outline_thickness";
+    public static final String UI_PERFORMANCE_MODE_PREF_STRING = "checkbox_ui_performance_mode";
     public static final String UI_BATTERY_SAVER_PREF_STRING = "list_ui_battery_saver";
     public static final int DEFAULT_PORTAL_READY_MS = 450;
     public static final int DEFAULT_PORTAL_CHARGE_MS = 1300;
@@ -137,6 +138,7 @@ public class PreferenceConfiguration {
     public static final String DEFAULT_BG_QUALITY = "720";
     public static final int DEFAULT_OSC_OUTLINE_THICKNESS = 100;
     public static final int DEFAULT_CARD_OUTLINE_THICKNESS = 100;
+    public static final boolean DEFAULT_UI_PERFORMANCE_MODE = false;
     public static final String DEFAULT_UI_BATTERY_SAVER = "auto";
     private static final String BIND_ALL_USB_STRING = "checkbox_usb_bind_all";
     private static final String MOUSE_EMULATION_STRING = "checkbox_mouse_emulation";
@@ -376,6 +378,8 @@ public class PreferenceConfiguration {
     public int bgQualityMaxShortEdge;
     public int oscOutlineThicknessPercent;
     public int cardOutlineThicknessPercent;
+    public boolean uiPerformanceMode;
+    public boolean isUiPerformanceModeEffective;
     public String uiBatterySaverMode;
     public boolean isUiBatterySaverEffective;
     //简化版性能信息
@@ -1067,8 +1071,10 @@ private static int getFramePacingValue(Context context) {
         }
         config.oscOutlineThicknessPercent = prefs.getInt(OSC_OUTLINE_THICKNESS_PREF_STRING, DEFAULT_OSC_OUTLINE_THICKNESS);
         config.cardOutlineThicknessPercent = prefs.getInt(CARD_OUTLINE_THICKNESS_PREF_STRING, DEFAULT_CARD_OUTLINE_THICKNESS);
+        config.uiPerformanceMode = prefs.getBoolean(UI_PERFORMANCE_MODE_PREF_STRING, DEFAULT_UI_PERFORMANCE_MODE);
         config.uiBatterySaverMode = prefs.getString(UI_BATTERY_SAVER_PREF_STRING, DEFAULT_UI_BATTERY_SAVER);
         config.isUiBatterySaverEffective = isUiBatterySaverEffective(context, config.uiBatterySaverMode);
+        config.isUiPerformanceModeEffective = config.uiPerformanceMode && !config.isUiBatterySaverEffective;
         config.enablePerfOverlayLite = prefs.getBoolean("checkbox_enable_perf_overlay_lite",DEFAULT_ENABLE_PERF_OVERLAY);
         config.enablePerfOverlayBottom = prefs.getBoolean("checkbox_enable_perf_overlay_bottom",DEFAULT_PERF_OVERLAY_BOTTOM);
         config.bindAllUsb = prefs.getBoolean(BIND_ALL_USB_STRING, DEFAULT_BIND_ALL_USB);
@@ -1188,6 +1194,9 @@ private static int getFramePacingValue(Context context) {
         return config;
     }
 
+    private static volatile long sLastPowerSaveCheckMs = 0L;
+    private static volatile boolean sLastPowerSaveState = false;
+
     public static boolean isUiBatterySaverEffective(Context context) {
         if (context == null) {
             return false;
@@ -1205,14 +1214,32 @@ private static int getFramePacingValue(Context context) {
         if ("off".equals(mode)) {
             return false;
         }
-        // "auto" (default): follow Android system Power Saver state
+        // "auto" (default): follow Android system Power Saver state (1s TTL cache avoids UI-thread Binder IPC spam)
         if (context != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            try {
-                android.os.PowerManager pm = (android.os.PowerManager) context.getSystemService(Context.POWER_SERVICE);
-                return pm != null && pm.isPowerSaveMode();
-            } catch (Throwable ignored) {
+            long now = android.os.SystemClock.uptimeMillis();
+            if ((now - sLastPowerSaveCheckMs) >= 1000L) {
+                try {
+                    android.os.PowerManager pm = (android.os.PowerManager) context.getSystemService(Context.POWER_SERVICE);
+                    sLastPowerSaveState = pm != null && pm.isPowerSaveMode();
+                } catch (Throwable ignored) {
+                    sLastPowerSaveState = false;
+                }
+                sLastPowerSaveCheckMs = now;
             }
+            return sLastPowerSaveState;
         }
         return false;
+    }
+
+    public static boolean isUiPerformanceModeEffective(Context context) {
+        if (context == null) {
+            return false;
+        }
+        if (isUiBatterySaverEffective(context)) {
+            return false;
+        }
+        return ProfilesManager.getInstance()
+                .getOverlayingSharedPreferences(context)
+                .getBoolean(UI_PERFORMANCE_MODE_PREF_STRING, DEFAULT_UI_PERFORMANCE_MODE);
     }
 }

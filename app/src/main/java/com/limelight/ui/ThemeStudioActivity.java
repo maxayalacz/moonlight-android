@@ -163,6 +163,8 @@ public class ThemeStudioActivity extends AppCompatActivity {
     private SliderRow rowCardOutline;
     private TextView bgQualityHeading;
     private TextView[] bgQualityPills;
+    private TextView uiPerformanceModeHeading;
+    private TextView[] uiPerformanceModePills;
     private TextView uiBatterySaverHeading;
     private TextView[] uiBatterySaverPills;
 
@@ -885,6 +887,39 @@ public class ThemeStudioActivity extends AppCompatActivity {
             bgQualityPills[i] = pill;
         }
         col.addView(qRow, qrLp);
+
+        uiPerformanceModeHeading = new TextView(this);
+        uiPerformanceModeHeading.setText(R.string.title_ui_performance_mode);
+        uiPerformanceModeHeading.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f);
+        uiPerformanceModeHeading.setTypeface(Typeface.DEFAULT_BOLD);
+        LinearLayout.LayoutParams pmhLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        pmhLp.topMargin = dp(12f);
+        col.addView(uiPerformanceModeHeading, pmhLp);
+
+        LinearLayout pmRow = new LinearLayout(this);
+        pmRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams pmrLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        pmrLp.topMargin = dp(8f);
+        final String[] pmLabels = { "Off", "On" };
+        uiPerformanceModePills = new TextView[pmLabels.length];
+        for (int i = 0; i < pmLabels.length; i++) {
+            final boolean enabled = (i == 1);
+            TextView pill = createPillButton(pmLabels[i]);
+            pill.setOnClickListener(v -> {
+                androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
+                        .edit()
+                        .putBoolean(PreferenceConfiguration.UI_PERFORMANCE_MODE_PREF_STRING, enabled)
+                        .apply();
+                refreshAll();
+            });
+            LinearLayout.LayoutParams ppLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            if (i > 0) ppLp.setMarginStart(dp(6f));
+            pmRow.addView(pill, ppLp);
+            uiPerformanceModePills[i] = pill;
+        }
+        col.addView(pmRow, pmrLp);
 
         uiBatterySaverHeading = new TextView(this);
         uiBatterySaverHeading.setText(R.string.title_ui_battery_saver);
@@ -1673,6 +1708,14 @@ public class ThemeStudioActivity extends AppCompatActivity {
         for (int i = 0; i < bgQualityPills.length; i++) {
             boolean active = BG_QUALITY_VALUES[i].equals(bundle.bgQuality);
             stylePillButton(bgQualityPills[i], active, p.accent, p.isLight);
+        }
+        uiPerformanceModeHeading.setTextColor(p.getPrimaryTextColor());
+        boolean savedPerfMode = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
+                .getBoolean(PreferenceConfiguration.UI_PERFORMANCE_MODE_PREF_STRING,
+                        PreferenceConfiguration.DEFAULT_UI_PERFORMANCE_MODE);
+        for (int i = 0; i < uiPerformanceModePills.length; i++) {
+            boolean active = ((i == 1) == savedPerfMode);
+            stylePillButton(uiPerformanceModePills[i], active, p.accent, p.isLight);
         }
         uiBatterySaverHeading.setTextColor(p.getPrimaryTextColor());
         String savedSaverMode = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)

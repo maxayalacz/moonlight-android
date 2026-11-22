@@ -4847,6 +4847,23 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
                 .apply();
     }
 
+    public boolean getUiPerformanceMode() {
+        return androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
+                .getBoolean(PreferenceConfiguration.UI_PERFORMANCE_MODE_PREF_STRING,
+                        PreferenceConfiguration.DEFAULT_UI_PERFORMANCE_MODE);
+    }
+
+    public void setUiPerformanceModeLive(boolean enabled) {
+        androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
+                .edit()
+                .putBoolean(PreferenceConfiguration.UI_PERFORMANCE_MODE_PREF_STRING, enabled)
+                .apply();
+        if (prefConfig != null) {
+            prefConfig.uiPerformanceMode = enabled;
+            prefConfig.isUiPerformanceModeEffective = enabled && !prefConfig.isUiBatterySaverEffective;
+        }
+    }
+
     public String getUiBatterySaverMode() {
         return androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
                 .getString(PreferenceConfiguration.UI_BATTERY_SAVER_PREF_STRING,
@@ -4863,6 +4880,8 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
             prefConfig.uiBatterySaverMode = normalized;
             prefConfig.isUiBatterySaverEffective =
                     PreferenceConfiguration.isUiBatterySaverEffective(this, normalized);
+            prefConfig.isUiPerformanceModeEffective =
+                    prefConfig.uiPerformanceMode && !prefConfig.isUiBatterySaverEffective;
         }
     }
 

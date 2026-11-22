@@ -872,6 +872,12 @@
             android:summary="@string/summary_custom_palette"
             android:title="@string/title_custom_palette"
             app:iconSpaceReserved="false" />
+        <SwitchPreferenceCompat
+            android:defaultValue="false"
+            android:key="checkbox_ui_performance_mode"
+            android:summary="@string/summary_ui_performance_mode"
+            android:title="@string/title_ui_performance_mode"
+            app:iconSpaceReserved="false" />
         <ListPreference
             android:defaultValue="auto"
             android:entries="@array/ui_battery_saver_names"

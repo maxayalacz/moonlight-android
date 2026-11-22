@@ -629,16 +629,37 @@ public class FlowingAuroraView extends View {
             return false;
         }
 
+        private final Path strokePath = new Path();
+        private final Rect cachedPathBounds = new Rect();
+        private float cachedStrokeW = -1f;
+
+        private void ensurePaths(Rect bounds, float strokeW) {
+            if (cachedPathBounds.equals(bounds) && Math.abs(cachedStrokeW - strokeW) < 0.01f) {
+                return;
+            }
+            cachedPathBounds.set(bounds);
+            cachedStrokeW = strokeW;
+            rectF.set(bounds);
+            clipPath.reset();
+            clipPath.addRoundRect(rectF, radii, Path.Direction.CW);
+            if (strokeW > 0.1f) {
+                float halfStroke = strokeW * 0.5f;
+                rectF.inset(halfStroke, halfStroke);
+                strokePath.reset();
+                strokePath.addRoundRect(rectF, radii, Path.Direction.CW);
+                rectF.set(bounds);
+            }
+        }
+
         @Override
         public void draw(@NonNull Canvas canvas) {
             Rect bounds = getBounds();
             if (bounds.isEmpty()) {
                 return;
             }
+            float strokeW = strokePaint.getStrokeWidth();
+            ensurePaths(bounds, strokeW);
             rectF.set(bounds);
-
-            clipPath.reset();
-            clipPath.addRoundRect(rectF, radii, Path.Direction.CW);
 
             int saveCount = canvas.save();
             canvas.clipPath(clipPath);
@@ -646,8 +667,9 @@ public class FlowingAuroraView extends View {
             View host = hostViewRef.get();
             PortalShaderView portal = portalRef.get();
             FlowingAuroraView aurora = auroraRef.get();
-            boolean batterySaverSolid = host != null
-                    && com.limelight.preferences.PreferenceConfiguration.isUiBatterySaverEffective(host.getContext());
+            boolean batterySaverSolid = (portal != null)
+                    ? portal.isBatterySaverEffective()
+                    : (host != null && com.limelight.preferences.PreferenceConfiguration.isUiBatterySaverEffective(host.getContext()));
             if (!batterySaverSolid && host != null && portal != null && portal.getWidth() > 0 && portal.getHeight() > 0) {
                 Bitmap blurred = portal.getBlurredBitmap();
                 if (blurred != null && !blurred.isRecycled()) {
@@ -695,13 +717,8 @@ public class FlowingAuroraView extends View {
             canvas.restoreToCount(saveCount);
 
             // Clean uniform rim stroke (omitted when global card outline is 0%)
-            float strokeW = strokePaint.getStrokeWidth();
             if (strokeW > 0.1f) {
-                float halfStroke = strokeW * 0.5f;
-                rectF.inset(halfStroke, halfStroke);
-                clipPath.reset();
-                clipPath.addRoundRect(rectF, radii, Path.Direction.CW);
-                canvas.drawPath(clipPath, strokePaint);
+                canvas.drawPath(strokePath, strokePaint);
             }
         }
 

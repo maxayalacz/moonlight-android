@@ -1238,6 +1238,7 @@ public class GameMenu implements Game.GameMenuCallbacks {
         LinearLayout overlayContent = addAccordionCategory(
                 body, ctx, getString(R.string.quick_settings_section_overlay), palette, sections);
 
+        addDrawerUiPerformanceModeRow(overlayContent, ctx, palette);
         addDrawerUiBatterySaverRow(overlayContent, ctx, palette, onBatterySaverChanged);
 
         addDrawerSliderRow(overlayContent, ctx, getString(R.string.title_card_outline_thickness),
@@ -1386,6 +1387,83 @@ public class GameMenu implements Game.GameMenuCallbacks {
         }
         parent.addView(card, cardLp);
         return content;
+    }
+
+    private void addDrawerUiPerformanceModeRow(LinearLayout parent, Context ctx, AppThemePalette palette) {
+        LinearLayout block = new LinearLayout(ctx);
+        block.setOrientation(LinearLayout.VERTICAL);
+        block.setPadding(dp(4f), dp(5f), dp(2f), dp(7f));
+
+        TextView label = new TextView(ctx);
+        label.setText(R.string.title_ui_performance_mode);
+        label.setTextColor(palette.getSecondaryTextColor());
+        label.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f);
+        block.addView(label, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        LinearLayout capsule = new LinearLayout(ctx);
+        capsule.setOrientation(LinearLayout.HORIZONTAL);
+        capsule.setPadding(dp(3f), dp(3f), dp(3f), dp(3f));
+        GradientDrawable capsuleBg = new GradientDrawable();
+        capsuleBg.setShape(GradientDrawable.RECTANGLE);
+        capsuleBg.setCornerRadius(dp(13f));
+        capsuleBg.setColor(AppThemePalette.withAlpha(palette.accent, palette.isLight ? 0.10f : 0.14f));
+        capsuleBg.setStroke(Math.max(1, dp(1f)), palette.getDividerColor());
+        capsule.setBackground(capsuleBg);
+
+        final boolean[] vals = { false, true };
+        final int[] labels = {
+                R.string.ui_battery_saver_short_off,
+                R.string.ui_battery_saver_short_on
+        };
+        final TextView[] tabs = new TextView[vals.length];
+        final boolean[] selected = { game.getUiPerformanceMode() };
+
+        Runnable refreshTabs = () -> {
+            for (int i = 0; i < vals.length; i++) {
+                boolean active = (vals[i] == selected[0]);
+                TextView tab = tabs[i];
+                if (active) {
+                    GradientDrawable tabBg = new GradientDrawable();
+                    tabBg.setShape(GradientDrawable.RECTANGLE);
+                    tabBg.setCornerRadius(dp(10f));
+                    tabBg.setColor(AppThemePalette.withAlpha(palette.highlight, palette.isLight ? 0.24f : 0.34f));
+                    tabBg.setStroke(Math.max(1, dp(1.1f)), palette.getNeonAccent());
+                    tab.setBackground(tabBg);
+                    tab.setTextColor(palette.getPrimaryTextColor());
+                    tab.setTypeface(Typeface.DEFAULT_BOLD);
+                } else {
+                    tab.setBackground(null);
+                    tab.setTextColor(palette.getSecondaryTextColor());
+                    tab.setTypeface(Typeface.DEFAULT);
+                }
+            }
+        };
+
+        for (int i = 0; i < vals.length; i++) {
+            final boolean enabled = vals[i];
+            TextView tab = new TextView(ctx);
+            tab.setText(labels[i]);
+            tab.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f);
+            tab.setGravity(Gravity.CENTER);
+            tab.setPadding(dp(4f), dp(6f), dp(4f), dp(6f));
+            tab.setFocusable(true);
+            tab.setClickable(true);
+            tab.setOnClickListener(v -> {
+                selected[0] = enabled;
+                refreshTabs.run();
+                game.setUiPerformanceModeLive(enabled);
+            });
+            tabs[i] = tab;
+            capsule.addView(tab, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        }
+
+        refreshTabs.run();
+        LinearLayout.LayoutParams capLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        capLp.topMargin = dp(5f);
+        block.addView(capsule, capLp);
+        parent.addView(block);
     }
 
     private void addDrawerUiBatterySaverRow(LinearLayout parent, Context ctx,

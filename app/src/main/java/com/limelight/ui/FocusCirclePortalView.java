@@ -177,7 +177,12 @@ public class FocusCirclePortalView extends View {
                     float floatCycle = (now % 5500L) / 5500f;
                     float offsetPx = dp(6f) * (float) Math.sin(floatCycle * Math.PI * 2.0);
                     setTranslationY(offsetPx);
-                    long minInterval = isDiscovering ? 16L : 33L;
+                    long minInterval;
+                    if (isDiscovering) {
+                        minInterval = PreferenceConfiguration.isUiPerformanceModeEffective(getContext()) ? 33L : 16L;
+                    } else {
+                        minInterval = 33L;
+                    }
                     if ((now - lastDrawInvalidateMs) >= minInterval) {
                         lastDrawInvalidateMs = now;
                         invalidate();
