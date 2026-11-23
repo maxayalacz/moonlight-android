@@ -327,7 +327,7 @@ public class AnalogStickFree extends VirtualControllerElement {
 
         if (bIsFingerOnScreen) {
             if (!cfg.enableOnScreenStyleOfficial) {
-                if (opacityFactor <= 0.005f && freeBgFactor <= 0.005f && !isEditMode) {
+                if (opacityFactor <= 0.005f && !isEditMode) {
                     return;
                 }
                 float outlineScale = getOutlineScaleFactor();
