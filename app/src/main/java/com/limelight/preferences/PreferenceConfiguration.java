@@ -103,6 +103,13 @@ public class PreferenceConfiguration {
     public static final String BLUR_SATURATION_PREF_STRING = "seekbar_blur_saturation";
     public static final String FROSTED_TINT_AMOUNT_PREF_STRING = "seekbar_frosted_tint_amount";
     public static final String BG_QUALITY_PREF_STRING = "list_bg_quality";
+    public static final String BG_RESOLUTION_PERCENT_PREF_STRING = "seekbar_bg_resolution_percent";
+    public static final String BLUR_RESOLUTION_PERCENT_PREF_STRING = "seekbar_blur_resolution_percent";
+    public static final String UI_FRAMERATE_PREF_STRING = "list_ui_framerate";
+    public static final String OSC_LIVE_BLUR_PREF_STRING = "checkbox_osc_live_blur";
+    public static final String OSC_BLUR_AMOUNT_PREF_STRING = "seekbar_osc_blur_amount";
+    public static final String OSC_BLUR_RESOLUTION_PERCENT_PREF_STRING = "seekbar_osc_blur_resolution_percent";
+    public static final String OSC_BLUR_FRAMERATE_PREF_STRING = "list_osc_blur_framerate";
     public static final String OSC_OUTLINE_THICKNESS_PREF_STRING = "seekbar_osc_outline_thickness";
     public static final String CARD_OUTLINE_THICKNESS_PREF_STRING = "seekbar_card_outline_thickness";
     public static final String UI_PERFORMANCE_MODE_PREF_STRING = "checkbox_ui_performance_mode";
@@ -136,6 +143,13 @@ public class PreferenceConfiguration {
     public static final int DEFAULT_BLUR_SATURATION = 140;
     public static final int DEFAULT_FROSTED_TINT_AMOUNT = 35;
     public static final String DEFAULT_BG_QUALITY = "720";
+    public static final int DEFAULT_BG_RESOLUTION_PERCENT = 65;
+    public static final int DEFAULT_BLUR_RESOLUTION_PERCENT = 15;
+    public static final String DEFAULT_UI_FRAMERATE = "60";
+    public static final boolean DEFAULT_OSC_LIVE_BLUR = false;
+    public static final int DEFAULT_OSC_BLUR_AMOUNT = 60;
+    public static final int DEFAULT_OSC_BLUR_RESOLUTION_PERCENT = 15;
+    public static final String DEFAULT_OSC_BLUR_FRAMERATE = "60";
     public static final int DEFAULT_OSC_OUTLINE_THICKNESS = 100;
     public static final int DEFAULT_CARD_OUTLINE_THICKNESS = 100;
     public static final boolean DEFAULT_UI_PERFORMANCE_MODE = false;
@@ -376,6 +390,13 @@ public class PreferenceConfiguration {
     public int blurSaturationPercent;
     public int frostedTintAmountPercent;
     public int bgQualityMaxShortEdge;
+    public int bgResolutionPercent;
+    public int blurResolutionPercent;
+    public String uiFramerate;
+    public boolean oscLiveBlur;
+    public int oscBlurAmountPercent;
+    public int oscBlurResolutionPercent;
+    public String oscBlurFramerate;
     public int oscOutlineThicknessPercent;
     public int cardOutlineThicknessPercent;
     public boolean uiPerformanceMode;
@@ -454,9 +475,6 @@ public class PreferenceConfiguration {
 
     //官方虚拟按钮风格
     public boolean enableOnScreenStyleOfficial;
-
-    //自由摇杆背景透明度
-    public int enableNewAnalogStickOpacity;
 
     public int trackpadSensitivityX;
     public int trackpadSensitivityY;
@@ -1069,6 +1087,30 @@ private static int getFramePacingValue(Context context) {
         } catch (NumberFormatException e) {
             config.bgQualityMaxShortEdge = 720;
         }
+        if (prefs.contains(BG_RESOLUTION_PERCENT_PREF_STRING)) {
+            config.bgResolutionPercent = Math.max(25, Math.min(100,
+                    prefs.getInt(BG_RESOLUTION_PERCENT_PREF_STRING, DEFAULT_BG_RESOLUTION_PERCENT)));
+        } else {
+            // Migrate legacy discrete quality setting to percentage of screen resolution
+            if (config.bgQualityMaxShortEdge == 0) {
+                config.bgResolutionPercent = 100;
+            } else if (config.bgQualityMaxShortEdge >= 1080) {
+                config.bgResolutionPercent = 90;
+            } else if (config.bgQualityMaxShortEdge <= 540) {
+                config.bgResolutionPercent = 50;
+            } else {
+                config.bgResolutionPercent = DEFAULT_BG_RESOLUTION_PERCENT;
+            }
+        }
+        config.blurResolutionPercent = Math.max(5, Math.min(50,
+                prefs.getInt(BLUR_RESOLUTION_PERCENT_PREF_STRING, DEFAULT_BLUR_RESOLUTION_PERCENT)));
+        config.uiFramerate = prefs.getString(UI_FRAMERATE_PREF_STRING, DEFAULT_UI_FRAMERATE);
+        config.oscLiveBlur = prefs.getBoolean(OSC_LIVE_BLUR_PREF_STRING, DEFAULT_OSC_LIVE_BLUR);
+        config.oscBlurAmountPercent = Math.max(0, Math.min(100,
+                prefs.getInt(OSC_BLUR_AMOUNT_PREF_STRING, DEFAULT_OSC_BLUR_AMOUNT)));
+        config.oscBlurResolutionPercent = Math.max(5, Math.min(50,
+                prefs.getInt(OSC_BLUR_RESOLUTION_PERCENT_PREF_STRING, DEFAULT_OSC_BLUR_RESOLUTION_PERCENT)));
+        config.oscBlurFramerate = prefs.getString(OSC_BLUR_FRAMERATE_PREF_STRING, DEFAULT_OSC_BLUR_FRAMERATE);
         config.oscOutlineThicknessPercent = prefs.getInt(OSC_OUTLINE_THICKNESS_PREF_STRING, DEFAULT_OSC_OUTLINE_THICKNESS);
         config.cardOutlineThicknessPercent = prefs.getInt(CARD_OUTLINE_THICKNESS_PREF_STRING, DEFAULT_CARD_OUTLINE_THICKNESS);
         config.uiPerformanceMode = prefs.getBoolean(UI_PERFORMANCE_MODE_PREF_STRING, DEFAULT_UI_PERFORMANCE_MODE);
@@ -1107,8 +1149,6 @@ private static int getFramePacingValue(Context context) {
         config.oscKeyboardOpacity = prefs.getInt("seekbar_keyboard_axi_opacity",DEFAULT_OPACITY);
 
         config.enableOnScreenStyleOfficial = prefs.getBoolean("checkbox_onscreen_style_official",false);
-
-        config.enableNewAnalogStickOpacity = prefs.getInt("seekbar_osc_free_analog_stick_opacity",20);
 
         config.onscreenKeyboardHeight = prefs.getInt("seekbar_onscreen_keyboard_height",200);
         config.onscreenKeyboardAutoFitDisabled = prefs.getBoolean("onscreen_keyboard_autofit",false);

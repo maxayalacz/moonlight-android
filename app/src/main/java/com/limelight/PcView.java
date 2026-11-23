@@ -85,6 +85,7 @@ import javax.microedition.khronos.opengles.GL10;
 
 public class PcView extends AppCompatActivity implements AdapterFragmentCallbacks {
     private static final String PREF_FOCUS_MODE = "checkbox_focus_mode";
+    private static boolean sColdBootAnimPlayed = false;
 
     private RelativeLayout noPcFoundLayout;
     private View pcFragmentContainerView;
@@ -161,10 +162,69 @@ public class PcView extends AppCompatActivity implements AdapterFragmentCallback
     private final static int OPEN_MANAGEMENT_PAGE_ID = 20;
     private final static int PAIR_ID_OTP = 21;
 
+    private void playColdBootSpiralAnimation() {
+        View content = findViewById(android.R.id.content);
+        if (content == null) {
+            return;
+        }
+        View bg = content.findViewWithTag("oneui_portal_starfield_bg");
+        if (!(bg instanceof com.limelight.ui.PortalShaderView)) {
+            return;
+        }
+        final com.limelight.ui.PortalShaderView psv = (com.limelight.ui.PortalShaderView) bg;
+        PreferenceConfiguration cfg = PreferenceConfiguration.readPreferences(this);
+        long durationMs = Math.max(400L, cfg.portalDisconnectOpenMs);
+
+        psv.setIsDisconnecting(true);
+        psv.setUniforms(0f, 0f, 0f, 0f, 0f);
+
+        android.animation.ValueAnimator anim = android.animation.ValueAnimator.ofFloat(0f, 1f);
+        anim.setDuration(durationMs);
+        anim.setInterpolator(new android.view.animation.LinearInterpolator());
+        anim.addUpdateListener(a -> {
+            float p = (float) a.getAnimatedValue();
+            psv.setUniforms(0f, 0f, 0f, p, 0f);
+        });
+        anim.addListener(new android.animation.AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(android.animation.Animator animation) {
+                psv.setIsDisconnecting(false);
+                psv.setUniforms(0f, 0f, 0f, 1f, 0f);
+            }
+
+            @Override
+            public void onAnimationCancel(android.animation.Animator animation) {
+                psv.setIsDisconnecting(false);
+                psv.setUniforms(0f, 0f, 0f, 1f, 0f);
+            }
+        });
+        anim.start();
+
+        View fg = UiHelper.getMenuForegroundView(this);
+        if (fg != null) {
+            fg.setAlpha(0f);
+            fg.setScaleX(0.96f);
+            fg.setScaleY(0.96f);
+            fg.animate()
+                    .alpha(1f)
+                    .scaleX(1f)
+                    .scaleY(1f)
+                    .setStartDelay(120L)
+                    .setDuration(420L)
+                    .setInterpolator(new android.view.animation.PathInterpolator(0.22f, 1f, 0.36f, 1f))
+                    .start();
+        }
+    }
+
     private void initializeViews() {
         setContentView(R.layout.activity_pc_view);
 
         UiHelper.notifyNewRootView(this);
+
+        if (!sColdBootAnimPlayed) {
+            sColdBootAnimPlayed = true;
+            playColdBootSpiralAnimation();
+        }
 
         // Allow floating expanded PiP overlays while browsing PCs
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

@@ -240,10 +240,19 @@ public class AnalogStick extends VirtualControllerElement {
             float outlineScale = getOutlineScaleFactor();
             float strokeW = outlineScale <= 0.01f ? 0f : Math.max(1f, getDefaultStrokeWidth() * outlineScale);
 
-            // Clean translucent base disc + outer border ring
+            // Clean translucent base disc + outer border ring (with optional live blur)
+            boolean drewLiveBlur = false;
+            OscLiveBlurHelper blurHelper = virtualController.getLiveBlurHelper();
+            if (blurHelper != null) {
+                blurClipPath.reset();
+                blurClipPath.addCircle(cx, cy, radius_complete, android.graphics.Path.Direction.CW);
+                blurBounds.set(cx - radius_complete, cy - radius_complete, cx + radius_complete, cy + radius_complete);
+                drewLiveBlur = blurHelper.drawLiveBlurForBounds(canvas, this, blurClipPath, blurBounds, opacityFactor);
+            }
+
             paint.setShader(null);
             paint.setStyle(Paint.Style.FILL);
-            paint.setColor(stickWithAlpha(0xFF101624, 0.44f * opacityFactor));
+            paint.setColor(stickWithAlpha(0xFF101624, (drewLiveBlur ? 0.34f : 0.44f) * opacityFactor));
             canvas.drawCircle(cx, cy, radius_complete, paint);
 
             if (strokeW > 0.1f) {

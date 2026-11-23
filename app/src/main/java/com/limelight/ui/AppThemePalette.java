@@ -138,6 +138,9 @@ public final class AppThemePalette {
         public int frostedTintAmountPercent; // 0..100 (100 = fully opaque + disables live blur)
         public int cardOutlineThicknessPercent;
         public String bgQuality;
+        public int bgResolutionPercent;
+        public int blurResolutionPercent;
+        public String uiFramerate;
         public int blurSaturationPercent;
         public int portalParticleBrightnessPercent;
         public int portalParticleSizePercent;
@@ -173,6 +176,9 @@ public final class AppThemePalette {
             this.frostedTintAmountPercent = colors.isLight ? 76 : PreferenceConfiguration.DEFAULT_FROSTED_TINT_AMOUNT;
             this.cardOutlineThicknessPercent = PreferenceConfiguration.DEFAULT_CARD_OUTLINE_THICKNESS;
             this.bgQuality = PreferenceConfiguration.DEFAULT_BG_QUALITY;
+            this.bgResolutionPercent = PreferenceConfiguration.DEFAULT_BG_RESOLUTION_PERCENT;
+            this.blurResolutionPercent = PreferenceConfiguration.DEFAULT_BLUR_RESOLUTION_PERCENT;
+            this.uiFramerate = PreferenceConfiguration.DEFAULT_UI_FRAMERATE;
             this.portalParticleBrightnessPercent = PreferenceConfiguration.DEFAULT_PORTAL_PARTICLE_BRIGHTNESS;
             this.portalParticleSizePercent = PreferenceConfiguration.DEFAULT_PORTAL_PARTICLE_SIZE;
             this.portalParticleDensityPercent = PreferenceConfiguration.DEFAULT_PORTAL_PARTICLE_DENSITY;
@@ -225,6 +231,9 @@ public final class AppThemePalette {
             obj.put("tint", frostedTintAmountPercent);
             obj.put("cardOutlinePx", cardOutlineThicknessPercent);
             obj.put("bgQuality", bgQuality != null ? bgQuality : PreferenceConfiguration.DEFAULT_BG_QUALITY);
+            obj.put("bgResPct", bgResolutionPercent);
+            obj.put("blurResPct", blurResolutionPercent);
+            obj.put("uiFps", uiFramerate != null ? uiFramerate : PreferenceConfiguration.DEFAULT_UI_FRAMERATE);
             obj.put("pBright", portalParticleBrightnessPercent);
             obj.put("pSize", portalParticleSizePercent);
             obj.put("pDensity", portalParticleDensityPercent);
@@ -312,6 +321,19 @@ public final class AppThemePalette {
                 b.frostedTintAmountPercent = clamp(obj.optInt("tint", isLight ? 76 : PreferenceConfiguration.DEFAULT_FROSTED_TINT_AMOUNT), 0, 100);
                 b.cardOutlineThicknessPercent = clamp(obj.optInt("cardOutlinePx", PreferenceConfiguration.DEFAULT_CARD_OUTLINE_THICKNESS), 0, 2000);
                 b.bgQuality = obj.optString("bgQuality", PreferenceConfiguration.DEFAULT_BG_QUALITY);
+                if (obj.has("bgResPct")) {
+                    b.bgResolutionPercent = clamp(obj.optInt("bgResPct", PreferenceConfiguration.DEFAULT_BG_RESOLUTION_PERCENT), 25, 100);
+                } else if ("0".equals(b.bgQuality)) {
+                    b.bgResolutionPercent = 100;
+                } else if ("1080".equals(b.bgQuality)) {
+                    b.bgResolutionPercent = 90;
+                } else if ("540".equals(b.bgQuality)) {
+                    b.bgResolutionPercent = 50;
+                } else {
+                    b.bgResolutionPercent = PreferenceConfiguration.DEFAULT_BG_RESOLUTION_PERCENT;
+                }
+                b.blurResolutionPercent = clamp(obj.optInt("blurResPct", PreferenceConfiguration.DEFAULT_BLUR_RESOLUTION_PERCENT), 5, 50);
+                b.uiFramerate = obj.optString("uiFps", PreferenceConfiguration.DEFAULT_UI_FRAMERATE);
                 b.portalParticleBrightnessPercent = clamp(obj.optInt("pBright", PreferenceConfiguration.DEFAULT_PORTAL_PARTICLE_BRIGHTNESS), 0, 2000);
                 b.portalParticleSizePercent = clamp(obj.optInt("pSize", PreferenceConfiguration.DEFAULT_PORTAL_PARTICLE_SIZE), 1, 2000);
                 b.portalParticleDensityPercent = clamp(obj.optInt("pDensity", PreferenceConfiguration.DEFAULT_PORTAL_PARTICLE_DENSITY), 0, 2000);
@@ -740,6 +762,9 @@ public final class AppThemePalette {
         b.frostedTintAmountPercent = current.getEffectiveTintAmount();
         b.cardOutlineThicknessPercent = clamp(cfg.cardOutlineThicknessPercent, 0, 2000);
         b.bgQuality = prefs.getString(PreferenceConfiguration.BG_QUALITY_PREF_STRING, PreferenceConfiguration.DEFAULT_BG_QUALITY);
+        b.bgResolutionPercent = clamp(cfg.bgResolutionPercent, 25, 100);
+        b.blurResolutionPercent = clamp(cfg.blurResolutionPercent, 5, 50);
+        b.uiFramerate = cfg.uiFramerate != null ? cfg.uiFramerate : PreferenceConfiguration.DEFAULT_UI_FRAMERATE;
         b.portalParticleBrightnessPercent = clamp(cfg.portalParticleBrightnessPercent, 0, 2000);
         b.portalParticleSizePercent = clamp(cfg.portalParticleSizePercent, 1, 2000);
         b.portalParticleDensityPercent = clamp(cfg.portalParticleDensityPercent, 0, 2000);
@@ -795,6 +820,11 @@ public final class AppThemePalette {
         ed.putInt(PreferenceConfiguration.CARD_OUTLINE_THICKNESS_PREF_STRING, clamp(bundle.cardOutlineThicknessPercent, 0, 2000));
         if (bundle.bgQuality != null) {
             ed.putString(PreferenceConfiguration.BG_QUALITY_PREF_STRING, bundle.bgQuality);
+        }
+        ed.putInt(PreferenceConfiguration.BG_RESOLUTION_PERCENT_PREF_STRING, clamp(bundle.bgResolutionPercent, 25, 100));
+        ed.putInt(PreferenceConfiguration.BLUR_RESOLUTION_PERCENT_PREF_STRING, clamp(bundle.blurResolutionPercent, 5, 50));
+        if (bundle.uiFramerate != null) {
+            ed.putString(PreferenceConfiguration.UI_FRAMERATE_PREF_STRING, bundle.uiFramerate);
         }
         ed.putInt(PreferenceConfiguration.PORTAL_PARTICLE_BRIGHTNESS_PREF_STRING, clamp(bundle.portalParticleBrightnessPercent, 0, 2000));
         ed.putInt(PreferenceConfiguration.PORTAL_PARTICLE_SIZE_PREF_STRING, clamp(bundle.portalParticleSizePercent, 1, 2000));

@@ -1363,7 +1363,7 @@ public class UiHelper {
             handoffView.setImageDrawable(null);
         }
         handoffView.setVisibility(View.VISIBLE);
-        psv.setFirstFrameListener(() -> handoffView.setVisibility(View.GONE));
+        psv.setFirstFrameListener(() -> handoffView.postOnAnimation(() -> handoffView.setVisibility(View.GONE)));
     }
 
     private static void setPortalBackdropRendering(Activity activity, boolean running) {
@@ -1440,7 +1440,7 @@ public class UiHelper {
         com.limelight.ui.PortalShaderView starfieldView = new com.limelight.ui.PortalShaderView(activity);
         starfieldView.setTag("oneui_portal_starfield_bg");
         starfieldView.configureStarfieldBackgroundMode();
-        starfieldView.setFirstFrameListener(() -> handoffView.setVisibility(View.GONE));
+        starfieldView.setFirstFrameListener(() -> handoffView.postOnAnimation(() -> handoffView.setVisibility(View.GONE)));
         contentFrame.addView(starfieldView, 1, new android.widget.FrameLayout.LayoutParams(
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT,
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT));

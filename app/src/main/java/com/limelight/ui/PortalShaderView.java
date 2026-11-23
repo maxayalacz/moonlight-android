@@ -578,12 +578,35 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
              1f,  1f
     };
 
+    private static volatile long sClockPausedGapMs = 0L;
+    private static volatile long sHandoffPauseStartMs = 0L;
+    private static volatile boolean sHandoffPending = false;
+
     /**
      * Shared monotonic clock across all screens so the starfield never jumps or resets
-     * between PcView, AppView, Settings, and Game.
+     * between PcView, AppView, Settings, and Game. Absorbs brief activity/EGL handoff gaps
+     * so the incoming screen resumes from the exact handoff timestamp with zero rubberband.
      */
     public static float getSharedTimeSec() {
-        return (SystemClock.uptimeMillis() % 1_000_000L) / 1000.0f;
+        long effectiveMs = SystemClock.uptimeMillis() - sClockPausedGapMs;
+        if (effectiveMs < 0L) {
+            effectiveMs = 0L;
+        }
+        return (effectiveMs % 1_000_000L) / 1000.0f;
+    }
+
+    private static void settleHandoffClockIfNeeded() {
+        if (!sHandoffPending) {
+            return;
+        }
+        sHandoffPending = false;
+        long pauseStart = sHandoffPauseStartMs;
+        if (pauseStart > 0L) {
+            long gapMs = SystemClock.uptimeMillis() - pauseStart;
+            if (gapMs > 16L && gapMs < 1500L) {
+                sClockPausedGapMs += (gapMs - 16L);
+            }
+        }
     }
 
     private static final int HANDOFF_SHORT_EDGE = 360;
@@ -613,6 +636,8 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             if (bmp != null) {
                 sHandoffBitmap = bmp;
                 sHandoffLandscape = (tw >= th);
+                sHandoffPauseStartMs = SystemClock.uptimeMillis();
+                sHandoffPending = true;
             }
         } catch (Throwable ignored) {
         }
@@ -776,6 +801,9 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
         } catch (Exception e) {
             bgMaxShortEdge = 720;
         }
+        bgResolutionPercent = Math.max(25, Math.min(100, bundle.bgResolutionPercent));
+        blurResolutionPercent = Math.max(5, Math.min(50, bundle.blurResolutionPercent));
+        uiFramerate = bundle.uiFramerate != null ? bundle.uiFramerate : PreferenceConfiguration.DEFAULT_UI_FRAMERATE;
         applyPaletteUniforms(AppThemePalette.buildCustomPalette(bundle.colors, bundle.frostedTintAmountPercent));
     }
 
@@ -804,6 +832,9 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             mainHandler.post(invalidateFrostedRunnable);
         }
         bgMaxShortEdge = Math.max(0, cfg.bgQualityMaxShortEdge);
+        bgResolutionPercent = Math.max(25, Math.min(100, cfg.bgResolutionPercent));
+        blurResolutionPercent = Math.max(5, Math.min(50, cfg.blurResolutionPercent));
+        uiFramerate = cfg.uiFramerate != null ? cfg.uiFramerate : PreferenceConfiguration.DEFAULT_UI_FRAMERATE;
         applyPaletteUniforms(palette);
     }
 
@@ -1274,6 +1305,9 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
                 }
 
                 long frameStartMs = SystemClock.uptimeMillis();
+                if (!firstFrameDispatched && backgroundMode) {
+                    settleHandoffClockIfNeeded();
+                }
                 float sharedTime = getSharedTimeSec();
 
                 int shortEdge = Math.min(w, h);
@@ -1281,13 +1315,14 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
                 boolean saverActive = batterySaverEffective;
                 boolean perfActive = !saverActive && performanceModeEffective;
                 if (backgroundMode) {
-                    int cap = bgMaxShortEdge;
-                    if (saverActive && (cap <= 0 || cap > BATTERY_SAVER_BG_SHORT_EDGE)) {
-                        cap = BATTERY_SAVER_BG_SHORT_EDGE;
-                    } else if (perfActive && (cap <= 0 || cap > PERF_MODE_BG_SHORT_EDGE)) {
-                        cap = PERF_MODE_BG_SHORT_EDGE;
+                    float scale = Math.max(0.25f, Math.min(1.0f, bgResolutionPercent / 100f));
+                    if (saverActive) {
+                        if (shortEdge > BATTERY_SAVER_BG_SHORT_EDGE) {
+                            scale = Math.min(scale, BATTERY_SAVER_BG_SHORT_EDGE / (float) shortEdge);
+                        }
+                    } else if (perfActive) {
+                        scale = Math.max(0.25f, scale * 0.75f);
                     }
-                    float scale = (cap > 0 && shortEdge > cap) ? (cap / (float) shortEdge) : 1.0f;
                     int fboW = Math.max(1, Math.round(w * scale));
                     int fboH = Math.max(1, Math.round(h * scale));
                     ensureBgFbo(fboW, fboH);
@@ -1304,29 +1339,18 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
                     GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT);
                     drawBlitTexture(bgFboTex);
 
-                    // 3. Motion-adaptive GPU blurred refraction bitmap (disabled in Battery Saver, lightweight 1-pass in Performance Mode)
+                    // 3. Live GPU blurred refraction bitmap synced to the exact background refresh rate
                     int blurPct = (saverActive || frostedTintAmountPercent >= 100) ? 0 : blurAmountPercent;
-                    long nowMs = SystemClock.uptimeMillis();
                     if (blurPct <= 0) {
                         if (publishedBlurBitmap != null) {
                             publishedBlurBitmap = null;
                             mainHandler.post(invalidateFrostedRunnable);
                         }
                         blurDirty = false;
-                    } else {
-                        long blurIntervalMs;
-                        if (irisTransitioning) {
-                            blurIntervalMs = perfActive ? BLUR_PERF_IRIS_INTERVAL_MS : BLUR_IRIS_INTERVAL_MS;
-                        } else if ((nowMs - sLastUserInteractionMs) <= 800L) {
-                            blurIntervalMs = perfActive ? BLUR_PERF_ACTIVE_INTERVAL_MS : BLUR_ACTIVE_INTERVAL_MS;
-                        } else {
-                            blurIntervalMs = perfActive ? BLUR_PERF_IDLE_INTERVAL_MS : BLUR_IDLE_INTERVAL_MS;
-                        }
-                        if (blurDirty || (!frostedDrawables.isEmpty() && (nowMs - lastBlurUpdateMs) >= blurIntervalMs)) {
-                            blurDirty = false;
-                            lastBlurUpdateMs = nowMs;
-                            updateBlurBitmapOnGlThread(w, h, blurPct, perfActive);
-                        }
+                    } else if (blurDirty || !frostedDrawables.isEmpty()) {
+                        blurDirty = false;
+                        lastBlurUpdateMs = frameStartMs;
+                        updateBlurBitmapOnGlThread(w, h, blurPct, blurResolutionPercent, perfActive);
                     }
                 } else {
                     // Game overlay mode: render into adaptive RGBA FBO + GL_LINEAR blit (preserves 100% alpha over stream)
@@ -1336,9 +1360,8 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
                     } else if (perfActive) {
                         cap = PERF_MODE_OVERLAY_SHORT_EDGE;
                     } else {
-                        cap = (bgMaxShortEdge > 0)
-                                ? Math.min(OVERLAY_MAX_SHORT_EDGE, bgMaxShortEdge)
-                                : OVERLAY_MAX_SHORT_EDGE;
+                        int userOverlayCap = Math.max(240, Math.round(shortEdge * (bgResolutionPercent / 100f)));
+                        cap = Math.min(OVERLAY_MAX_SHORT_EDGE, userOverlayCap);
                     }
                     if (shortEdge > cap) {
                         float scale = cap / (float) shortEdge;
@@ -1374,18 +1397,18 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
                     long targetFrameMs;
                     if (saverActive) {
                         targetFrameMs = BATTERY_SAVER_FRAME_MS;
-                    } else if ((SystemClock.uptimeMillis() - sLastUserInteractionMs) > MENU_IDLE_THRESHOLD_MS) {
-                        targetFrameMs = MENU_IDLE_FRAME_MS;
                     } else {
-                        targetFrameMs = MENU_ACTIVE_FRAME_MS;
+                        targetFrameMs = resolveUiFrameIntervalMs(uiFramerate);
                     }
-                    long elapsedMs = SystemClock.uptimeMillis() - frameStartMs;
-                    long sleepMs = targetFrameMs - elapsedMs;
-                    if (sleepMs > 0L) {
-                        try {
-                            Thread.sleep(sleepMs);
-                        } catch (InterruptedException ignored) {
-                            break;
+                    if (targetFrameMs > 0L) {
+                        long elapsedMs = SystemClock.uptimeMillis() - frameStartMs;
+                        long sleepMs = targetFrameMs - elapsedMs;
+                        if (sleepMs > 0L) {
+                            try {
+                                Thread.sleep(sleepMs);
+                            } catch (InterruptedException ignored) {
+                                break;
+                            }
                         }
                     }
                 }
@@ -1815,23 +1838,12 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             blurRingIndex = 0;
         }
 
-        private int chooseAdaptiveBlurShortEdge(int blurPct, boolean perfActive) {
-            // Higher blur -> lower FBO resolution to save GPU/bandwidth where detail is invisible;
-            // Lower blur -> higher FBO resolution so light frost stays razor-smooth with zero pixelation.
-            if (perfActive) {
-                if (blurPct <= 20) return 144;
-                if (blurPct <= 40) return 120;
-                if (blurPct <= 65) return 96;
-                if (blurPct <= 95) return 72;
-                if (blurPct <= 135) return 56;
-                return 48;
-            }
-            if (blurPct <= 20) return 240;
-            if (blurPct <= 40) return 192;
-            if (blurPct <= 65) return 144;
-            if (blurPct <= 95) return 96;
-            if (blurPct <= 135) return 72;
-            return 56;
+        private long resolveUiFrameIntervalMs(String fpsPref) {
+            if ("max".equalsIgnoreCase(fpsPref)) return 0L;
+            if ("120".equals(fpsPref)) return 8L;
+            if ("90".equals(fpsPref)) return 11L;
+            if ("30".equals(fpsPref)) return 33L;
+            return 16L; // default 60 FPS
         }
 
         private void syncReadbackFallback(int tw, int th) {
@@ -1845,13 +1857,17 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
             mainHandler.post(invalidateFrostedRunnable);
         }
 
-        private void updateBlurBitmapOnGlThread(int viewW, int viewH, int blurPct, boolean perfActive) {
+        private void updateBlurBitmapOnGlThread(int viewW, int viewH, int blurPct, int blurResPct, boolean perfActive) {
             boolean landscape = viewW >= viewH;
             int minView = Math.max(1, Math.min(viewW, viewH));
             int maxView = Math.max(minView, Math.max(viewW, viewH));
             float aspect = Math.max(1.0f, Math.min(2.6f, maxView / (float) minView));
 
-            int shortEdge = chooseAdaptiveBlurShortEdge(blurPct, perfActive);
+            float resFraction = Math.max(0.05f, Math.min(0.50f, blurResPct / 100f));
+            if (perfActive) {
+                resFraction *= 0.75f;
+            }
+            int shortEdge = Math.max(24, (Math.round(minView * resFraction) + 1) & ~1);
             int longEdge = Math.max(shortEdge, (Math.round(shortEdge * aspect) + 1) & ~1);
             int tw = landscape ? longEdge : shortEdge;
             int th = landscape ? shortEdge : longEdge;

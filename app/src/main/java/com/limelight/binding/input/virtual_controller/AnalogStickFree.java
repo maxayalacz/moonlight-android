@@ -254,7 +254,6 @@ public class AnalogStickFree extends VirtualControllerElement {
         if (bIsEnable && !enabled) {
             opacityFactor *= 0.38f;
         }
-        float freeBgFactor = Math.max(0.0f, Math.min(1.0f, cfg.enableNewAnalogStickOpacity / 100f));
 
         if (!bIsFingerOnScreen) {
             if (!cfg.enableOnScreenStyleOfficial && opacityFactor > 0.005f) {
@@ -263,10 +262,19 @@ public class AnalogStickFree extends VirtualControllerElement {
                 float outlineScale = getOutlineScaleFactor();
                 float strokeW = outlineScale <= 0.01f ? 0f : Math.max(1f, getDefaultStrokeWidth() * outlineScale);
 
+                boolean drewLiveBlur = false;
+                OscLiveBlurHelper blurHelper = virtualController.getLiveBlurHelper();
+                if (blurHelper != null) {
+                    blurClipPath.reset();
+                    blurClipPath.addCircle(cx, cy, radius_complete, android.graphics.Path.Direction.CW);
+                    blurBounds.set(cx - radius_complete, cy - radius_complete, cx + radius_complete, cy + radius_complete);
+                    drewLiveBlur = blurHelper.drawLiveBlurForBounds(canvas, this, blurClipPath, blurBounds, opacityFactor * 0.70f);
+                }
+
                 // Subtle translucent idle zone + dashed boundary ring + center dot
                 paint.setShader(null);
                 paint.setStyle(Paint.Style.FILL);
-                paint.setColor(freeStickWithAlpha(0xFF101624, 0.25f * opacityFactor));
+                paint.setColor(freeStickWithAlpha(0xFF101624, (drewLiveBlur ? 0.18f : 0.25f) * opacityFactor));
                 canvas.drawCircle(cx, cy, radius_complete, paint);
 
                 if (strokeW > 0.1f) {
@@ -333,14 +341,23 @@ public class AnalogStickFree extends VirtualControllerElement {
                     }
                     case MOVED_IN_DEAD_ZONE:
                     case MOVED_ACTIVE: {
-                        if (freeBgFactor > 0.005f) {
+                        if (opacityFactor > 0.005f) {
+                            boolean drewLiveBlur = false;
+                            OscLiveBlurHelper blurHelper = virtualController.getLiveBlurHelper();
+                            if (blurHelper != null) {
+                                blurClipPath.reset();
+                                blurClipPath.addCircle(touchStartX, touchStartY, radius_complete, android.graphics.Path.Direction.CW);
+                                blurBounds.set(
+                                        touchStartX - radius_complete, touchStartY - radius_complete,
+                                        touchStartX + radius_complete, touchStartY + radius_complete);
+                                drewLiveBlur = blurHelper.drawLiveBlurForBounds(canvas, this, blurClipPath, blurBounds, opacityFactor);
+                            }
+
                             paint.setShader(null);
                             paint.setStyle(Paint.Style.FILL);
-                            paint.setColor(freeStickWithAlpha(0xFF101624, freeBgFactor * 0.55f));
+                            paint.setColor(freeStickWithAlpha(0xFF101624, (drewLiveBlur ? 0.34f : 0.44f) * opacityFactor));
                             canvas.drawCircle(touchStartX, touchStartY, radius_complete, paint);
-                        }
 
-                        if (opacityFactor > 0.005f) {
                             if (strokeW > 0.1f) {
                                 paint.setStyle(Paint.Style.STROKE);
                                 paint.setStrokeWidth(strokeW);
@@ -405,7 +422,7 @@ public class AnalogStickFree extends VirtualControllerElement {
     private int bgCircleColor=0x2BF5F5F9;
     private int strokeCircleColor=0xFF8F8F8F;
     public void setBgOpacity() {
-        int hexOpacity = PreferenceConfiguration.readPreferences(getContext()).enableNewAnalogStickOpacity * 255 / 100;
+        int hexOpacity = getEffectiveOscOpacity() * 255 / 100;
         this.bgCircleColor = (hexOpacity << 24) | (bgCircleColor & 0x00FFFFFF);
         this.strokeCircleColor = (hexOpacity << 24) | (pressedColor & 0x00FFFFFF);
         invalidate();

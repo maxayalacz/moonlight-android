@@ -606,17 +606,45 @@
             android:summary="@string/summary_free_analog_stick"
             android:title="@string/title_free_analog_stick"
             app:iconSpaceReserved="false" />
+        <SwitchPreferenceCompat
+            android:defaultValue="false"
+            android:key="checkbox_osc_live_blur"
+            android:summary="@string/summary_osc_live_blur"
+            android:title="@string/title_osc_live_blur"
+            app:iconSpaceReserved="false" />
         <com.limelight.preferences.SeekBarPreference
-            android:defaultValue="20"
-            android:dialogMessage="@string/summary_osc_opacity"
-            android:key="seekbar_osc_free_analog_stick_opacity"
+            android:defaultValue="60"
+            android:dependency="checkbox_osc_live_blur"
+            android:dialogMessage="@string/summary_osc_blur_amount"
+            android:key="seekbar_osc_blur_amount"
             android:max="100"
-            android:summary="@string/summary_free_analog_stick_opacity"
-            android:text="@string/suffix_osc_opacity"
-            android:title="@string/title_free_analog_stick_opacity"
+            android:summary="@string/summary_osc_blur_amount"
+            android:text="%"
+            android:title="@string/title_osc_blur_amount"
             app:iconSpaceReserved="false"
             seekbar:min="0"
             seekbar:step="1" />
+        <com.limelight.preferences.SeekBarPreference
+            android:defaultValue="15"
+            android:dependency="checkbox_osc_live_blur"
+            android:dialogMessage="@string/summary_osc_blur_resolution_percent"
+            android:key="seekbar_osc_blur_resolution_percent"
+            android:max="50"
+            android:summary="@string/summary_osc_blur_resolution_percent"
+            android:text="%"
+            android:title="@string/title_osc_blur_resolution_percent"
+            app:iconSpaceReserved="false"
+            seekbar:min="5"
+            seekbar:step="1" />
+        <ListPreference
+            android:defaultValue="60"
+            android:dependency="checkbox_osc_live_blur"
+            android:entries="@array/ui_framerate_names"
+            android:entryValues="@array/ui_framerate_values"
+            android:key="list_osc_blur_framerate"
+            android:summary="@string/summary_osc_blur_framerate"
+            android:title="@string/title_osc_blur_framerate"
+            app:iconSpaceReserved="false" />
         <SwitchPreferenceCompat
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -871,6 +899,36 @@
             android:key="pref_custom_palette"
             android:summary="@string/summary_custom_palette"
             android:title="@string/title_custom_palette"
+            app:iconSpaceReserved="false" />
+        <com.limelight.preferences.SeekBarPreference
+            android:defaultValue="65"
+            android:dialogMessage="@string/summary_bg_resolution_percent"
+            android:key="seekbar_bg_resolution_percent"
+            android:max="100"
+            android:summary="@string/summary_bg_resolution_percent"
+            android:text="%"
+            android:title="@string/title_bg_resolution_percent"
+            app:iconSpaceReserved="false"
+            seekbar:min="25"
+            seekbar:step="5" />
+        <com.limelight.preferences.SeekBarPreference
+            android:defaultValue="15"
+            android:dialogMessage="@string/summary_blur_resolution_percent"
+            android:key="seekbar_blur_resolution_percent"
+            android:max="50"
+            android:summary="@string/summary_blur_resolution_percent"
+            android:text="%"
+            android:title="@string/title_blur_resolution_percent"
+            app:iconSpaceReserved="false"
+            seekbar:min="5"
+            seekbar:step="1" />
+        <ListPreference
+            android:defaultValue="60"
+            android:entries="@array/ui_framerate_names"
+            android:entryValues="@array/ui_framerate_values"
+            android:key="list_ui_framerate"
+            android:summary="@string/summary_ui_framerate"
+            android:title="@string/title_ui_framerate"
             app:iconSpaceReserved="false" />
         <SwitchPreferenceCompat
             android:defaultValue="false"

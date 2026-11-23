@@ -4545,17 +4545,65 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
         }
     }
 
-    public int getFreeAnalogStickOpacity() {
-        return prefConfig != null ? prefConfig.enableNewAnalogStickOpacity : 20;
+    public boolean isOscLiveBlurEnabled() {
+        return prefConfig != null && prefConfig.oscLiveBlur;
     }
 
-    public void setFreeAnalogStickOpacityLive(int opacity) {
-        int clamped = Math.max(0, Math.min(100, opacity));
+    public void setOscLiveBlurLive(boolean enabled) {
         if (prefConfig != null) {
-            prefConfig.enableNewAnalogStickOpacity = clamped;
+            prefConfig.oscLiveBlur = enabled;
         }
-        getLiveOverlayPrefs().edit().putInt("seekbar_osc_free_analog_stick_opacity", clamped).apply();
-        invalidateVirtualControllerElements();
+        getLiveOverlayPrefs().edit().putBoolean(PreferenceConfiguration.OSC_LIVE_BLUR_PREF_STRING, enabled).apply();
+        if (virtualController != null) {
+            virtualController.getLiveBlurHelper().refreshBlurPreferenceNow();
+        }
+    }
+
+    public int getOscBlurAmount() {
+        return prefConfig != null ? prefConfig.oscBlurAmountPercent : PreferenceConfiguration.DEFAULT_OSC_BLUR_AMOUNT;
+    }
+
+    public void setOscBlurAmountLive(int amount) {
+        int clamped = Math.max(0, Math.min(100, amount));
+        if (prefConfig != null) {
+            prefConfig.oscBlurAmountPercent = clamped;
+        }
+        getLiveOverlayPrefs().edit().putInt(PreferenceConfiguration.OSC_BLUR_AMOUNT_PREF_STRING, clamped).apply();
+        if (virtualController != null) {
+            virtualController.getLiveBlurHelper().refreshBlurPreferenceNow();
+        }
+    }
+
+    public int getOscBlurResolutionPercent() {
+        return prefConfig != null ? prefConfig.oscBlurResolutionPercent : PreferenceConfiguration.DEFAULT_OSC_BLUR_RESOLUTION_PERCENT;
+    }
+
+    public void setOscBlurResolutionPercentLive(int resPct) {
+        int clamped = Math.max(5, Math.min(50, resPct));
+        if (prefConfig != null) {
+            prefConfig.oscBlurResolutionPercent = clamped;
+        }
+        getLiveOverlayPrefs().edit().putInt(PreferenceConfiguration.OSC_BLUR_RESOLUTION_PERCENT_PREF_STRING, clamped).apply();
+        if (virtualController != null) {
+            virtualController.getLiveBlurHelper().refreshBlurPreferenceNow();
+        }
+    }
+
+    public String getOscBlurFramerate() {
+        return prefConfig != null && prefConfig.oscBlurFramerate != null
+                ? prefConfig.oscBlurFramerate
+                : PreferenceConfiguration.DEFAULT_OSC_BLUR_FRAMERATE;
+    }
+
+    public void setOscBlurFramerateLive(String fps) {
+        String normalized = fps != null ? fps : PreferenceConfiguration.DEFAULT_OSC_BLUR_FRAMERATE;
+        if (prefConfig != null) {
+            prefConfig.oscBlurFramerate = normalized;
+        }
+        getLiveOverlayPrefs().edit().putString(PreferenceConfiguration.OSC_BLUR_FRAMERATE_PREF_STRING, normalized).apply();
+        if (virtualController != null) {
+            virtualController.getLiveBlurHelper().refreshBlurPreferenceNow();
+        }
     }
 
     private com.limelight.binding.input.virtual_controller.OscLayoutEditorOverlay oscLayoutEditorOverlay;
@@ -4882,6 +4930,9 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
                     PreferenceConfiguration.isUiBatterySaverEffective(this, normalized);
             prefConfig.isUiPerformanceModeEffective =
                     prefConfig.uiPerformanceMode && !prefConfig.isUiBatterySaverEffective;
+        }
+        if (virtualController != null) {
+            virtualController.getLiveBlurHelper().refreshBlurPreferenceNow();
         }
     }
 

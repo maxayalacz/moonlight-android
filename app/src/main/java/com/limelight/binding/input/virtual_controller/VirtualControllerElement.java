@@ -45,6 +45,8 @@ public abstract class VirtualControllerElement extends View {
     protected final int elementId;
 
     private final Paint paint = new Paint();
+    protected final android.graphics.Path blurClipPath = new android.graphics.Path();
+    protected final android.graphics.RectF blurBounds = new android.graphics.RectF();
 
     protected int normalColor = 0xF0888888;
     protected int pressedColor = 0xF07272ED;

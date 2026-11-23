@@ -919,4 +919,21 @@
     <string name="ui_battery_saver_short_off">Off</string>
     <string name="ui_battery_saver_short_auto">Auto</string>
     <string name="ui_battery_saver_short_on">On</string>
+    <string name="title_bg_resolution_percent">Background Resolution</string>
+    <string name="summary_bg_resolution_percent">Internal render resolution of the starfield shader as a percentage of screen resolution (text and UI stay native)</string>
+    <string name="title_blur_resolution_percent">Live Blur Resolution</string>
+    <string name="summary_blur_resolution_percent">Internal resolution of the menu frosted glass blur pass as a percentage of screen resolution</string>
+    <string name="title_ui_framerate">Background &amp; Blur Framerate</string>
+    <string name="summary_ui_framerate">Refresh rate for both the starfield background and menu live frosted blur</string>
+    <string name="ui_framerate_30">30 FPS</string>
+    <string name="ui_framerate_60">60 FPS</string>
+    <string name="ui_framerate_90">90 FPS</string>
+    <string name="ui_framerate_120">120 FPS</string>
+    <string name="ui_framerate_max">Max (Display Hz)</string>
+    <string name="title_osc_live_blur">On-Screen Controls Live Blur</string>
+    <string name="summary_osc_live_blur">Blur the live game stream behind on-screen controller buttons and sticks (paused automatically in UI Battery Saver)</string>
+    <string name="title_osc_blur_resolution_percent">OSC Live Blur Resolution</string>
+    <string name="summary_osc_blur_resolution_percent">Internal resolution of the on-screen controller blur pass as a percentage of screen resolution</string>
+    <string name="title_osc_blur_framerate">OSC Live Blur Framerate</string>
+    <string name="summary_osc_blur_framerate">Refresh rate for the on-screen controller live blur (independent from menu blur)</string>
 </resources>

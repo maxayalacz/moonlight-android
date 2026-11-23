@@ -241,9 +241,13 @@ public class DigitalPad extends VirtualControllerElement {
         dpadPath.close();
 
         rect.set(cx - halfSpan, cy - halfSpan, cx + halfSpan, cy + halfSpan);
+        OscLiveBlurHelper blurHelper = virtualController.getLiveBlurHelper();
+        boolean drewLiveBlur = blurHelper != null
+                && blurHelper.drawLiveBlurForBounds(canvas, this, dpadPath, rect, opacityFactor);
+
         paint.setShader(null);
         paint.setStyle(Paint.Style.FILL);
-        paint.setColor(dpadWithAlpha(0xFF101624, 0.46f * opacityFactor));
+        paint.setColor(dpadWithAlpha(0xFF101624, (drewLiveBlur ? 0.36f : 0.46f) * opacityFactor));
         canvas.drawPath(dpadPath, paint);
 
         if (strokeW > 0.1f) {

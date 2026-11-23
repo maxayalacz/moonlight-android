@@ -1501,6 +1501,9 @@ public class StreamSettings extends AppCompatActivity {
             for (String key : new String[]{
                     PreferenceConfiguration.BLUR_AMOUNT_PREF_STRING,
                     PreferenceConfiguration.BG_QUALITY_PREF_STRING,
+                    PreferenceConfiguration.BG_RESOLUTION_PERCENT_PREF_STRING,
+                    PreferenceConfiguration.BLUR_RESOLUTION_PERCENT_PREF_STRING,
+                    PreferenceConfiguration.UI_FRAMERATE_PREF_STRING,
                     PreferenceConfiguration.PORTAL_PARTICLE_BRIGHTNESS_PREF_STRING
             }) {
                 Preference livePref = findPreference(key);

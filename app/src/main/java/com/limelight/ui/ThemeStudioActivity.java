@@ -97,8 +97,8 @@ public class ThemeStudioActivity extends AppCompatActivity {
             0xFFFFFFFF, 0xFFCBD5E1, 0xFF334155, 0xFF0D1117
     };
 
-    private static final String[] BG_QUALITY_LABELS = { "480p", "720p", "1080p", "Native" };
-    private static final String[] BG_QUALITY_VALUES = { "480", "720", "1080", "0" };
+    private static final String[] UI_FRAMERATE_LABELS = { "30", "60", "90", "120", "Max" };
+    private static final String[] UI_FRAMERATE_VALUES = { "30", "60", "90", "120", "max" };
     private static final String[] UI_BATTERY_SAVER_LABELS = { "Off", "Auto", "On" };
     private static final String[] UI_BATTERY_SAVER_VALUES = { "off", "auto", "on" };
 
@@ -161,8 +161,10 @@ public class ThemeStudioActivity extends AppCompatActivity {
     private SliderRow rowTintAmount;
     private TextView tintPerfHint;
     private SliderRow rowCardOutline;
-    private TextView bgQualityHeading;
-    private TextView[] bgQualityPills;
+    private SliderRow rowBgResolution;
+    private SliderRow rowBlurResolution;
+    private TextView uiFramerateHeading;
+    private TextView[] uiFrameratePills;
     private TextView uiPerformanceModeHeading;
     private TextView[] uiPerformanceModePills;
     private TextView uiBatterySaverHeading;
@@ -859,34 +861,39 @@ public class ThemeStudioActivity extends AppCompatActivity {
         rowCardOutline = addSliderRow(col, "Card Outline Thickness", 0, 250, 5, 0, 2000, "%",
                 v -> { bundle.cardOutlineThicknessPercent = v; refreshAll(); });
 
-        bgQualityHeading = new TextView(this);
-        bgQualityHeading.setText(R.string.title_bg_quality);
-        bgQualityHeading.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f);
-        bgQualityHeading.setTypeface(Typeface.DEFAULT_BOLD);
-        LinearLayout.LayoutParams bqhLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        bqhLp.topMargin = dp(12f);
-        col.addView(bgQualityHeading, bqhLp);
+        rowBgResolution = addSliderRow(col, getString(R.string.title_bg_resolution_percent), 25, 100, 5, 25, 100, "%",
+                v -> { bundle.bgResolutionPercent = v; refreshAll(); });
+        rowBlurResolution = addSliderRow(col, getString(R.string.title_blur_resolution_percent), 5, 50, 1, 5, 50, "%",
+                v -> { bundle.blurResolutionPercent = v; refreshAll(); });
 
-        LinearLayout qRow = new LinearLayout(this);
-        qRow.setOrientation(LinearLayout.HORIZONTAL);
-        LinearLayout.LayoutParams qrLp = new LinearLayout.LayoutParams(
+        uiFramerateHeading = new TextView(this);
+        uiFramerateHeading.setText(R.string.title_ui_framerate);
+        uiFramerateHeading.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f);
+        uiFramerateHeading.setTypeface(Typeface.DEFAULT_BOLD);
+        LinearLayout.LayoutParams frhLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        frhLp.topMargin = dp(12f);
+        col.addView(uiFramerateHeading, frhLp);
+
+        LinearLayout frRow = new LinearLayout(this);
+        frRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams frrLp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        qrLp.topMargin = dp(8f);
-        bgQualityPills = new TextView[BG_QUALITY_LABELS.length];
-        for (int i = 0; i < BG_QUALITY_LABELS.length; i++) {
-            final String val = BG_QUALITY_VALUES[i];
-            TextView pill = createPillButton(BG_QUALITY_LABELS[i]);
+        frrLp.topMargin = dp(8f);
+        uiFrameratePills = new TextView[UI_FRAMERATE_LABELS.length];
+        for (int i = 0; i < UI_FRAMERATE_LABELS.length; i++) {
+            final String val = UI_FRAMERATE_VALUES[i];
+            TextView pill = createPillButton(UI_FRAMERATE_LABELS[i]);
             pill.setOnClickListener(v -> {
-                bundle.bgQuality = val;
+                bundle.uiFramerate = val;
                 refreshAll();
             });
-            LinearLayout.LayoutParams qpLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-            if (i > 0) qpLp.setMarginStart(dp(6f));
-            qRow.addView(pill, qpLp);
-            bgQualityPills[i] = pill;
+            LinearLayout.LayoutParams fpLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            if (i > 0) fpLp.setMarginStart(dp(6f));
+            frRow.addView(pill, fpLp);
+            uiFrameratePills[i] = pill;
         }
-        col.addView(qRow, qrLp);
+        col.addView(frRow, frrLp);
 
         uiPerformanceModeHeading = new TextView(this);
         uiPerformanceModeHeading.setText(R.string.title_ui_performance_mode);
@@ -1704,10 +1711,15 @@ public class ThemeStudioActivity extends AppCompatActivity {
         tintPerfHint.setTextColor(bundle.frostedTintAmountPercent >= 100 ? p.getNeonAccent() : p.getSecondaryTextColor());
         rowCardOutline.setValue(bundle.cardOutlineThicknessPercent);
         rowCardOutline.applyTheme(p, pillStroke, pillPadH, pillPadV, pillRad);
-        bgQualityHeading.setTextColor(p.getPrimaryTextColor());
-        for (int i = 0; i < bgQualityPills.length; i++) {
-            boolean active = BG_QUALITY_VALUES[i].equals(bundle.bgQuality);
-            stylePillButton(bgQualityPills[i], active, p.accent, p.isLight);
+        rowBgResolution.setValue(bundle.bgResolutionPercent);
+        rowBgResolution.applyTheme(p, pillStroke, pillPadH, pillPadV, pillRad);
+        rowBlurResolution.setValue(bundle.blurResolutionPercent);
+        rowBlurResolution.applyTheme(p, pillStroke, pillPadH, pillPadV, pillRad);
+        uiFramerateHeading.setTextColor(p.getPrimaryTextColor());
+        String activeFps = bundle.uiFramerate != null ? bundle.uiFramerate : PreferenceConfiguration.DEFAULT_UI_FRAMERATE;
+        for (int i = 0; i < uiFrameratePills.length; i++) {
+            boolean active = UI_FRAMERATE_VALUES[i].equalsIgnoreCase(activeFps);
+            stylePillButton(uiFrameratePills[i], active, p.accent, p.isLight);
         }
         uiPerformanceModeHeading.setTextColor(p.getPrimaryTextColor());
         boolean savedPerfMode = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)

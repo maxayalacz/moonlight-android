@@ -285,4 +285,19 @@
         <item>off</item>
     </string-array>
 
+    <string-array name="ui_framerate_names">
+        <item>@string/ui_framerate_30</item>
+        <item>@string/ui_framerate_60</item>
+        <item>@string/ui_framerate_90</item>
+        <item>@string/ui_framerate_120</item>
+        <item>@string/ui_framerate_max</item>
+    </string-array>
+    <string-array name="ui_framerate_values" translatable="false">
+        <item>30</item>
+        <item>60</item>
+        <item>90</item>
+        <item>120</item>
+        <item>max</item>
+    </string-array>
+
 </resources>

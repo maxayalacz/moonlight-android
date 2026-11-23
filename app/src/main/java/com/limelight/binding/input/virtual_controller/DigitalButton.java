@@ -203,7 +203,21 @@ public class DigitalButton extends VirtualControllerElement {
             float r = Math.max(4f, (minDim - strokeW) * 0.5f - 2f);
             float cornerR = (elementId == EID_TOUCHPAD) ? minDim * 0.18f : minDim * 0.40f;
 
-            float tintAlpha = (pressed ? 0.60f : 0.46f) * opacityFactor;
+            boolean drewLiveBlur = false;
+            OscLiveBlurHelper blurHelper = virtualController.getLiveBlurHelper();
+            if (blurHelper != null) {
+                blurClipPath.reset();
+                if (isCircle) {
+                    blurClipPath.addCircle(cx, cy, r, android.graphics.Path.Direction.CW);
+                    blurBounds.set(cx - r, cy - r, cx + r, cy + r);
+                } else {
+                    blurClipPath.addRoundRect(rect, cornerR, cornerR, android.graphics.Path.Direction.CW);
+                    blurBounds.set(rect);
+                }
+                drewLiveBlur = blurHelper.drawLiveBlurForBounds(canvas, this, blurClipPath, blurBounds, opacityFactor);
+            }
+
+            float tintAlpha = (pressed ? 0.56f : (drewLiveBlur ? 0.36f : 0.46f)) * opacityFactor;
             int fillColor = withAlpha(pressed ? 0xFF1A2236 : 0xFF101624, tintAlpha);
             float borderAlpha = (pressed ? 0.95f : 0.60f) * opacityFactor;
 
