@@ -676,6 +676,9 @@ public class PortalShaderView extends TextureView implements TextureView.Surface
     private volatile int frostedTintAmountPercent = 35;
     private volatile boolean blurDirty = true;
     private volatile int bgMaxShortEdge = 720;
+    private volatile int bgResolutionPercent = PreferenceConfiguration.DEFAULT_BG_RESOLUTION_PERCENT;
+    private volatile int blurResolutionPercent = PreferenceConfiguration.DEFAULT_BLUR_RESOLUTION_PERCENT;
+    private volatile String uiFramerate = PreferenceConfiguration.DEFAULT_UI_FRAMERATE;
     private volatile boolean batterySaverEffective = false;
     private volatile boolean performanceModeEffective = false;
     private volatile boolean backgroundMode = false;
